@@ -1,10 +1,11 @@
 'use server';
 // Project CRUD server actions. Only managers/admins/owners can create or
-// update projects (RLS re-enforces).
+// update projects (RLS re-enforces). Workspace slug → UUID translation
+// handled via getWorkspaceContext, same pattern as tasks.ts.
 
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
-import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type {
   ActionResult,
   ActivityView,
@@ -89,15 +90,16 @@ export async function createProject(input: {
     };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
     return { ok: false, error: 'Only managers+ can create projects' };
   }
 
   const { data, error } = await supabase
     .from('projects')
     .insert({
-      workspace_id: input.workspaceId,
+      workspace_id: ctx.uuid,
       name,
       type: input.type ?? 'Episode',
       description: input.description ?? null,
@@ -111,7 +113,7 @@ export async function createProject(input: {
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'project_created',
     target_type: 'project',
@@ -173,8 +175,9 @@ export async function updateProject(input: {
   const supabase = createClient();
   if (!supabase) return { ok: true, data: { id: input.projectId, ...input.patch } };
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
     return { ok: false, error: 'Only managers+ can edit projects' };
   }
 
@@ -195,7 +198,7 @@ export async function updateProject(input: {
     .from('projects')
     .update(row)
     .eq('id', input.projectId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
   return { ok: true, data: { id: input.projectId, ...input.patch } };

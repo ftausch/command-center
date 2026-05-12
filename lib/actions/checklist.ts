@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
-import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type {
   ActionResult,
   ActivityView,
@@ -30,7 +30,6 @@ export async function addChecklistItem(input: {
   if (!label) return { ok: false, error: 'Label is required' };
 
   const supabase = createClient();
-  const userId = await actor();
 
   if (!supabase) {
     const item: TaskChecklistItemView = {
@@ -43,15 +42,16 @@ export async function addChecklistItem(input: {
     return { ok: true, data: item };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ITEM_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ITEM_ROLES])) {
     return { ok: false, error: 'You do not have permission to add checklist items' };
   }
 
   const { data, error } = await supabase
     .from('task_checklist_items')
     .insert({
-      workspace_id: input.workspaceId,
+      workspace_id: ctx.uuid,
       task_id: input.taskId,
       label,
       position: input.position ?? 0,
@@ -59,7 +59,6 @@ export async function addChecklistItem(input: {
     .select()
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
-  void userId;
   return {
     ok: true,
     data: {
@@ -98,8 +97,9 @@ export async function toggleChecklistItem(input: {
     return { ok: true, data: { id: input.itemId, done: input.done }, activity };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ITEM_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ITEM_ROLES])) {
     return { ok: false, error: 'You do not have permission to update checklist' };
   }
 
@@ -107,12 +107,12 @@ export async function toggleChecklistItem(input: {
     .from('task_checklist_items')
     .update({ done: input.done })
     .eq('id', input.itemId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
   if (input.done) {
     await supabase.from('activity_logs').insert({
-      workspace_id: input.workspaceId,
+      workspace_id: ctx.uuid,
       actor_id: userId,
       kind: 'checklist_item_done',
       target_type: 'task',
