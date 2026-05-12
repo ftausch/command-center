@@ -1,181 +1,356 @@
--- Role permission probe.
---
--- Run in Supabase Dashboard → SQL Editor, signed in as the postgres /
--- service-role role. The script temporarily sets your workspace_members
--- row to each role in turn, then probes a representative operation as
--- that authenticated role (via JWT-claim simulation). All probes are
--- non-destructive — any rows inserted during the probe are deleted by
--- the same block before the next role is tested. Your original role is
--- restored at the end, even on error.
+-- Comprehensive role + RLS probe. Covers the 10 Phase 6 verification
+-- items. Non-destructive — saves/restores your role(s) and deletes every
+-- probe row before exit.
 --
 -- ── Setup ─────────────────────────────────────────────────────────────
--- Replace the two placeholders below with your values.
--- Your auth.uid:
---   select id, email from auth.users where email = 'you@example.com';
--- A workspace you're already a member of:
---   select slug from workspaces;
--- A workspace must have ≥ 1 project for the create-task probe to run.
--- (You can run supabase/seed-sample-data.sql to bootstrap one.)
+-- Replace <YOUR_AUTH_UID> below. Your auth.users.id is in:
+--   select id, email from auth.users where email = '<your-email>';
+--
+-- The script assumes:
+--   - You're a member of `unicornbakery` (primary)
+--   - workspace `selbstfrei` exists (secondary; used to test cross-workspace
+--     isolation; the script temporarily removes you from it if you're a
+--     member, then re-adds you with your original role)
+--   - At least one project exists in unicornbakery for the task probes
+--     (run supabase/seed-sample-data.sql first if not)
+--
+-- Each probe prints `allowed` or `denied (<reason>)`. Unexpected values
+-- are flagged with "LEAK" or "HOLE".
 
 do $$
 declare
-  me        uuid := '<YOUR_AUTH_UID>'::uuid;
-  ws_slug   text := 'unicornbakery';
-  ws_id     uuid;
-  proj_id   uuid;
-  original  role;
-  cur       role;
-  jwt       text;
-  log_line  text;
+  me                  uuid := '<YOUR_AUTH_UID>'::uuid;
+  primary_slug        text := 'unicornbakery';
+  secondary_slug      text := 'selbstfrei';
+  primary_ws          uuid;
+  secondary_ws        uuid;
+  primary_proj        uuid;
+  secondary_proj      uuid;
+  probe_task_mine     uuid;
+  probe_task_others   uuid;
+  original_primary    role;
+  original_secondary  role;
+  was_in_secondary    boolean := false;
+  cur                 role;
+  jwt                 text;
+  outcome             text;
+  visible_count       integer;
 begin
-  -- ── resolve workspace + check membership ─────────────────────────────
-  select id into ws_id from workspaces where slug = ws_slug;
-  if ws_id is null then
-    raise exception 'workspace % not found — run supabase/seed.sql first', ws_slug;
+  -- Resolve workspaces
+  select id into primary_ws from workspaces where slug = primary_slug;
+  select id into secondary_ws from workspaces where slug = secondary_slug;
+  if primary_ws is null then raise exception 'workspace % not found', primary_slug; end if;
+  if secondary_ws is null then raise exception 'workspace % not found', secondary_slug; end if;
+
+  -- Save current membership state
+  select role into original_primary
+    from workspace_members where user_id = me and workspace_id = primary_ws;
+  if original_primary is null then
+    raise exception 'user % is not a member of %; run seed-membership.sql first', me, primary_slug;
   end if;
 
-  select role into original
-    from workspace_members
-    where user_id = me and workspace_id = ws_id;
-  if original is null then
-    raise exception 'user % is not a member of % — run supabase/seed-membership.sql first', me, ws_slug;
-  end if;
+  select role into original_secondary
+    from workspace_members where user_id = me and workspace_id = secondary_ws;
+  was_in_secondary := original_secondary is not null;
 
-  select id into proj_id from projects where workspace_id = ws_id limit 1;
+  select id into primary_proj from projects where workspace_id = primary_ws limit 1;
+  select id into secondary_proj from projects where workspace_id = secondary_ws limit 1;
 
-  raise notice '──────────────────────────────────────────────';
-  raise notice ' user        : %', me;
-  raise notice ' workspace   : % (%)', ws_slug, ws_id;
-  raise notice ' original    : %', original;
-  if proj_id is null then
-    raise notice ' ! no projects exist — create-task probe will be skipped';
-  end if;
-  raise notice '──────────────────────────────────────────────';
+  raise notice '═══════════════════════════════════════════════';
+  raise notice ' user           : %', me;
+  raise notice ' primary ws     : % (% / role=%)', primary_slug, primary_ws, original_primary;
+  raise notice ' secondary ws   : % (% / member=%)', secondary_slug, secondary_ws, was_in_secondary;
+  raise notice ' primary proj   : %', primary_proj;
+  raise notice '═══════════════════════════════════════════════';
 
-  -- ── probe loop ───────────────────────────────────────────────────────
+  ----------------------------------------------------------------
+  -- Part 1: For each role, probe representative operations
+  ----------------------------------------------------------------
   for cur in select unnest(enum_range(null::role)) loop
-    -- apply role as superuser (bypasses RLS)
-    update workspace_members
-      set role = cur
-      where user_id = me and workspace_id = ws_id;
-
-    jwt := json_build_object(
-      'sub',  me::text,
-      'role', 'authenticated',
-      'aud',  'authenticated'
-    )::text;
-
+    update workspace_members set role = cur
+      where user_id = me and workspace_id = primary_ws;
+    jwt := json_build_object('sub', me::text, 'role', 'authenticated', 'aud', 'authenticated')::text;
     raise notice '';
     raise notice '─── role: % ───', cur;
 
-    -- ── probe 1: select workspace (should ✓ for every role) ───────────
+    -- 1.1 select workspace
     perform set_config('role', 'authenticated', true);
     perform set_config('request.jwt.claims', jwt, true);
     begin
-      perform 1 from workspaces where id = ws_id;
-      if found then
-        log_line := 'select workspace : ✓ allowed';
-      else
-        log_line := 'select workspace : ✗ no row visible (unexpected)';
-      end if;
-    exception when others then
-      log_line := format('select workspace : ✗ %s (%s)', sqlstate, sqlerrm);
-    end;
+      perform 1 from workspaces where id = primary_ws;
+      outcome := case when found then 'allowed' else 'denied (no row)' end;
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
-    raise notice '  %', log_line;
+    raise notice '  select workspace             : %', outcome;
 
-    -- ── probe 2: create project (expected ✗ for viewer + member) ──────
+    -- 1.2 update workspace (admin+ only)
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', jwt, true);
+    begin
+      update workspaces set tagline = tagline where id = primary_ws;
+      outcome := case when found then 'allowed' else 'denied (RLS hid row)' end;
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    raise notice '  update workspace settings    : %', outcome;
+
+    -- 1.3 create project (manager+)
     perform set_config('role', 'authenticated', true);
     perform set_config('request.jwt.claims', jwt, true);
     begin
       insert into projects (workspace_id, name, status, priority)
-        values (ws_id, '__rls_probe_project', 'Planning', 'Medium');
-      log_line := 'create project   : ✓ allowed';
-    exception when others then
-      log_line := format('create project   : ✗ %s', sqlstate);
-    end;
+        values (primary_ws, '__probe_proj', 'Planning', 'Medium');
+      outcome := 'allowed';
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
-    delete from projects where workspace_id = ws_id and name = '__rls_probe_project';
-    raise notice '  %', log_line;
+    delete from projects where workspace_id = primary_ws and name = '__probe_proj';
+    raise notice '  create project               : %', outcome;
 
-    -- ── probe 3: create task (expected ✗ for viewer only) ─────────────
-    if proj_id is not null then
+    -- 1.4 create task (member+)
+    if primary_proj is not null then
       perform set_config('role', 'authenticated', true);
       perform set_config('request.jwt.claims', jwt, true);
       begin
         insert into tasks (workspace_id, project_id, title)
-          values (ws_id, proj_id, '__rls_probe_task');
-        log_line := 'create task      : ✓ allowed';
-      exception when others then
-        log_line := format('create task      : ✗ %s', sqlstate);
-      end;
+          values (primary_ws, primary_proj, '__probe_task');
+        outcome := 'allowed';
+      exception when others then outcome := 'denied (' || sqlstate || ')'; end;
       perform set_config('role', 'postgres', true);
       perform set_config('request.jwt.claims', '', true);
-      delete from tasks where workspace_id = ws_id and title = '__rls_probe_task';
-      raise notice '  %', log_line;
+      delete from tasks where workspace_id = primary_ws and title = '__probe_task';
+      raise notice '  create task                  : %', outcome;
     end if;
 
-    -- ── probe 4: read slack access_token (expected ✗ for every role) ──
+    -- 1.5 add workspace member (admin+)
     perform set_config('role', 'authenticated', true);
     perform set_config('request.jwt.claims', jwt, true);
     begin
-      perform access_token from slack_integrations where workspace_id = ws_id limit 1;
-      log_line := 'read slack token : ⚠ allowed (column revoke missing?)';
-    exception when others then
-      log_line := format('read slack token : ✓ denied (%s)', sqlstate);
+      -- self-insert: harmless duplicate, but the policy gate fires first
+      insert into workspace_members (workspace_id, user_id, role)
+        values (primary_ws, me, cur);
+      outcome := 'allowed (duplicate ignored)';
+    exception when unique_violation then
+      outcome := 'allowed (would insert if new)';
+    when others then
+      outcome := 'denied (' || sqlstate || ')';
     end;
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '', true);
-    raise notice '  %', log_line;
+    raise notice '  add workspace member         : %', outcome;
   end loop;
 
-  -- ── restore ──────────────────────────────────────────────────────────
-  update workspace_members
-    set role = original
-    where user_id = me and workspace_id = ws_id;
+  ----------------------------------------------------------------
+  -- Part 2: Workspace isolation (items 6 + 7)
+  ----------------------------------------------------------------
+  raise notice '';
+  raise notice '═══════════════════════════════════════════════';
+  raise notice ' Part 2: cross-workspace isolation';
+  raise notice '═══════════════════════════════════════════════';
+
+  -- Bump primary to owner so denial isn't masked by under-privilege
+  update workspace_members set role = 'owner' where user_id = me and workspace_id = primary_ws;
+
+  -- Remove from secondary (will re-add)
+  if was_in_secondary then
+    delete from workspace_members where user_id = me and workspace_id = secondary_ws;
+  end if;
+
+  jwt := json_build_object('sub', me::text, 'role', 'authenticated', 'aud', 'authenticated')::text;
+
+  -- 2.1 read tasks from a workspace I'm not a member of
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jwt, true);
+  select count(*) into visible_count from tasks where workspace_id = secondary_ws;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+  if visible_count = 0 then
+    outcome := '0 rows visible (correct)';
+  else
+    outcome := visible_count || ' rows visible (LEAK!)';
+  end if;
+  raise notice '  read foreign workspace tasks : %', outcome;
+
+  -- 2.2 read workspaces I'm not a member of (should not include secondary)
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jwt, true);
+  select count(*) into visible_count from workspaces where id = secondary_ws;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '', true);
+  if visible_count = 0 then
+    outcome := 'hidden (correct)';
+  else
+    outcome := 'visible (LEAK!)';
+  end if;
+  raise notice '  read foreign workspace row   : %', outcome;
+
+  -- 2.3 try to insert task into foreign workspace
+  if secondary_proj is not null then
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', jwt, true);
+    begin
+      insert into tasks (workspace_id, project_id, title)
+        values (secondary_ws, secondary_proj, '__probe_cross');
+      outcome := 'allowed (LEAK!)';
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    delete from tasks where workspace_id = secondary_ws and title = '__probe_cross';
+    raise notice '  insert into foreign ws       : %', outcome;
+  end if;
+
+  -- Re-add membership in secondary
+  if was_in_secondary then
+    insert into workspace_members (workspace_id, user_id, role)
+      values (secondary_ws, me, original_secondary)
+      on conflict (workspace_id, user_id) do update set role = excluded.role;
+  end if;
+
+  ----------------------------------------------------------------
+  -- Part 3: Assignee-only scope for members (item 8)
+  ----------------------------------------------------------------
+  raise notice '';
+  raise notice '═══════════════════════════════════════════════';
+  raise notice ' Part 3: assignee-only scope (member role)';
+  raise notice '═══════════════════════════════════════════════';
+
+  if primary_proj is not null then
+    insert into tasks (workspace_id, project_id, title, assignee_id)
+      values (primary_ws, primary_proj, '__probe_mine', me)
+      returning id into probe_task_mine;
+    insert into tasks (workspace_id, project_id, title, assignee_id)
+      values (primary_ws, primary_proj, '__probe_others', null)
+      returning id into probe_task_others;
+
+    update workspace_members set role = 'member' where user_id = me and workspace_id = primary_ws;
+    jwt := json_build_object('sub', me::text, 'role', 'authenticated', 'aud', 'authenticated')::text;
+
+    -- 3.1 member updates own assigned task
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', jwt, true);
+    begin
+      update tasks set title = '__probe_mine_v2' where id = probe_task_mine;
+      outcome := case when found then 'allowed (correct)' else 'denied (no row)' end;
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    raise notice '  member updates OWN task      : %', outcome;
+
+    -- 3.2 member tries to update someone else's task
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', jwt, true);
+    begin
+      update tasks set title = '__probe_others_v2' where id = probe_task_others;
+      if found then
+        outcome := 'allowed (LEAK!)';
+      else
+        outcome := 'denied (RLS blocked update — correct)';
+      end if;
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    raise notice '  member updates OTHER task    : %', outcome;
+
+    delete from tasks where id in (probe_task_mine, probe_task_others);
+  end if;
+
+  ----------------------------------------------------------------
+  -- Part 4: Viewer-as-assignee write (item 9; flags 0003 status)
+  ----------------------------------------------------------------
+  raise notice '';
+  raise notice '═══════════════════════════════════════════════';
+  raise notice ' Part 4: viewer-as-assignee write (RLS hole)';
+  raise notice '═══════════════════════════════════════════════';
+
+  if primary_proj is not null then
+    update workspace_members set role = 'viewer' where user_id = me and workspace_id = primary_ws;
+
+    insert into tasks (workspace_id, project_id, title, assignee_id)
+      values (primary_ws, primary_proj, '__probe_viewer_assigned', me)
+      returning id into probe_task_mine;
+
+    jwt := json_build_object('sub', me::text, 'role', 'authenticated', 'aud', 'authenticated')::text;
+
+    perform set_config('role', 'authenticated', true);
+    perform set_config('request.jwt.claims', jwt, true);
+    begin
+      update tasks set title = '__probe_viewer_v2' where id = probe_task_mine;
+      if found then
+        outcome := 'allowed (HOLE — apply migration 0003)';
+      else
+        outcome := 'denied (correct — 0003 is applied)';
+      end if;
+    exception when others then outcome := 'denied (' || sqlstate || ')'; end;
+    perform set_config('role', 'postgres', true);
+    perform set_config('request.jwt.claims', '', true);
+    delete from tasks where id = probe_task_mine;
+    raise notice '  viewer updates ASSIGNED task : %', outcome;
+  end if;
+
+  ----------------------------------------------------------------
+  -- Restore + summary
+  ----------------------------------------------------------------
+  update workspace_members set role = original_primary
+    where user_id = me and workspace_id = primary_ws;
 
   raise notice '';
-  raise notice '──────────────────────────────────────────────';
-  raise notice ' restored role to %', original;
-  raise notice '──────────────────────────────────────────────';
+  raise notice '═══════════════════════════════════════════════';
+  raise notice ' restored: primary=%, secondary=%', original_primary, original_secondary;
+  raise notice '═══════════════════════════════════════════════';
 
 exception when others then
-  -- restore role even if a probe explosion crashes the loop
+  -- Best-effort restore on error
   begin
-    update workspace_members
-      set role = original
-      where user_id = me and workspace_id = ws_id;
+    update workspace_members set role = original_primary
+      where user_id = me and workspace_id = primary_ws;
+    if was_in_secondary then
+      insert into workspace_members (workspace_id, user_id, role)
+        values (secondary_ws, me, original_secondary)
+        on conflict (workspace_id, user_id) do update set role = excluded.role;
+    end if;
   exception when others then null;
   end;
   raise;
 end$$;
 
--- ── Expected output ─────────────────────────────────────────────────────
+-- ── Expected output (with migration 0003 applied) ──────────────────────
 -- ─── role: viewer ───
---   select workspace : ✓ allowed
---   create project   : ✗ 42501
---   create task      : ✗ 42501
---   read slack token : ✓ denied (42501)
+--   select workspace             : allowed
+--   update workspace settings    : denied (RLS hid row)
+--   create project               : denied (42501)
+--   create task                  : denied (42501)
+--   add workspace member         : denied (42501)
 -- ─── role: member ───
---   select workspace : ✓ allowed
---   create project   : ✗ 42501
---   create task      : ✓ allowed
---   read slack token : ✓ denied (42501)
+--   select workspace             : allowed
+--   update workspace settings    : denied (RLS hid row)
+--   create project               : denied (42501)
+--   create task                  : allowed
+--   add workspace member         : denied (42501)
 -- ─── role: manager ───
---   select workspace : ✓ allowed
---   create project   : ✓ allowed
---   create task      : ✓ allowed
---   read slack token : ✓ denied (42501)
+--   select workspace             : allowed
+--   update workspace settings    : denied (RLS hid row)
+--   create project               : allowed
+--   create task                  : allowed
+--   add workspace member         : denied (42501)
 -- ─── role: admin ───
---   select workspace : ✓ allowed
---   create project   : ✓ allowed
---   create task      : ✓ allowed
---   read slack token : ✓ denied (42501)   ← admin-only column access goes through service-role,
---                                            not the authenticated JWT
+--   select workspace             : allowed
+--   update workspace settings    : allowed
+--   create project               : allowed
+--   create task                  : allowed
+--   add workspace member         : allowed (duplicate ignored)
 -- ─── role: owner ───
---   select workspace : ✓ allowed
---   create project   : ✓ allowed
---   create task      : ✓ allowed
---   read slack token : ✓ denied (42501)
+--   (same as admin)
+--
+-- Part 2 (workspace isolation):
+--   read foreign workspace tasks : 0 rows visible (correct)
+--   read foreign workspace row   : hidden (correct)
+--   insert into foreign ws       : denied (42501)
+--
+-- Part 3 (assignee-only):
+--   member updates OWN task      : allowed (correct)
+--   member updates OTHER task    : denied (RLS blocked update — correct)
+--
+-- Part 4 (viewer-as-assignee):
+--   viewer updates ASSIGNED task : denied (correct — 0003 is applied)
+--                                  ↑ before 0003 this would say "HOLE"
