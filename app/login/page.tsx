@@ -17,7 +17,10 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 function humanizeError(code: string | null, desc: string | null, fallback: string | null): string {
   if (code === 'otp_expired') {
-    return 'Der Magic Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.';
+    // Common causes: email scanner/preview consumed the link before the user
+    // clicked, link was clicked twice, or > 1h passed. Tell the user the
+    // realistic next step rather than just "expired".
+    return 'Magic Link bereits verwendet oder abgelaufen. Häufige Ursache: dein Mail-Programm hat den Link beim Anzeigen automatisch geöffnet. Bitte unten neu anfordern und den Link direkt klicken (nicht hovern, nicht in Vorschau öffnen).';
   }
   if (code === 'access_denied') {
     return 'Zugriff verweigert. Bitte erneut anmelden.';
@@ -28,7 +31,13 @@ function humanizeError(code: string | null, desc: string | null, fallback: strin
   if (fallback === 'not_configured') {
     return 'Auth ist in dieser Umgebung nicht konfiguriert (mock mode).';
   }
-  if (fallback === 'exchange_failed' || fallback === 'verify_failed') {
+  if (fallback === 'exchange_failed') {
+    return (
+      desc ||
+      'Verifizierung fehlgeschlagen — möglicherweise wurde der Link in einem anderen Browser oder einer anderen Session geöffnet. Bitte neu anfordern.'
+    );
+  }
+  if (fallback === 'verify_failed') {
     return desc || 'Verifizierung fehlgeschlagen — bitte erneut anfordern.';
   }
   if (fallback === 'missing_code') {
@@ -37,6 +46,10 @@ function humanizeError(code: string | null, desc: string | null, fallback: strin
   return desc || fallback || 'Unbekannter Fehler.';
 }
 
+// sessionStorage key for the email between requests. Lets the user click
+// "Send magic link" again after an otp_expired error without retyping.
+const EMAIL_KEY = 'cc.login.email';
+
 function LoginInner() {
   const params = useSearchParams();
   const [email, setEmail] = useState('');
@@ -44,6 +57,17 @@ function LoginInner() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const configured = isSupabaseConfigured();
+
+  // Restore previously-typed email so clicking "Send magic link" again after
+  // an otp_expired error doesn't require retyping. Same input field, just
+  // pre-filled — no visual change.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = sessionStorage.getItem(EMAIL_KEY);
+      if (saved) setEmail(saved);
+    } catch {}
+  }, []);
 
   // Pick up errors forwarded by /auth/callback (query string) AND any
   // fragment errors a legacy flow might leave on the URL (e.g. when the
@@ -80,11 +104,16 @@ function LoginInner() {
       setStatus('error');
       return;
     }
+    // Normalize the redirect target. window.location.origin handles both
+    // localhost:3000 and localhost:3002 automatically; we just trim any
+    // accidental trailing slash on the path and ensure exactly one '/'.
+    const redirectTo = `${window.location.origin.replace(/\/+$/, '')}/auth/callback`;
+    try {
+      sessionStorage.setItem(EMAIL_KEY, email);
+    } catch {}
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: redirectTo },
     });
     if (error) {
       setErrorMsg(error.message);
