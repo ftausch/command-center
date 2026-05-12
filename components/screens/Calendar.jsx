@@ -2,18 +2,19 @@
 // Calendar
 
 import { useState, useMemo } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { TODAY, dueLabel, eventColor, formatDate, parseDate } from '@/lib/utils';
 
-export function CalendarScreen({ workspace, setRoute }) {
-  const events = D.calendarEvents[workspace] || [];
+export function CalendarScreen({ setRoute }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
+  const events = data.calendarEvents;
   const [month, setMonth] = useState({ year: 2026, mo: 4 }); // May (0-indexed)
 
   const monthLabel = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][month.mo];
   const firstDay = new Date(month.year, month.mo, 1);
-  const startWeekday = (firstDay.getDay() + 6) % 7; // Mon=0
+  const startWeekday = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(month.year, month.mo + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
@@ -22,7 +23,7 @@ export function CalendarScreen({ workspace, setRoute }) {
 
   const evByDate = useMemo(() => {
     const m = {};
-    events.forEach(ev => {
+    events.forEach((ev) => {
       const d = parseDate(ev.date);
       if (d.getFullYear() === month.year && d.getMonth() === month.mo) {
         const day = d.getDate();
@@ -38,7 +39,7 @@ export function CalendarScreen({ workspace, setRoute }) {
     <div className="page fade-in">
       <div className="page-head">
         <div>
-          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{D.brands[workspace].name}</Badge></div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Calendar</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Recordings, Deadlines, Reviews & Publish-Termine — alles in einer Ansicht.
@@ -53,14 +54,13 @@ export function CalendarScreen({ workspace, setRoute }) {
         </div>
       </div>
 
-      {/* Legend */}
       <div className="row gap-3 mb-4 wrap">
         {[
           { t: 'recording', label: 'Recording' },
           { t: 'deadline', label: 'Deadline' },
           { t: 'review', label: 'Review' },
           { t: 'publish', label: 'Publish' },
-        ].map(l => (
+        ].map((l) => (
           <div key={l.t} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
             <span className="dot-indicator" style={{ background: eventColor(l.t) }} />
             {l.label}
@@ -73,14 +73,12 @@ export function CalendarScreen({ workspace, setRoute }) {
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
-        {/* weekday header */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
-          {['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => (
+          {['Mo','Di','Mi','Do','Fr','Sa','So'].map((d) => (
             <div key={d} style={{ padding: '10px 12px', fontSize: 11.5, fontWeight: 600, color: 'var(--text-3)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{d}</div>
           ))}
         </div>
 
-        {/* cells */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {cells.map((d, i) => {
             const evs = (d && evByDate[d]) || [];
@@ -123,9 +121,8 @@ export function CalendarScreen({ workspace, setRoute }) {
         </div>
       </div>
 
-      {/* upcoming list */}
       <div className="mt-6">
-        <div className="label mb-3">Demnächst · {D.brands[workspace].name}</div>
+        <div className="label mb-3">Demnächst · {brand?.name}</div>
         <div className="card">
           {events.slice(0, 8).map((ev, i) => (
             <div key={i} className="row gap-4" style={{ padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)', cursor: 'pointer' }} onClick={() => setRoute('project:' + ev.projectId)}>
@@ -136,7 +133,7 @@ export function CalendarScreen({ workspace, setRoute }) {
               <div style={{ width: 4, alignSelf: 'stretch', background: eventColor(ev.type), borderRadius: 2 }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{ev.title}</div>
-                <div className="meta mt-1">{D.projects.find(p => p.id === ev.projectId)?.name}</div>
+                <div className="meta mt-1">{data.projects.find((p) => p.id === ev.projectId)?.name}</div>
               </div>
               <Badge kind="ghost">{ev.type}</Badge>
             </div>

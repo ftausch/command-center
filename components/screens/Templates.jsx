@@ -2,24 +2,36 @@
 // Templates screen
 
 import { useState } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { Field } from '@/components/screens/ProjectDetail';
 
-export function TemplatesScreen({ workspace }) {
-  const tpl = D.templates[workspace];
-  const phases = D.phases[workspace];
+export function TemplatesScreen() {
+  const { currentWorkspaceId: workspace, currentWorkspace: brand, data, workspaces } = useWorkspace();
+  const templates = data.templates;
   const [selected, setSelected] = useState(workspace);
 
-  const t = D.templates[selected] || tpl;
-  const ph = D.phases[selected] || phases;
+  const t = templates[selected] || templates[workspace];
+  if (!t) {
+    return (
+      <div className="page fade-in">
+        <p className="meta">Kein Template gefunden für diesen Workspace.</p>
+      </div>
+    );
+  }
+
+  // The Templates screen shows phases for the chosen template, which may
+  // belong to a different workspace than the current one. We fall back to the
+  // current workspace's phases if the alternate workspace's phases aren't
+  // loaded (mock has both; supabase mode would need extra fetches later).
+  const ph = data.phases;
 
   return (
     <div className="page fade-in">
       <div className="page-head">
         <div>
-          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{D.brands[workspace].name}</Badge></div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Templates</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Wiederkehrende Workflows als Bauplan. Neue Episode = 1 Klick, alle Tasks vorausgefüllt.
@@ -31,14 +43,16 @@ export function TemplatesScreen({ workspace }) {
         </div>
       </div>
 
-      {/* Template chooser */}
       <div className="row gap-2 mb-4 wrap">
-        {Object.entries(D.templates).map(([id, t]) => (
-          <button key={id} className={`chip ${selected === id ? 'active' : ''}`} onClick={() => setSelected(id)}>
-            <span className="dot-indicator" style={{ background: D.brands[id].color }} />
-            {D.brands[id].name}
-          </button>
-        ))}
+        {Object.keys(templates).map((id) => {
+          const tpl = workspaces.find((w) => w.id === id);
+          return (
+            <button key={id} className={`chip ${selected === id ? 'active' : ''}`} onClick={() => setSelected(id)}>
+              <span className="dot-indicator" style={{ background: tpl?.color }} />
+              {tpl?.name ?? id}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
@@ -59,10 +73,9 @@ export function TemplatesScreen({ workspace }) {
             </div>
           </div>
 
-          {/* Phase grouped tasks */}
           <div>
             {ph.map((phase, pi) => {
-              const phaseTasks = t.tasks.filter(tk => tk.phase === phase);
+              const phaseTasks = t.tasks.filter((tk) => tk.phase === phase);
               if (phaseTasks.length === 0) return null;
               return (
                 <div key={phase}>
@@ -85,7 +98,6 @@ export function TemplatesScreen({ workspace }) {
           </div>
         </div>
 
-        {/* Right info */}
         <div className="col gap-4">
           <div className="card card-pad">
             <div className="label mb-3">Default-Konfiguration</div>
@@ -94,7 +106,7 @@ export function TemplatesScreen({ workspace }) {
             <Field label="Default Reviewer">Owner (Fabian)</Field>
             <Field label="Phasen">
               <div className="row gap-1 wrap">
-                {ph.map(p => <span key={p} className="badge ghost" style={{ fontSize: 11 }}>{p}</span>)}
+                {ph.map((p) => <span key={p} className="badge ghost" style={{ fontSize: 11 }}>{p}</span>)}
               </div>
             </Field>
           </div>

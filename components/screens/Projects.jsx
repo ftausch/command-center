@@ -2,30 +2,31 @@
 // Projects list screen
 
 import { useState, useMemo } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
 import { dueLabel, statusColor } from '@/lib/utils';
 
-export function ProjectsScreen({ workspace, setRoute }) {
+export function ProjectsScreen({ setRoute }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
 
-  const all = useMemo(() => D.projects.filter(p => p.workspace === workspace), [workspace]);
+  const all = data.projects;
   const filtered = useMemo(() => {
     let r = all;
-    if (statusFilter !== 'All') r = r.filter(p => p.status === statusFilter);
-    if (search.trim()) r = r.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+    if (statusFilter !== 'All') r = r.filter((p) => p.status === statusFilter);
+    if (search.trim()) r = r.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
     return r;
   }, [all, statusFilter, search]);
 
   const counts = {
     All: all.length,
-    'In Progress': all.filter(p => p.status === 'In Progress').length,
-    Planning: all.filter(p => p.status === 'Planning').length,
-    Review: all.filter(p => p.status === 'Review').length,
-    Blocked: all.filter(p => p.status === 'Blocked').length,
-    Done: all.filter(p => p.status === 'Done').length,
+    'In Progress': all.filter((p) => p.status === 'In Progress').length,
+    Planning: all.filter((p) => p.status === 'Planning').length,
+    Review: all.filter((p) => p.status === 'Review').length,
+    Blocked: all.filter((p) => p.status === 'Blocked').length,
+    Done: all.filter((p) => p.status === 'Done').length,
   };
 
   return (
@@ -33,7 +34,7 @@ export function ProjectsScreen({ workspace, setRoute }) {
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2">
-            <Badge kind="brand" dot>{D.brands[workspace].name}</Badge>
+            <Badge kind="brand" dot>{brand?.name}</Badge>
           </div>
           <h1 className="h1">Projects</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
@@ -74,10 +75,12 @@ export function ProjectsScreen({ workspace, setRoute }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(p => {
-              const team = p.team.map(id => D.users.find(u => u.id === id));
-              const owner = D.users.find(u => u.id === p.owner);
-              const phases = D.phases[workspace];
+            {filtered.map((p) => {
+              const team = p.team
+                .map((id) => data.members.find((u) => u.id === id))
+                .filter(Boolean);
+              const owner = data.members.find((u) => u.id === p.owner);
+              const phases = data.phases;
               const due = dueLabel(p.due);
               return (
                 <tr key={p.id} onClick={() => setRoute('project:' + p.id)} style={{ cursor: 'pointer' }}>
@@ -99,7 +102,13 @@ export function ProjectsScreen({ workspace, setRoute }) {
                     </div>
                   </td>
                   <td><PriorityBadge priority={p.priority} /></td>
-                  <td><div className="row gap-2"><Avatar user={owner} /><span style={{ fontSize: 12.5 }}>{owner.name.split(' ')[0]}</span></div></td>
+                  <td>
+                    {owner ? (
+                      <div className="row gap-2"><Avatar user={owner} /><span style={{ fontSize: 12.5 }}>{owner.name.split(' ')[0]}</span></div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>
+                    )}
+                  </td>
                   <td><AvatarStack users={team} max={3} /></td>
                   <td><span className={`badge ${due.danger ? 'danger' : 'ghost'}`}>{due.text}</span></td>
                   <td>

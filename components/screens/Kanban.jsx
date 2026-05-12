@@ -2,49 +2,48 @@
 // Kanban Board
 
 import { useState, useMemo } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
-import { Avatar, PriorityBadge } from '@/components/ui';
+import { Avatar, Badge, PriorityBadge } from '@/components/ui';
 import { dueLabel, kColColor } from '@/lib/utils';
 
 const KANBAN_COLS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Done'];
 
-export function KanbanScreen({ workspace, setRoute }) {
+export function KanbanScreen({ setRoute }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
   const [projectFilter, setProjectFilter] = useState('all');
 
   const tasks = useMemo(() => {
-    let r = D.tasks.filter(t => t.workspace === workspace);
-    if (projectFilter !== 'all') r = r.filter(t => t.projectId === projectFilter);
+    let r = data.tasks;
+    if (projectFilter !== 'all') r = r.filter((t) => t.projectId === projectFilter);
     return r;
-  }, [workspace, projectFilter]);
+  }, [data.tasks, projectFilter]);
 
   const grouped = useMemo(() => {
     const g = {};
-    KANBAN_COLS.forEach(c => g[c] = []);
+    KANBAN_COLS.forEach((c) => (g[c] = []));
     g['Blocked'] = [];
-    tasks.forEach(t => {
+    tasks.forEach((t) => {
       if (t.status === 'Blocked') g['Blocked'].push(t);
       else (g[t.status] = g[t.status] || []).push(t);
     });
     return g;
   }, [tasks]);
 
-  const projects = D.projects.filter(p => p.workspace === workspace);
-
   return (
     <div className="page fade-in" style={{ paddingBottom: 24 }}>
       <div className="page-head">
         <div>
-          <div className="row gap-2 mb-2"><span className="badge brand"><span className="badge-dot" />{D.brands[workspace].name}</span></div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Board</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Status-Spalten über alle Projekte. Drag (visuell) zwischen Spalten zum Verschieben.
           </p>
         </div>
         <div className="row gap-2">
-          <select className="input" style={{ width: 220, height: 32 }} value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
-            <option value="all">Alle Projekte ({projects.length})</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <select className="input" style={{ width: 220, height: 32 }} value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+            <option value="all">Alle Projekte ({data.projects.length})</option>
+            {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="btn btn-ghost btn-sm">Group: Status <I.chevronDown size={12} /></button>
           <button className="btn btn-brand btn-sm"><I.plus size={13} /> New Task</button>
@@ -54,22 +53,22 @@ export function KanbanScreen({ workspace, setRoute }) {
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
         <button className="chip active">Alle <span className="count">{tasks.length}</span></button>
-        <button className="chip"><span className="dot-indicator danger" /> High <span className="count">{tasks.filter(t => t.priority === 'High').length}</span></button>
+        <button className="chip"><span className="dot-indicator danger" /> High <span className="count">{tasks.filter((t) => t.priority === 'High').length}</span></button>
         <button className="chip">Assignee: Me</button>
         <button className="chip">Has Slack</button>
         <button className="chip"><I.filter size={11} /> Mehr</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
-        {KANBAN_COLS.map(col => (
-          <KColumn key={col} title={col} tasks={grouped[col] || []} blocked={col === 'In Progress' ? grouped['Blocked'] : null} workspace={workspace} setRoute={setRoute} />
+        {KANBAN_COLS.map((col) => (
+          <KColumn key={col} title={col} tasks={grouped[col] || []} blocked={col === 'In Progress' ? grouped['Blocked'] : null} setRoute={setRoute} />
         ))}
       </div>
     </div>
   );
 }
 
-function KColumn({ title, tasks, blocked, workspace, setRoute }) {
+function KColumn({ title, tasks, blocked, setRoute }) {
   const allTasks = blocked ? [...tasks, ...(blocked || [])] : tasks;
   return (
     <div style={{ background: 'transparent', minHeight: 400 }}>
@@ -83,7 +82,7 @@ function KColumn({ title, tasks, blocked, workspace, setRoute }) {
       </div>
 
       <div className="col gap-2">
-        {allTasks.map(t => <KCard key={t.id} task={t} workspace={workspace} setRoute={setRoute} />)}
+        {allTasks.map((t) => <KCard key={t.id} task={t} setRoute={setRoute} />)}
         {allTasks.length === 0 && (
           <div style={{
             padding: 14, borderRadius: 8, border: '1.5px dashed var(--border)',
@@ -101,9 +100,11 @@ function KColumn({ title, tasks, blocked, workspace, setRoute }) {
   );
 }
 
-function KCard({ task, workspace, setRoute }) {
-  const a = D.users.find(u => u.id === task.assignee);
-  const p = D.projects.find(pr => pr.id === task.projectId);
+function KCard({ task, setRoute }) {
+  const { data } = useWorkspace();
+  const a = data.members.find((u) => u.id === task.assignee);
+  const p = data.projects.find((pr) => pr.id === task.projectId);
+  const waiting = data.members.find((u) => u.id === task.waitingOn);
   const td = dueLabel(task.due);
   return (
     <div
@@ -122,9 +123,9 @@ function KCard({ task, workspace, setRoute }) {
         </div>
       )}
       <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35, marginBottom: 6 }}>{task.title}</div>
-      {(task.blocker || task.waitingOn) && (
+      {(task.blocker || waiting) && (
         <div className="meta mb-2" style={{ fontSize: 11.5 }}>
-          {task.blocker || 'Wartet auf ' + D.users.find(u => u.id === task.waitingOn)?.name}
+          {task.blocker || 'Wartet auf ' + waiting?.name}
         </div>
       )}
       <div className="row gap-2" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
@@ -132,7 +133,7 @@ function KCard({ task, workspace, setRoute }) {
       </div>
       <div className="row between">
         <div className="row gap-2">
-          <Avatar user={a} />
+          {a && <Avatar user={a} />}
           <PriorityBadge priority={task.priority} />
         </div>
         <span className={`badge ${td.danger ? 'danger' : td.today ? 'warning' : 'ghost'}`}>{td.text}</span>

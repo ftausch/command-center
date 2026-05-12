@@ -1,20 +1,22 @@
 'use client';
 // Team View
 
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge } from '@/components/ui';
 import { daysUntil } from '@/lib/utils';
 import { KPI } from '@/components/screens/Dashboard';
 
-export function TeamScreen({ workspace, setRoute }) {
-  const users = D.users.filter(u => u.workspaces.includes(workspace));
+export function TeamScreen({ setRoute }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
+  const users = data.members;
+  const tasks = data.tasks;
 
   return (
     <div className="page fade-in">
       <div className="page-head">
         <div>
-          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{D.brands[workspace].name}</Badge></div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Team</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Wer arbeitet gerade woran. Auslastung pro Person. Filter nach Rolle, Status, Workspace.
@@ -26,21 +28,19 @@ export function TeamScreen({ workspace, setRoute }) {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-4 gap-3 mb-6">
-        <KPI label="Teammitglieder" value={users.length} trend={`${users.filter(u => u.online).length} online`} />
-        <KPI label="Offene Tasks" value={D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done').length} trend="Gesamtauslastung 78%" />
-        <KPI label="Überfällig" value={D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="auf 2 Personen verteilt" tone="bad" />
-        <KPI label="Ø Tasks pro Person" value={Math.round(D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done').length / users.length * 10) / 10} trend="Balance gut" tone="ok" />
+        <KPI label="Teammitglieder" value={users.length} trend={`${users.filter((u) => u.online).length} online`} />
+        <KPI label="Offene Tasks" value={tasks.filter((t) => t.status !== 'Done').length} trend="Gesamtauslastung 78%" />
+        <KPI label="Überfällig" value={tasks.filter((t) => t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="auf 2 Personen verteilt" tone="bad" />
+        <KPI label="Ø Tasks pro Person" value={users.length ? Math.round((tasks.filter((t) => t.status !== 'Done').length / users.length) * 10) / 10 : 0} trend="Balance gut" tone="ok" />
       </div>
 
-      {/* Team grid */}
       <div className="grid grid-2 gap-3">
-        {users.map(u => {
-          const userTasks = D.tasks.filter(t => t.workspace === workspace && t.assignee === u.id);
-          const open = userTasks.filter(t => t.status !== 'Done');
-          const overdue = open.filter(t => daysUntil(t.due) < 0);
-          const inProgress = open.filter(t => t.status === 'In Progress');
+        {users.map((u) => {
+          const userTasks = tasks.filter((t) => t.assignee === u.id);
+          const open = userTasks.filter((t) => t.status !== 'Done');
+          const overdue = open.filter((t) => daysUntil(t.due) < 0);
+          const inProgress = open.filter((t) => t.status === 'In Progress');
           const load = Math.min(100, open.length * 14);
           const overLoaded = load > 80;
           return (
@@ -57,7 +57,7 @@ export function TeamScreen({ workspace, setRoute }) {
                   </div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14.5 }}>{u.name}</div>
-                    <div className="meta">{u.role} · {u.workspaces.length === 2 ? 'beide Workspaces' : D.brands[u.workspaces[0]].name}</div>
+                    <div className="meta">{u.role}</div>
                   </div>
                 </div>
                 <button className="btn btn-quiet btn-sm"><I.more size={14} /></button>
@@ -79,11 +79,10 @@ export function TeamScreen({ workspace, setRoute }) {
                 </div>
               </div>
 
-              {/* Top tasks */}
               <div className="col gap-1 mt-2" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 10 }}>
                 <div className="label" style={{ marginBottom: 4 }}>Aktuell</div>
-                {open.slice(0, 2).map(t => {
-                  const p = D.projects.find(pr => pr.id === t.projectId);
+                {open.slice(0, 2).map((t) => {
+                  const p = data.projects.find((pr) => pr.id === t.projectId);
                   return (
                     <div key={t.id} className="row gap-2" style={{ padding: '4px 0', fontSize: 12.5, cursor: 'pointer' }} onClick={() => setRoute('project:' + t.projectId)}>
                       <span className="dot-indicator" style={{ background: t.status === 'Blocked' ? 'var(--danger)' : t.status === 'In Progress' ? 'var(--info)' : 'var(--text-3)' }} />

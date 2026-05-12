@@ -1,7 +1,6 @@
 'use client';
 // Shared small components: Badge, Avatar, ProgressBar, PhaseTracker, SlackCard, etc.
 
-import { D } from '@/lib/data';
 import { hueFor } from '@/lib/utils';
 
 export const Badge = ({ kind = 'neutral', children, dot, large }) => (
@@ -76,12 +75,14 @@ export const StatusBadge = ({ status }) => {
   return <Badge kind={m.kind} dot>{m.label}</Badge>;
 };
 
-export const BrandBadge = ({ workspace, brand }) => {
-  const b = brand || D.brands[workspace];
+// BrandBadge requires the brand object — callers fetch it from
+// useWorkspace().currentWorkspace (or pass an explicit brand for previews).
+export const BrandBadge = ({ brand }) => {
+  if (!brand) return null;
   return (
     <span className="badge" style={{ background: 'transparent', borderColor: 'var(--border)', color: 'var(--text-2)' }}>
-      <span className="badge-dot" style={{ background: b.color }} />
-      {b.name}
+      <span className="badge-dot" style={{ background: brand.color }} />
+      {brand.name}
     </span>
   );
 };

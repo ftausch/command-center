@@ -2,12 +2,14 @@
 // Sidebar — left nav with brand pill + nav sections; Topbar with breadcrumb + search
 
 import React from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
 
-export function Sidebar({ route, setRoute, workspace, onSwitchWorkspace, counts }) {
-  const brand = D.brands[workspace];
+export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
+
+  if (!brand) return <aside className="sidebar" />;
 
   const navMain = [
     { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
@@ -22,6 +24,8 @@ export function Sidebar({ route, setRoute, workspace, onSwitchWorkspace, counts 
     { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
   ];
 
+  const me = data.members[0];
+
   return (
     <aside className="sidebar">
       {/* App mark */}
@@ -35,7 +39,7 @@ export function Sidebar({ route, setRoute, workspace, onSwitchWorkspace, counts 
         <div className="brand-mark">{brand.initials}</div>
         <div>
           <div className="brand-name">{brand.name}</div>
-          <div className="brand-sub">{brand.sub.split('·')[1]?.trim() || 'Workspace'}</div>
+          <div className="brand-sub">{(brand.sub || '').split('·')[1]?.trim() || 'Workspace'}</div>
         </div>
         <span className="caret"><I.caret size={14} /></span>
       </button>
@@ -67,7 +71,7 @@ export function Sidebar({ route, setRoute, workspace, onSwitchWorkspace, counts 
         ))}
 
         <div className="nav-section">Pinned Projects</div>
-        {D.projects.filter(p => p.workspace === workspace).slice(0, 3).map(p => (
+        {data.projects.slice(0, 3).map(p => (
           <div key={p.id} className={`nav-item ${route === 'project:'+p.id ? 'active' : ''}`} onClick={() => setRoute('project:'+p.id)} style={{ paddingLeft: 12 }}>
             <span className="dot-indicator" style={{ background: 'var(--brand)', opacity: 0.6 }} />
             <span className="truncate" style={{ fontSize: 13 }}>{p.name}</span>
@@ -85,26 +89,28 @@ export function Sidebar({ route, setRoute, workspace, onSwitchWorkspace, counts 
           <span>Concept Doc</span>
           <span className="nav-count" style={{ background: 'var(--bg-sunk)', color: 'var(--text-3)' }}>read</span>
         </div>
-        <div className="nav-item" style={{ marginTop: 4 }}>
-          <Avatar user={D.users[0]} />
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>Fabian Tausch</span>
-            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Owner</span>
+        {me && (
+          <div className="nav-item" style={{ marginTop: 4 }}>
+            <Avatar user={me} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{me.name}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{me.role}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </aside>
   );
 }
 
-export function Topbar({ workspace, openCmdK, breadcrumb }) {
-  const brand = D.brands[workspace];
+export function Topbar({ openCmdK, breadcrumb }) {
+  const { currentWorkspace: brand } = useWorkspace();
 
   return (
     <div className="topbar">
       {/* Breadcrumb */}
       <div className="row gap-2" style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{brand.name}</span>
+        <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{brand?.name}</span>
         {breadcrumb && (
           <React.Fragment>
             <span style={{ color: 'var(--text-4)' }}><I.chevron size={12} /></span>
