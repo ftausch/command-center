@@ -3,7 +3,7 @@
 // return null so the rest of the app degrades to mock mode without errors.
 
 import { createClient } from '@/lib/supabase/server';
-import type { Profile } from '@/lib/types';
+import type { Profile, Role } from '@/lib/types';
 
 /** Returns the current Supabase auth user, or null. */
 export async function currentUser() {
@@ -58,4 +58,34 @@ export async function signOut() {
   const supabase = createClient();
   if (!supabase) return;
   await supabase.auth.signOut();
+}
+
+/**
+ * Fetch the current user's role inside the given workspace. Returns null if
+ * the user isn't a member. In mock mode (no Supabase) returns 'owner' so
+ * dev/preview can exercise every action without an auth flow.
+ */
+export async function getWorkspaceRole(
+  workspaceId: string,
+): Promise<Role | null> {
+  const supabase = createClient();
+  if (!supabase) return 'owner';
+  const user = await currentUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return (data?.role as Role | undefined) ?? null;
+}
+
+/** Returns true if `role` is in the allowed list. Use for early role gates
+ *  in server actions; RLS still enforces at the DB level. */
+export function canWriteAsRole(
+  role: Role | null,
+  allowed: Role[],
+): boolean {
+  return role !== null && allowed.includes(role);
 }

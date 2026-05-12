@@ -1,6 +1,7 @@
 'use client';
 // Dashboard Overview screen
 
+import { useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
@@ -8,6 +9,7 @@ import {
   PriorityBadge, Progress, SlackCard, StatusBadge,
 } from '@/components/ui';
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong } from '@/lib/utils';
+import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
 export function DashboardScreen({ setRoute }) {
   const { currentWorkspace: brand, data, me } = useWorkspace();
@@ -201,16 +203,54 @@ export const KPI = ({ label, value, trend, tone }) => (
 );
 
 function FocusRow({ task, setRoute }) {
-  const { data } = useWorkspace();
+  const { data, currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const due = dueLabel(task.due);
+  const [pending, setPending] = useState(false);
+
+  // Wire the existing round button to toggle Done ↔ previous status. The
+  // visual stays identical — we just attach an onClick.
+  const toggleDone = async (e) => {
+    e.stopPropagation();
+    if (pending) return;
+    setPending(true);
+    if (task.status === 'Done') {
+      const result = await changeTaskStatus({
+        taskId: task.id,
+        workspaceId: currentWorkspaceId,
+        from: 'Done',
+        to: 'In Progress',
+      });
+      if (result.ok) {
+        updateTaskInCache(task.id, { status: 'In Progress' });
+        if (result.activity) pushActivity(result.activity);
+      }
+    } else {
+      const result = await markTaskDone({
+        taskId: task.id,
+        workspaceId: currentWorkspaceId,
+        from: task.status,
+      });
+      if (result.ok) {
+        updateTaskInCache(task.id, { status: 'Done' });
+        if (result.activity) pushActivity(result.activity);
+      }
+    }
+    setPending(false);
+  };
+
   return (
     <div
       className="row gap-3"
       onClick={() => setRoute('project:' + task.projectId)}
       style={{ padding: '11px 18px', borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}
     >
-      <button className="btn btn-icon btn-sm" style={{ border: '1.5px solid var(--border-strong)', borderRadius: 999, width: 18, height: 18, padding: 0, background: 'transparent' }}>
+      <button
+        className="btn btn-icon btn-sm"
+        onClick={toggleDone}
+        disabled={pending}
+        style={{ border: '1.5px solid var(--border-strong)', borderRadius: 999, width: 18, height: 18, padding: 0, background: 'transparent' }}
+      >
         {task.status === 'Done' && <I.check size={11} />}
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -1,0 +1,202 @@
+'use server';
+// Project CRUD server actions. Only managers/admins/owners can create or
+// update projects (RLS re-enforces).
+
+import { randomUUID } from 'node:crypto';
+import { createClient } from '@/lib/supabase/server';
+import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import type {
+  ActionResult,
+  ActivityView,
+  ProjectStatus,
+  ProjectView,
+  TaskPriority,
+} from '@/lib/types';
+
+const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
+
+async function actor(): Promise<string> {
+  const supabase = createClient();
+  if (!supabase) return 'fabian';
+  const u = await currentUser();
+  return u?.id ?? 'fabian';
+}
+
+function synthActivity(p: {
+  workspaceId: string;
+  user: string;
+  verb: string;
+  target: string;
+  meta?: string;
+  icon: string;
+}): ActivityView {
+  return {
+    id: randomUUID(),
+    workspace: p.workspaceId,
+    user: p.user,
+    verb: p.verb,
+    target: p.target,
+    meta: p.meta ?? '',
+    time: new Date().toISOString(),
+    icon: p.icon,
+  };
+}
+
+export async function createProject(input: {
+  workspaceId: string;
+  name: string;
+  type?: string;
+  description?: string;
+  ownerId?: string;
+  due?: string;
+  priority?: TaskPriority;
+  status?: ProjectStatus;
+}): Promise<ActionResult<ProjectView>> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: 'Name is required' };
+
+  const supabase = createClient();
+  const userId = await actor();
+
+  if (!supabase) {
+    const project: ProjectView = {
+      id: randomUUID(),
+      workspace: input.workspaceId,
+      name,
+      type: input.type ?? 'Episode',
+      desc: input.description ?? '',
+      status: input.status ?? 'Planning',
+      priority: input.priority ?? 'Medium',
+      progress: 0,
+      phaseIdx: 0,
+      due: input.due ?? '',
+      owner: input.ownerId ?? userId,
+      team: [userId],
+      slackChannel: '',
+      slackConnected: false,
+    };
+    return {
+      ok: true,
+      data: project,
+      activity: synthActivity({
+        workspaceId: input.workspaceId,
+        user: userId,
+        verb: 'created Project',
+        target: project.id,
+        meta: name,
+        icon: 'plus',
+      }),
+    };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Only managers+ can create projects' };
+  }
+
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      workspace_id: input.workspaceId,
+      name,
+      type: input.type ?? 'Episode',
+      description: input.description ?? null,
+      status: input.status ?? 'Planning',
+      priority: input.priority ?? 'Medium',
+      due_date: input.due || null,
+      owner_id: input.ownerId ?? userId,
+    })
+    .select()
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
+
+  await supabase.from('activity_logs').insert({
+    workspace_id: input.workspaceId,
+    actor_id: userId,
+    kind: 'project_created',
+    target_type: 'project',
+    target_id: data.id,
+    meta: { name },
+  });
+
+  const project: ProjectView = {
+    id: data.id,
+    workspace: input.workspaceId,
+    name: data.name,
+    type: data.type ?? '',
+    desc: data.description ?? '',
+    status: data.status,
+    priority: data.priority,
+    progress: data.progress ?? 0,
+    phaseIdx: data.phase_idx ?? 0,
+    due: data.due_date ?? '',
+    owner: data.owner_id ?? '',
+    team: [],
+    slackChannel: data.slack_channel ?? '',
+    slackConnected: !!data.slack_connected,
+  };
+
+  return {
+    ok: true,
+    data: project,
+    activity: synthActivity({
+      workspaceId: input.workspaceId,
+      user: userId,
+      verb: 'created Project',
+      target: project.id,
+      meta: name,
+      icon: 'plus',
+    }),
+  };
+}
+
+export async function updateProject(input: {
+  projectId: string;
+  workspaceId: string;
+  patch: Partial<
+    Pick<
+      ProjectView,
+      | 'name'
+      | 'type'
+      | 'desc'
+      | 'status'
+      | 'priority'
+      | 'progress'
+      | 'phaseIdx'
+      | 'due'
+      | 'owner'
+      | 'slackChannel'
+      | 'slackConnected'
+    >
+  >;
+}): Promise<ActionResult<Partial<ProjectView> & { id: string }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: { id: input.projectId, ...input.patch } };
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Only managers+ can edit projects' };
+  }
+
+  const row: Record<string, unknown> = {};
+  if (input.patch.name !== undefined) row.name = input.patch.name;
+  if (input.patch.type !== undefined) row.type = input.patch.type;
+  if (input.patch.desc !== undefined) row.description = input.patch.desc;
+  if (input.patch.status !== undefined) row.status = input.patch.status;
+  if (input.patch.priority !== undefined) row.priority = input.patch.priority;
+  if (input.patch.progress !== undefined) row.progress = input.patch.progress;
+  if (input.patch.phaseIdx !== undefined) row.phase_idx = input.patch.phaseIdx;
+  if (input.patch.due !== undefined) row.due_date = input.patch.due || null;
+  if (input.patch.owner !== undefined) row.owner_id = input.patch.owner || null;
+  if (input.patch.slackChannel !== undefined) row.slack_channel = input.patch.slackChannel || null;
+  if (input.patch.slackConnected !== undefined) row.slack_connected = input.patch.slackConnected;
+
+  const { error } = await supabase
+    .from('projects')
+    .update(row)
+    .eq('id', input.projectId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, data: { id: input.projectId, ...input.patch } };
+}
