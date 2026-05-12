@@ -31,6 +31,18 @@ function forwardError(origin: string, params: URLSearchParams) {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
 
+  // Structured diagnostic log — never prints token values, only shape.
+  // Lets you grep `[auth/callback]` in the dev server output to see what
+  // Supabase actually sent for each click.
+  console.log('[auth/callback]', {
+    origin,
+    hasCode: !!searchParams.get('code'),
+    hasTokenHash: !!searchParams.get('token_hash'),
+    type: searchParams.get('type') || null,
+    error: searchParams.get('error') || null,
+    error_code: searchParams.get('error_code') || null,
+  });
+
   // 3. Supabase forwarded an error from its /verify endpoint.
   if (searchParams.get('error') || searchParams.get('error_code')) {
     return forwardError(origin, searchParams);
