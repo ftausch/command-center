@@ -1,0 +1,110 @@
+'use client';
+// Team View
+
+import { D } from '@/lib/data';
+import { I } from '@/components/icons';
+import { Avatar, Badge } from '@/components/ui';
+import { daysUntil } from '@/lib/utils';
+import { KPI } from '@/components/screens/Dashboard';
+
+export function TeamScreen({ workspace, setRoute }) {
+  const users = D.users.filter(u => u.workspaces.includes(workspace));
+
+  return (
+    <div className="page fade-in">
+      <div className="page-head">
+        <div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{D.brands[workspace].name}</Badge></div>
+          <h1 className="h1">Team</h1>
+          <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
+            Wer arbeitet gerade woran. Auslastung pro Person. Filter nach Rolle, Status, Workspace.
+          </p>
+        </div>
+        <div className="row gap-2">
+          <button className="btn btn-ghost btn-sm"><I.filter size={13} /> Filter</button>
+          <button className="btn btn-brand btn-sm"><I.plus size={13} /> Person einladen</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-4 gap-3 mb-6">
+        <KPI label="Teammitglieder" value={users.length} trend={`${users.filter(u => u.online).length} online`} />
+        <KPI label="Offene Tasks" value={D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done').length} trend="Gesamtauslastung 78%" />
+        <KPI label="Überfällig" value={D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="auf 2 Personen verteilt" tone="bad" />
+        <KPI label="Ø Tasks pro Person" value={Math.round(D.tasks.filter(t => t.workspace === workspace && t.status !== 'Done').length / users.length * 10) / 10} trend="Balance gut" tone="ok" />
+      </div>
+
+      {/* Team grid */}
+      <div className="grid grid-2 gap-3">
+        {users.map(u => {
+          const userTasks = D.tasks.filter(t => t.workspace === workspace && t.assignee === u.id);
+          const open = userTasks.filter(t => t.status !== 'Done');
+          const overdue = open.filter(t => daysUntil(t.due) < 0);
+          const inProgress = open.filter(t => t.status === 'In Progress');
+          const load = Math.min(100, open.length * 14);
+          const overLoaded = load > 80;
+          return (
+            <div key={u.id} className="card card-pad">
+              <div className="row between mb-3">
+                <div className="row gap-3">
+                  <div style={{ position: 'relative' }}>
+                    <Avatar user={u} size="lg" />
+                    {u.online && <span style={{
+                      position: 'absolute', bottom: 0, right: 0,
+                      width: 10, height: 10, borderRadius: 999,
+                      background: 'var(--success)', border: '2px solid var(--bg-elev)',
+                    }} />}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14.5 }}>{u.name}</div>
+                    <div className="meta">{u.role} · {u.workspaces.length === 2 ? 'beide Workspaces' : D.brands[u.workspaces[0]].name}</div>
+                  </div>
+                </div>
+                <button className="btn btn-quiet btn-sm"><I.more size={14} /></button>
+              </div>
+
+              <div className="row gap-4 mb-3">
+                <SmallStat label="Offen" value={open.length} />
+                <SmallStat label="In Progress" value={inProgress.length} />
+                <SmallStat label="Überfällig" value={overdue.length} tone={overdue.length > 0 ? 'bad' : ''} />
+              </div>
+
+              <div className="mb-3">
+                <div className="row between" style={{ marginBottom: 6 }}>
+                  <span className="label">Workload</span>
+                  <span className="mono" style={{ fontSize: 11.5, color: overLoaded ? 'var(--danger)' : 'var(--text-3)' }}>{load}%</span>
+                </div>
+                <div className="progress" style={{ height: 5 }}>
+                  <div className="progress-bar" style={{ width: load + '%', background: overLoaded ? 'var(--danger)' : load > 60 ? 'var(--warning)' : 'var(--brand)' }} />
+                </div>
+              </div>
+
+              {/* Top tasks */}
+              <div className="col gap-1 mt-2" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 10 }}>
+                <div className="label" style={{ marginBottom: 4 }}>Aktuell</div>
+                {open.slice(0, 2).map(t => {
+                  const p = D.projects.find(pr => pr.id === t.projectId);
+                  return (
+                    <div key={t.id} className="row gap-2" style={{ padding: '4px 0', fontSize: 12.5, cursor: 'pointer' }} onClick={() => setRoute('project:' + t.projectId)}>
+                      <span className="dot-indicator" style={{ background: t.status === 'Blocked' ? 'var(--danger)' : t.status === 'In Progress' ? 'var(--info)' : 'var(--text-3)' }} />
+                      <span className="truncate" style={{ flex: 1 }}>{t.title}</span>
+                      <span className="meta">{p?.name.split('—')[0]?.trim() || p?.name}</span>
+                    </div>
+                  );
+                })}
+                {open.length === 0 && <div className="meta">Keine offenen Tasks</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const SmallStat = ({ label, value, tone }) => (
+  <div>
+    <div className="label" style={{ fontSize: 10 }}>{label}</div>
+    <div className="mono" style={{ fontSize: 18, fontWeight: 600, marginTop: 2, color: tone === 'bad' ? 'var(--danger)' : 'var(--text-1)' }}>{value}</div>
+  </div>
+);
