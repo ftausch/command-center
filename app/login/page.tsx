@@ -3,16 +3,72 @@
 // system from globals.css (card, btn, input). When Supabase isn't
 // configured (e.g. preview deploys with no env vars) we render a hint
 // instead of crashing.
+//
+// Error display: Supabase's /auth/v1/verify endpoint may redirect here
+// (via /auth/callback) with ?error_code=otp_expired etc. on a failed or
+// expired magic link. We also fall back to reading window.location.hash
+// in case a legacy implicit-flow project still uses fragment errors. The
+// existing error slot in the form renders whichever shape arrived — no
+// new UI added.
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
-export default function LoginPage() {
+function humanizeError(code: string | null, desc: string | null, fallback: string | null): string {
+  if (code === 'otp_expired') {
+    return 'Der Magic Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.';
+  }
+  if (code === 'access_denied') {
+    return 'Zugriff verweigert. Bitte erneut anmelden.';
+  }
+  if (code === 'unauthorized_client' || code === 'invalid_request') {
+    return 'Diese Redirect-URL ist nicht in den Supabase Auth-Settings erlaubt. Bitte beim Admin prüfen lassen.';
+  }
+  if (fallback === 'not_configured') {
+    return 'Auth ist in dieser Umgebung nicht konfiguriert (mock mode).';
+  }
+  if (fallback === 'exchange_failed' || fallback === 'verify_failed') {
+    return desc || 'Verifizierung fehlgeschlagen — bitte erneut anfordern.';
+  }
+  if (fallback === 'missing_code') {
+    return desc || 'Auth callback ohne Token. Bitte neuen Magic Link anfordern.';
+  }
+  return desc || fallback || 'Unbekannter Fehler.';
+}
+
+function LoginInner() {
+  const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const configured = isSupabaseConfigured();
+
+  // Pick up errors forwarded by /auth/callback (query string) AND any
+  // fragment errors a legacy flow might leave on the URL (e.g. when the
+  // user lands here directly from Supabase rather than via the callback).
+  useEffect(() => {
+    let errorCode = params.get('error_code');
+    let errorDescription = params.get('error_description');
+    let error = params.get('error');
+
+    if (!errorCode && !error && typeof window !== 'undefined' && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      errorCode = errorCode || hashParams.get('error_code');
+      errorDescription = errorDescription || hashParams.get('error_description');
+      error = error || hashParams.get('error');
+      // Strip the hash so the message doesn't survive a refresh.
+      if (errorCode || error) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+
+    if (errorCode || error) {
+      setErrorMsg(humanizeError(errorCode, errorDescription, error));
+      setStatus('error');
+    }
+  }, [params]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -128,5 +184,14 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams() must be inside <Suspense> when statically prerendered.
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
   );
 }
