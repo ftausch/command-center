@@ -226,3 +226,29 @@ export interface WorkspaceStats {
   tasks: number; // open tasks
   team: number;
 }
+
+export interface TaskCommentView {
+  id: string;
+  taskId: string;
+  author: string; // user id
+  time: string;   // ISO 8601
+  text: string;
+}
+
+export interface TaskChecklistItemView {
+  id: string;
+  taskId: string;
+  label: string;
+  done: boolean;
+  position: number;
+}
+
+// Standardised return shape for every server action. Lets callers update
+// optimistic state with `data` (and merge `activity` into the activity log)
+// or surface `error` in the UI.
+export type ActionResult<T> = {
+  ok: boolean;
+  data?: T;
+  activity?: ActivityView;
+  error?: string;
+};

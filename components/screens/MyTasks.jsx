@@ -6,12 +6,52 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { daysUntil, dueLabel } from '@/lib/utils';
+import {
+  createTask,
+  markTaskDone,
+  changeTaskStatus,
+} from '@/lib/actions/tasks';
 
 export function MyTasksScreen({ setRoute }) {
-  const { currentWorkspace: brand, data, me } = useWorkspace();
+  const {
+    currentWorkspace: brand,
+    currentWorkspaceId,
+    data,
+    me,
+    addTask,
+    pushActivity,
+  } = useWorkspace();
   const [tab, setTab] = useState('all');
   const [groupBy, setGroupBy] = useState('project');
   const [filterPrio, setFilterPrio] = useState(null);
+  const [quickAddTitle, setQuickAddTitle] = useState('');
+  const [quickAddPending, setQuickAddPending] = useState(false);
+  const [quickAddError, setQuickAddError] = useState(null);
+
+  // Quick-add defaults the project to the first project of this workspace.
+  // No project picker exists in the current UI, so we pick a sensible
+  // default rather than introduce new markup.
+  const defaultProjectId = data.projects[0]?.id;
+
+  const submitQuickAdd = async () => {
+    const title = quickAddTitle.trim();
+    if (!title || !defaultProjectId) return;
+    setQuickAddPending(true);
+    setQuickAddError(null);
+    const result = await createTask({
+      workspaceId: currentWorkspaceId,
+      projectId: defaultProjectId,
+      title,
+    });
+    setQuickAddPending(false);
+    if (result.ok && result.data) {
+      addTask(result.data);
+      if (result.activity) pushActivity(result.activity);
+      setQuickAddTitle('');
+    } else {
+      setQuickAddError(result.error ?? 'Could not create task');
+    }
+  };
 
   const myTasks = useMemo(
     () => (me ? data.tasks.filter((t) => t.assignee === me.id) : []),
@@ -108,10 +148,32 @@ export function MyTasksScreen({ setRoute }) {
 
       <div className="card mb-4" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <I.plus size={14} color="var(--text-3)" />
-        <input className="input" placeholder="Quick add — Task-Titel eingeben…" style={{ border: 'none', height: 32 }} />
+        <input
+          className="input"
+          placeholder="Quick add — Task-Titel eingeben…"
+          style={{ border: 'none', height: 32 }}
+          value={quickAddTitle}
+          onChange={(e) => setQuickAddTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !quickAddPending) submitQuickAdd();
+          }}
+          disabled={quickAddPending || !defaultProjectId}
+          title={defaultProjectId ? '' : 'Erst ein Projekt anlegen'}
+        />
         <Badge kind="ghost">in {brand?.name}</Badge>
-        <button className="btn btn-quiet btn-sm">Detail öffnen <I.arrowRight size={12} /></button>
+        <button
+          className="btn btn-quiet btn-sm"
+          onClick={submitQuickAdd}
+          disabled={quickAddPending || !quickAddTitle.trim() || !defaultProjectId}
+        >
+          Detail öffnen <I.arrowRight size={12} />
+        </button>
       </div>
+      {quickAddError && (
+        <div className="meta" style={{ color: 'var(--danger)', marginTop: -8, marginBottom: 12 }}>
+          {quickAddError}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="card">
@@ -150,14 +212,56 @@ export function MyTasksScreen({ setRoute }) {
 }
 
 function TaskRow({ task, setRoute }) {
-  const { data } = useWorkspace();
+  const { data, currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const waiting = data.members.find((u) => u.id === task.waitingOn);
   const due = dueLabel(task.due);
+  const [pending, setPending] = useState(false);
+
+  // Toggle Done ↔ In Progress via the existing circle. Visual is unchanged
+  // — the circle was already filled with brand color for Done.
+  const toggleDone = async (e) => {
+    e.stopPropagation();
+    if (pending) return;
+    setPending(true);
+    if (task.status === 'Done') {
+      const result = await changeTaskStatus({
+        taskId: task.id,
+        workspaceId: currentWorkspaceId,
+        from: 'Done',
+        to: 'In Progress',
+      });
+      if (result.ok) {
+        updateTaskInCache(task.id, { status: 'In Progress' });
+        if (result.activity) pushActivity(result.activity);
+      }
+    } else {
+      const result = await markTaskDone({
+        taskId: task.id,
+        workspaceId: currentWorkspaceId,
+        from: task.status,
+      });
+      if (result.ok) {
+        updateTaskInCache(task.id, { status: 'Done' });
+        if (result.activity) pushActivity(result.activity);
+      }
+    }
+    setPending(false);
+  };
+
   return (
     <tr style={{ cursor: 'pointer' }} onClick={() => setRoute('project:' + task.projectId)}>
       <td>
-        <span style={{ display: 'inline-block', width: 16, height: 16, borderRadius: 999, border: '1.5px solid var(--border-strong)', background: task.status === 'Done' ? 'var(--brand)' : 'transparent', verticalAlign: 'middle' }} />
+        <span
+          role="button"
+          tabIndex={0}
+          aria-pressed={task.status === 'Done'}
+          onClick={toggleDone}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') toggleDone(e);
+          }}
+          style={{ display: 'inline-block', width: 16, height: 16, borderRadius: 999, border: '1.5px solid var(--border-strong)', background: task.status === 'Done' ? 'var(--brand)' : 'transparent', verticalAlign: 'middle', cursor: 'pointer' }}
+        />
       </td>
       <td>
         <div style={{ fontWeight: 500 }}>{task.title}</div>

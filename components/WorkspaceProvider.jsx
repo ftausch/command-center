@@ -42,8 +42,13 @@ const EMPTY_DATA = {
   slackNotifications: [],
   templates: {},
   phases: [],
+  // Per-task caches populated lazily by mutation helpers (and, in the
+  // future, by per-task fetches when a detail screen opens).
+  taskComments: {},        // { [taskId]: TaskCommentView[] }
+  taskChecklistItems: {},  // { [taskId]: TaskChecklistItemView[] }
 };
 
+const noop = () => {};
 const WorkspaceContext = createContext({
   workspaces: [],
   currentWorkspaceId: null,
@@ -55,6 +60,17 @@ const WorkspaceContext = createContext({
   refresh: async () => {},
   me: null,
   mode: 'mock',
+  // Mutation helpers — call from action callers to merge results into the
+  // in-memory cache. Each is a no-op in the default context value.
+  addTask: noop,
+  updateTaskInCache: noop,
+  removeTask: noop,
+  addProject: noop,
+  updateProjectInCache: noop,
+  addTaskComment: noop,
+  addChecklistItem: noop,
+  updateChecklistItemInCache: noop,
+  pushActivity: noop,
 });
 
 function mockWorkspaces() {
@@ -176,6 +192,75 @@ export function WorkspaceProvider({ children }) {
     [currentWorkspaceId, loadData],
   );
 
+  // ── Mutation helpers ───────────────────────────────────────────────────
+  // Each helper merges a newly-created/updated/deleted entity returned by a
+  // server action into the in-memory cache so the UI sees the change without
+  // a full re-fetch. The helpers themselves never call the server.
+  const addTask = useCallback((task) => {
+    if (!task) return;
+    setData((d) => ({ ...d, tasks: [task, ...d.tasks] }));
+  }, []);
+  const updateTaskInCache = useCallback((taskId, patch) => {
+    setData((d) => ({
+      ...d,
+      tasks: d.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+    }));
+  }, []);
+  const removeTask = useCallback((taskId) => {
+    setData((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== taskId) }));
+  }, []);
+  const addProject = useCallback((project) => {
+    if (!project) return;
+    setData((d) => ({ ...d, projects: [project, ...d.projects] }));
+  }, []);
+  const updateProjectInCache = useCallback((projectId, patch) => {
+    setData((d) => ({
+      ...d,
+      projects: d.projects.map((p) =>
+        p.id === projectId ? { ...p, ...patch } : p,
+      ),
+    }));
+  }, []);
+  const addTaskComment = useCallback((comment) => {
+    if (!comment) return;
+    setData((d) => {
+      const existing = d.taskComments[comment.taskId] ?? [];
+      return {
+        ...d,
+        taskComments: { ...d.taskComments, [comment.taskId]: [...existing, comment] },
+      };
+    });
+  }, []);
+  const addChecklistItem = useCallback((item) => {
+    if (!item) return;
+    setData((d) => {
+      const existing = d.taskChecklistItems[item.taskId] ?? [];
+      return {
+        ...d,
+        taskChecklistItems: {
+          ...d.taskChecklistItems,
+          [item.taskId]: [...existing, item],
+        },
+      };
+    });
+  }, []);
+  const updateChecklistItemInCache = useCallback((taskId, itemId, patch) => {
+    setData((d) => {
+      const existing = d.taskChecklistItems[taskId] ?? [];
+      return {
+        ...d,
+        taskChecklistItems: {
+          ...d.taskChecklistItems,
+          [taskId]: existing.map((i) => (i.id === itemId ? { ...i, ...patch } : i)),
+        },
+      };
+    });
+  }, []);
+  const pushActivity = useCallback((entry) => {
+    if (!entry) return;
+    setData((d) => ({ ...d, activity: [entry, ...d.activity] }));
+  }, []);
+
   const currentWorkspace = useMemo(
     () => workspaces.find((w) => w.id === currentWorkspaceId) ?? null,
     [workspaces, currentWorkspaceId],
@@ -193,6 +278,15 @@ export function WorkspaceProvider({ children }) {
       refresh,
       me,
       mode,
+      addTask,
+      updateTaskInCache,
+      removeTask,
+      addProject,
+      updateProjectInCache,
+      addTaskComment,
+      addChecklistItem,
+      updateChecklistItemInCache,
+      pushActivity,
     }),
     [
       workspaces,
@@ -204,6 +298,15 @@ export function WorkspaceProvider({ children }) {
       refresh,
       me,
       mode,
+      addTask,
+      updateTaskInCache,
+      removeTask,
+      addProject,
+      updateProjectInCache,
+      addTaskComment,
+      addChecklistItem,
+      updateChecklistItemInCache,
+      pushActivity,
     ],
   );
 

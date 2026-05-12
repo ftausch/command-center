@@ -1,0 +1,362 @@
+'use server';
+// Task CRUD server actions. Each function:
+//   1. validates the caller is a member of the workspace
+//   2. enforces a role gate (RLS will re-enforce server-side)
+//   3. writes to Supabase + logs activity, OR synthesizes a mock entity
+//      when Supabase isn't configured
+//   4. returns an ActionResult with the affected entity + activity log so
+//      the client can merge into provider state without a refetch
+//
+// Why an `activity` field on every response: the client provider keeps an
+// in-memory activity feed. Returning the synthesized activity entry keeps
+// the feed in sync after writes without round-tripping to the DB.
+
+import { randomUUID } from 'node:crypto';
+import { createClient } from '@/lib/supabase/server';
+import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import type {
+  ActionResult,
+  ActivityView,
+  TaskPriority,
+  TaskStatus,
+  TaskView,
+} from '@/lib/types';
+
+const ASSIGNEE_ROLES = ['owner', 'admin', 'manager', 'member'] as const;
+const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
+
+function mockActor(): string {
+  // mock-mode "me" id — matches D.users[0] in lib/data.js
+  return 'fabian';
+}
+
+async function actor(): Promise<string> {
+  const supabase = createClient();
+  if (!supabase) return mockActor();
+  const u = await currentUser();
+  return u?.id ?? mockActor();
+}
+
+function synthActivity(params: {
+  workspaceId: string;
+  user: string;
+  verb: string;
+  target: string;
+  meta?: string;
+  icon: string;
+}): ActivityView {
+  return {
+    id: randomUUID(),
+    workspace: params.workspaceId,
+    user: params.user,
+    verb: params.verb,
+    target: params.target,
+    meta: params.meta ?? '',
+    time: new Date().toISOString(),
+    icon: params.icon,
+  };
+}
+
+export async function createTask(input: {
+  workspaceId: string;
+  projectId: string;
+  title: string;
+  assigneeId?: string;
+  due?: string;
+  priority?: TaskPriority;
+  tags?: string[];
+}): Promise<ActionResult<TaskView>> {
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: 'Title is required' };
+
+  const userId = await actor();
+  const supabase = createClient();
+
+  // mock mode — synthesize and return
+  if (!supabase) {
+    const task: TaskView = {
+      id: randomUUID(),
+      workspace: input.workspaceId,
+      projectId: input.projectId,
+      title,
+      assignee: input.assigneeId ?? userId,
+      status: 'To Do',
+      priority: input.priority ?? 'Medium',
+      due: input.due ?? '',
+      tags: input.tags ?? [],
+    };
+    return {
+      ok: true,
+      data: task,
+      activity: synthActivity({
+        workspaceId: input.workspaceId,
+        user: userId,
+        verb: 'created Task',
+        target: task.id,
+        meta: title,
+        icon: 'plus',
+      }),
+    };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to create tasks' };
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({
+      workspace_id: input.workspaceId,
+      project_id: input.projectId,
+      title,
+      assignee_id: input.assigneeId ?? userId,
+      due_date: input.due || null,
+      priority: input.priority ?? 'Medium',
+      tags: input.tags ?? [],
+    })
+    .select()
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
+
+  await supabase.from('activity_logs').insert({
+    workspace_id: input.workspaceId,
+    actor_id: userId,
+    kind: 'task_created',
+    target_type: 'task',
+    target_id: data.id,
+    meta: { title },
+  });
+
+  const task: TaskView = {
+    id: data.id,
+    workspace: input.workspaceId,
+    projectId: data.project_id,
+    title: data.title,
+    assignee: data.assignee_id ?? '',
+    status: data.status,
+    priority: data.priority,
+    due: data.due_date ?? '',
+    tags: data.tags ?? [],
+  };
+  return {
+    ok: true,
+    data: task,
+    activity: synthActivity({
+      workspaceId: input.workspaceId,
+      user: userId,
+      verb: 'created Task',
+      target: task.id,
+      meta: title,
+      icon: 'plus',
+    }),
+  };
+}
+
+export async function updateTask(input: {
+  taskId: string;
+  workspaceId: string;
+  patch: Partial<
+    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'tags' | 'blocker' | 'waitingOn'>
+  >;
+}): Promise<ActionResult<Partial<TaskView> & { id: string }>> {
+  const supabase = createClient();
+  const userId = await actor();
+
+  if (!supabase) {
+    return {
+      ok: true,
+      data: { id: input.taskId, ...input.patch },
+    };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to edit tasks' };
+  }
+
+  // Column rename from view-shape to DB-shape
+  const row: Record<string, unknown> = {};
+  if (input.patch.title !== undefined) row.title = input.patch.title;
+  if (input.patch.assignee !== undefined) row.assignee_id = input.patch.assignee || null;
+  if (input.patch.due !== undefined) row.due_date = input.patch.due || null;
+  if (input.patch.priority !== undefined) row.priority = input.patch.priority;
+  if (input.patch.tags !== undefined) row.tags = input.patch.tags;
+  if (input.patch.blocker !== undefined) row.blocker = input.patch.blocker || null;
+  if (input.patch.waitingOn !== undefined) row.waiting_on_id = input.patch.waitingOn || null;
+
+  const { error } = await supabase
+    .from('tasks')
+    .update(row)
+    .eq('id', input.taskId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+
+  void userId; // available for future audit fields
+  return { ok: true, data: { id: input.taskId, ...input.patch } };
+}
+
+export async function changeTaskStatus(input: {
+  taskId: string;
+  workspaceId: string;
+  from: TaskStatus;
+  to: TaskStatus;
+}): Promise<ActionResult<{ id: string; status: TaskStatus }>> {
+  const supabase = createClient();
+  const userId = await actor();
+
+  const activity = synthActivity({
+    workspaceId: input.workspaceId,
+    user: userId,
+    verb: 'pushed Status',
+    target: input.taskId,
+    meta: `→ ${input.to}`,
+    icon: 'arrow-right',
+  });
+
+  if (!supabase) {
+    return { ok: true, data: { id: input.taskId, status: input.to }, activity };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to change status' };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ status: input.to })
+    .eq('id', input.taskId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+
+  await supabase.from('activity_logs').insert({
+    workspace_id: input.workspaceId,
+    actor_id: userId,
+    kind: 'task_status_changed',
+    target_type: 'task',
+    target_id: input.taskId,
+    meta: { from: input.from, to: input.to },
+  });
+
+  return { ok: true, data: { id: input.taskId, status: input.to }, activity };
+}
+
+export async function markTaskDone(input: {
+  taskId: string;
+  workspaceId: string;
+  from: TaskStatus;
+}): Promise<ActionResult<{ id: string; status: TaskStatus }>> {
+  const supabase = createClient();
+  const userId = await actor();
+
+  const activity = synthActivity({
+    workspaceId: input.workspaceId,
+    user: userId,
+    verb: 'completed',
+    target: input.taskId,
+    icon: 'check',
+  });
+
+  if (!supabase) {
+    return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to complete tasks' };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ status: 'Done' })
+    .eq('id', input.taskId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+
+  await supabase.from('activity_logs').insert({
+    workspace_id: input.workspaceId,
+    actor_id: userId,
+    kind: 'task_completed',
+    target_type: 'task',
+    target_id: input.taskId,
+    meta: { from: input.from },
+  });
+
+  return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
+}
+
+export async function markTaskBlocked(input: {
+  taskId: string;
+  workspaceId: string;
+  reason?: string;
+}): Promise<ActionResult<{ id: string; status: TaskStatus; blocker: string | null }>> {
+  const supabase = createClient();
+  const userId = await actor();
+
+  const reason = input.reason?.trim() || null;
+  const activity = synthActivity({
+    workspaceId: input.workspaceId,
+    user: userId,
+    verb: 'blocked',
+    target: input.taskId,
+    meta: reason ?? 'Blocker gemeldet',
+    icon: 'block',
+  });
+
+  if (!supabase) {
+    return {
+      ok: true,
+      data: { id: input.taskId, status: 'Blocked', blocker: reason },
+      activity,
+    };
+  }
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to block tasks' };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ status: 'Blocked', blocker: reason })
+    .eq('id', input.taskId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+
+  await supabase.from('activity_logs').insert({
+    workspace_id: input.workspaceId,
+    actor_id: userId,
+    kind: 'task_blocked',
+    target_type: 'task',
+    target_id: input.taskId,
+    meta: { reason },
+  });
+
+  return {
+    ok: true,
+    data: { id: input.taskId, status: 'Blocked', blocker: reason },
+    activity,
+  };
+}
+
+export async function deleteTask(input: {
+  taskId: string;
+  workspaceId: string;
+}): Promise<ActionResult<{ id: string }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: { id: input.taskId } };
+
+  const role = await getWorkspaceRole(input.workspaceId);
+  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Only managers+ can delete tasks' };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', input.taskId)
+    .eq('workspace_id', input.workspaceId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: { id: input.taskId } };
+}

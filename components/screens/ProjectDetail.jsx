@@ -9,16 +9,52 @@ import {
   PhaseTracker, PriorityBadge, Progress, SlackCard, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
+import { addTaskComment } from '@/lib/actions/comments';
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data, me } = useWorkspace();
+  const {
+    currentWorkspace: brand,
+    currentWorkspaceId,
+    data,
+    me,
+    addTaskComment: addTaskCommentToCache,
+    pushActivity,
+  } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
+  const [commentText, setCommentText] = useState('');
+  const [commentPending, setCommentPending] = useState(false);
+  const [commentError, setCommentError] = useState(null);
 
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
 
   const phases = data.phases;
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
+  // The comments form is project-scoped in the existing UI but the schema
+  // stores comments per-task. Attach new comments to the first task of the
+  // project so the wiring works without introducing a task picker.
+  const commentTargetTaskId = tasks[0]?.id ?? null;
+  const projectComments = tasks.flatMap((t) => data.taskComments[t.id] ?? []);
+
+  const submitComment = async () => {
+    const body = commentText.trim();
+    if (!body || !commentTargetTaskId) return;
+    setCommentPending(true);
+    setCommentError(null);
+    const result = await addTaskComment({
+      workspaceId: currentWorkspaceId,
+      taskId: commentTargetTaskId,
+      body,
+    });
+    setCommentPending(false);
+    if (result.ok && result.data) {
+      addTaskCommentToCache(result.data);
+      if (result.activity) pushActivity(result.activity);
+      setCommentText('');
+    } else {
+      setCommentError(result.error ?? 'Kommentar konnte nicht gesendet werden');
+    }
+  };
   const team = project.team
     .map((id) => data.members.find((u) => u.id === id))
     .filter(Boolean);
@@ -138,11 +174,32 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 <CommentItem authorId="tim" time="vor 14 Min" text="@Mara — Rough-Cut bitte heute bis 18 Uhr. Wir brauchen morgen früh die Review-Runde mit Fabian." />
                 <CommentItem authorId="mara" time="vor 1 Std" text="Schaffe ich. Ich arbeite gerade am Übergang Minute 17–22, da ist noch viel doppelte Audio." />
                 <CommentItem authorId="fabian" time="gestern" text="Wichtig: Verena hat um Cut bei 32:10 gebeten (Politik-Disclaimer). Bitte unbedingt rausnehmen." />
+                {projectComments.map((c) => (
+                  <CommentItem key={c.id} authorId={c.author} time={timeAgo(c.time)} text={c.text} />
+                ))}
                 <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
                   {me && <Avatar user={me} />}
-                  <input className="input" placeholder="Kommentar schreiben — @ für Mention, # für Task…" />
-                  <button className="btn btn-brand">Kommentieren</button>
+                  <input
+                    className="input"
+                    placeholder="Kommentar schreiben — @ für Mention, # für Task…"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !commentPending) submitComment();
+                    }}
+                    disabled={commentPending || !commentTargetTaskId}
+                  />
+                  <button
+                    className="btn btn-brand"
+                    onClick={submitComment}
+                    disabled={commentPending || !commentText.trim() || !commentTargetTaskId}
+                  >
+                    Kommentieren
+                  </button>
                 </div>
+                {commentError && (
+                  <div className="meta" style={{ color: 'var(--danger)' }}>{commentError}</div>
+                )}
               </div>
             </div>
           )}
