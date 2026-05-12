@@ -19,6 +19,33 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return NextResponse.next();
 
+  // ── Auth-param rescue ──────────────────────────────────────────────────
+  // Supabase appends `?code=` (or `?token_hash=`, or `?error=`) to whatever
+  // URL it ended up redirecting to. The intended target is /auth/callback,
+  // but when the redirect_to wasn't allowlisted Supabase falls back to the
+  // dashboard's Site URL (usually '/'), so the verification ends up on the
+  // homepage and the homepage doesn't know what to do with `?code=`.
+  //
+  // We intercept that case here and forward to /auth/callback with the
+  // params preserved, so the auth flow completes regardless of dashboard
+  // misconfiguration. The only path we don't rescue is /login carrying
+  // ONLY error params — that's a legitimate landing (the login page reads
+  // those params to render a human-readable message). A /login URL that
+  // also carries `?code=` still gets rescued.
+  const params = request.nextUrl.searchParams;
+  const hasCode = params.has('code') || params.has('token_hash');
+  const hasError = params.has('error') || params.has('error_code');
+  const pathname = request.nextUrl.pathname;
+  const isCallback = pathname.startsWith('/auth/callback');
+  const isLoginErrorTarget =
+    pathname.startsWith('/login') && hasError && !hasCode;
+
+  if ((hasCode || hasError) && !isCallback && !isLoginErrorTarget) {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = '/auth/callback';
+    return NextResponse.redirect(callbackUrl);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(url, key, {
@@ -46,7 +73,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {
