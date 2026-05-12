@@ -3,7 +3,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
-import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type { ActionResult, ActivityView, TaskCommentView } from '@/lib/types';
 
 const COMMENT_ROLES = ['owner', 'admin', 'manager', 'member'] as const;
@@ -49,15 +49,16 @@ export async function addTaskComment(input: {
     return { ok: true, data: comment, activity };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...COMMENT_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...COMMENT_ROLES])) {
     return { ok: false, error: 'You do not have permission to comment' };
   }
 
   const { data, error } = await supabase
     .from('task_comments')
     .insert({
-      workspace_id: input.workspaceId,
+      workspace_id: ctx.uuid,
       task_id: input.taskId,
       author_id: userId,
       body,
@@ -67,7 +68,7 @@ export async function addTaskComment(input: {
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'comment_added',
     target_type: 'task',

@@ -7,13 +7,15 @@
 //   4. returns an ActionResult with the affected entity + activity log so
 //      the client can merge into provider state without a refetch
 //
-// Why an `activity` field on every response: the client provider keeps an
-// in-memory activity feed. Returning the synthesized activity entry keeps
-// the feed in sync after writes without round-tripping to the DB.
+// Workspace ID translation: every caller passes the workspace SLUG (the
+// UI's stable id, same shape as mock data). `getWorkspaceContext` resolves
+// it to the UUID stored in the DB and returns the caller's role in one
+// trip. Without that translation, `.eq('workspace_id', slug)` matches zero
+// rows (and inserts fail FK validation).
 
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
-import { currentUser, getWorkspaceRole, canWriteAsRole } from '@/lib/auth';
+import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type {
   ActionResult,
   ActivityView,
@@ -26,7 +28,6 @@ const ASSIGNEE_ROLES = ['owner', 'admin', 'manager', 'member'] as const;
 const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
 
 function mockActor(): string {
-  // mock-mode "me" id — matches D.users[0] in lib/data.js
   return 'fabian';
 }
 
@@ -38,7 +39,7 @@ async function actor(): Promise<string> {
 }
 
 function synthActivity(params: {
-  workspaceId: string;
+  workspaceId: string; // slug — view shape
   user: string;
   verb: string;
   target: string;
@@ -72,7 +73,6 @@ export async function createTask(input: {
   const userId = await actor();
   const supabase = createClient();
 
-  // mock mode — synthesize and return
   if (!supabase) {
     const task: TaskView = {
       id: randomUUID(),
@@ -99,15 +99,16 @@ export async function createTask(input: {
     };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
     return { ok: false, error: 'You do not have permission to create tasks' };
   }
 
   const { data, error } = await supabase
     .from('tasks')
     .insert({
-      workspace_id: input.workspaceId,
+      workspace_id: ctx.uuid,
       project_id: input.projectId,
       title,
       assignee_id: input.assigneeId ?? userId,
@@ -120,7 +121,7 @@ export async function createTask(input: {
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'task_created',
     target_type: 'task',
@@ -161,21 +162,16 @@ export async function updateTask(input: {
   >;
 }): Promise<ActionResult<Partial<TaskView> & { id: string }>> {
   const supabase = createClient();
-  const userId = await actor();
-
   if (!supabase) {
-    return {
-      ok: true,
-      data: { id: input.taskId, ...input.patch },
-    };
+    return { ok: true, data: { id: input.taskId, ...input.patch } };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
     return { ok: false, error: 'You do not have permission to edit tasks' };
   }
 
-  // Column rename from view-shape to DB-shape
   const row: Record<string, unknown> = {};
   if (input.patch.title !== undefined) row.title = input.patch.title;
   if (input.patch.assignee !== undefined) row.assignee_id = input.patch.assignee || null;
@@ -189,10 +185,9 @@ export async function updateTask(input: {
     .from('tasks')
     .update(row)
     .eq('id', input.taskId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
-  void userId; // available for future audit fields
   return { ok: true, data: { id: input.taskId, ...input.patch } };
 }
 
@@ -218,8 +213,9 @@ export async function changeTaskStatus(input: {
     return { ok: true, data: { id: input.taskId, status: input.to }, activity };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
     return { ok: false, error: 'You do not have permission to change status' };
   }
 
@@ -227,11 +223,11 @@ export async function changeTaskStatus(input: {
     .from('tasks')
     .update({ status: input.to })
     .eq('id', input.taskId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'task_status_changed',
     target_type: 'task',
@@ -262,8 +258,9 @@ export async function markTaskDone(input: {
     return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
     return { ok: false, error: 'You do not have permission to complete tasks' };
   }
 
@@ -271,11 +268,11 @@ export async function markTaskDone(input: {
     .from('tasks')
     .update({ status: 'Done' })
     .eq('id', input.taskId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'task_completed',
     target_type: 'task',
@@ -312,8 +309,9 @@ export async function markTaskBlocked(input: {
     };
   }
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...ASSIGNEE_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
     return { ok: false, error: 'You do not have permission to block tasks' };
   }
 
@@ -321,11 +319,11 @@ export async function markTaskBlocked(input: {
     .from('tasks')
     .update({ status: 'Blocked', blocker: reason })
     .eq('id', input.taskId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
   await supabase.from('activity_logs').insert({
-    workspace_id: input.workspaceId,
+    workspace_id: ctx.uuid,
     actor_id: userId,
     kind: 'task_blocked',
     target_type: 'task',
@@ -347,8 +345,9 @@ export async function deleteTask(input: {
   const supabase = createClient();
   if (!supabase) return { ok: true, data: { id: input.taskId } };
 
-  const role = await getWorkspaceRole(input.workspaceId);
-  if (!canWriteAsRole(role, [...MANAGER_ROLES])) {
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
     return { ok: false, error: 'Only managers+ can delete tasks' };
   }
 
@@ -356,7 +355,7 @@ export async function deleteTask(input: {
     .from('tasks')
     .delete()
     .eq('id', input.taskId)
-    .eq('workspace_id', input.workspaceId);
+    .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: { id: input.taskId } };
 }

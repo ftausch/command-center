@@ -61,24 +61,58 @@ export async function signOut() {
 }
 
 /**
- * Fetch the current user's role inside the given workspace. Returns null if
- * the user isn't a member. In mock mode (no Supabase) returns 'owner' so
- * dev/preview can exercise every action without an auth flow.
+ * Resolve a workspace slug to its UUID AND look up the current user's role
+ * in that workspace, in a single trip. The UI keys workspaces by slug (so
+ * mock + Supabase code paths share IDs), but the DB stores UUIDs — so
+ * every server action needs both pieces to write.
+ *
+ * Returns null in three cases:
+ *   - mock mode (no Supabase client): callers branch on `!supabase` first
+ *     and synthesize entities there, so they never reach this function
+ *   - the slug doesn't exist
+ *   - the current user isn't a member of that workspace
+ *
+ * Two queries instead of one PostgREST join — clearer code, negligible
+ * runtime cost (both queries hit indexed columns).
+ */
+export async function getWorkspaceContext(
+  workspaceSlug: string,
+): Promise<{ uuid: string; role: Role } | null> {
+  const supabase = createClient();
+  if (!supabase) return null;
+  const user = await currentUser();
+  if (!user) return null;
+
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('slug', workspaceSlug)
+    .maybeSingle();
+  if (!ws?.id) return null;
+
+  const { data: member } = await supabase
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', ws.id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!member?.role) return null;
+
+  return { uuid: ws.id as string, role: member.role as Role };
+}
+
+/**
+ * Convenience: fetch only the role for the current user in a workspace.
+ * Returns 'owner' in mock mode so server actions can exercise every code
+ * path without an auth flow. Returns null if the user isn't a member.
  */
 export async function getWorkspaceRole(
-  workspaceId: string,
+  workspaceSlug: string,
 ): Promise<Role | null> {
   const supabase = createClient();
   if (!supabase) return 'owner';
-  const user = await currentUser();
-  if (!user) return null;
-  const { data } = await supabase
-    .from('workspace_members')
-    .select('role')
-    .eq('workspace_id', workspaceId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  return (data?.role as Role | undefined) ?? null;
+  const ctx = await getWorkspaceContext(workspaceSlug);
+  return ctx?.role ?? null;
 }
 
 /** Returns true if `role` is in the allowed list. Use for early role gates
