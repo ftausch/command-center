@@ -1,7 +1,7 @@
 'use client';
 // Dashboard Overview screen
 
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
   Avatar, AvatarStack, Badge, EmptyState,
@@ -9,34 +9,33 @@ import {
 } from '@/components/ui';
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong } from '@/lib/utils';
 
-export function DashboardScreen({ workspace, setRoute }) {
-  const brand = D.brands[workspace];
-  const me = D.users[0];
+export function DashboardScreen({ setRoute }) {
+  const { currentWorkspace: brand, data, me } = useWorkspace();
 
-  const allTasks = D.tasks.filter(t => t.workspace === workspace);
-  const projects = D.projects.filter(p => p.workspace === workspace);
-  const events = D.calendarEvents[workspace] || [];
+  const allTasks = data.tasks;
+  const projects = data.projects;
+  const events = data.calendarEvents;
 
-  const open = allTasks.filter(t => t.status !== 'Done');
-  const dueToday = open.filter(t => daysUntil(t.due) === 0);
-  const overdue = open.filter(t => daysUntil(t.due) < 0);
-  const blocked = open.filter(t => t.status === 'Blocked');
-  const inReview = open.filter(t => t.status === 'Review');
-  const myOpen = open.filter(t => t.assignee === me.id);
-  const slackNotifs = D.slackNotifications.filter(n => n.workspace === workspace);
+  const open = allTasks.filter((t) => t.status !== 'Done');
+  const dueToday = open.filter((t) => daysUntil(t.due) === 0);
+  const overdue = open.filter((t) => daysUntil(t.due) < 0);
+  const blocked = open.filter((t) => t.status === 'Blocked');
+  const inReview = open.filter((t) => t.status === 'Review');
+  const myOpen = me ? open.filter((t) => t.assignee === me.id) : [];
+  const slackNotifs = data.slackNotifications;
 
-  const activeProjects = projects.filter(p => p.status !== 'Done' && p.status !== 'Planning');
+  const activeProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Planning');
 
   return (
     <div className="page fade-in">
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2">
-            <Badge kind="brand" dot>{brand.name}</Badge>
+            <Badge kind="brand" dot>{brand?.name}</Badge>
             <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>·</span>
             <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>Montag · {formatDateLong('2026-05-11')}</span>
           </div>
-          <h1 className="h1">Guten Morgen, Fabian.</h1>
+          <h1 className="h1">Guten Morgen, {me?.name?.split(' ')[0] ?? 'Fabian'}.</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0' }}>
             {dueToday.length} Aufgaben heute fällig, {blocked.length} blockiert, {inReview.length} warten auf Review.
           </p>
@@ -68,7 +67,7 @@ export function DashboardScreen({ workspace, setRoute }) {
               <button className="btn btn-quiet btn-sm" onClick={() => setRoute('mytasks')}>Alle ansehen <I.arrowRight size={13} /></button>
             </div>
             <div>
-              {myOpen.slice(0, 5).map(t => (
+              {myOpen.slice(0, 5).map((t) => (
                 <FocusRow key={t.id} task={t} setRoute={setRoute} />
               ))}
               {myOpen.length === 0 && (
@@ -84,8 +83,8 @@ export function DashboardScreen({ workspace, setRoute }) {
               <button className="btn btn-quiet btn-sm" onClick={() => setRoute('projects')}>Alle <I.arrowRight size={13} /></button>
             </div>
             <div>
-              {activeProjects.slice(0, 4).map(p => (
-                <ProjectRow key={p.id} project={p} setRoute={setRoute} workspace={workspace} />
+              {activeProjects.slice(0, 4).map((p) => (
+                <ProjectRow key={p.id} project={p} setRoute={setRoute} />
               ))}
             </div>
           </section>
@@ -100,8 +99,9 @@ export function DashboardScreen({ workspace, setRoute }) {
               <Badge kind="danger" dot>{blocked.length + overdue.length}</Badge>
             </div>
             <div>
-              {[...blocked, ...overdue].slice(0, 4).map(t => {
-                const p = D.projects.find(pr => pr.id === t.projectId);
+              {[...blocked, ...overdue].slice(0, 4).map((t) => {
+                const p = data.projects.find((pr) => pr.id === t.projectId);
+                const u = data.members.find((m) => m.id === t.assignee);
                 return (
                   <div key={t.id} style={{ padding: '12px 18px', borderTop: '1px solid var(--border-soft)' }} className="row gap-3">
                     <I.block size={14} color="var(--danger)" />
@@ -110,10 +110,10 @@ export function DashboardScreen({ workspace, setRoute }) {
                       <div className="row gap-2 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
                         <span>{p?.name}</span>
                         <span>·</span>
-                        <span>{t.blocker || t.blockedReason || 'Überfällig seit ' + Math.abs(daysUntil(t.due)) + 'd'}</span>
+                        <span>{t.blocker || p?.blockedReason || 'Überfällig seit ' + Math.abs(daysUntil(t.due)) + 'd'}</span>
                       </div>
                     </div>
-                    <Avatar user={D.users.find(u => u.id === t.assignee)} />
+                    {u && <Avatar user={u} />}
                   </div>
                 );
               })}
@@ -127,11 +127,11 @@ export function DashboardScreen({ workspace, setRoute }) {
           <section className="card">
             <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
               <div className="h3">Team-Auslastung</div>
-              <div className="meta mt-1">Diese Woche · {brand.name}</div>
+              <div className="meta mt-1">Diese Woche · {brand?.name}</div>
             </div>
             <div style={{ padding: '8px 18px 16px' }}>
-              {D.users.filter(u => u.workspaces.includes(workspace)).slice(0, 6).map(u => {
-                const userTasks = open.filter(t => t.assignee === u.id);
+              {data.members.slice(0, 6).map((u) => {
+                const userTasks = open.filter((t) => t.assignee === u.id);
                 const load = Math.min(10, userTasks.length);
                 const cells = Array.from({ length: 8 }).map((_, i) => i < load ? (load > 6 ? 'over' : 'filled') : '');
                 return (
@@ -157,7 +157,7 @@ export function DashboardScreen({ workspace, setRoute }) {
             <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
               <div>
                 <div className="h3 row gap-2"><I.slack size={15} /> Slack Updates</div>
-                <div className="meta mt-1">Aus #{brand.id}-* Channels</div>
+                <div className="meta mt-1">Aus #{brand?.id}-* Channels</div>
               </div>
               <Badge kind="success" dot>Connected</Badge>
             </div>
@@ -201,7 +201,8 @@ export const KPI = ({ label, value, trend, tone }) => (
 );
 
 function FocusRow({ task, setRoute }) {
-  const p = D.projects.find(pr => pr.id === task.projectId);
+  const { data } = useWorkspace();
+  const p = data.projects.find((pr) => pr.id === task.projectId);
   const due = dueLabel(task.due);
   return (
     <div
@@ -225,8 +226,9 @@ function FocusRow({ task, setRoute }) {
   );
 }
 
-function ProjectRow({ project, setRoute, workspace }) {
-  const team = project.team.map(id => D.users.find(u => u.id === id));
+function ProjectRow({ project, setRoute }) {
+  const { data } = useWorkspace();
+  const team = project.team.map((id) => data.members.find((u) => u.id === id)).filter(Boolean);
   const due = dueLabel(project.due);
   return (
     <div

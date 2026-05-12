@@ -1,19 +1,20 @@
 'use client';
 // Activity Feed
 
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { ActivityTimeline } from '@/components/screens/ProjectDetail';
 
-export function ActivityScreen({ workspace }) {
-  const items = D.activity.filter(a => a.workspace === workspace);
+export function ActivityScreen() {
+  const { currentWorkspace: brand, data } = useWorkspace();
+  const items = data.activity;
 
   return (
     <div className="page fade-in">
       <div className="page-head">
         <div>
-          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{D.brands[workspace].name}</Badge></div>
+          <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Activity</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Chronologischer Verlauf aller wichtigen Änderungen in diesem Workspace.

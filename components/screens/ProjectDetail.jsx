@@ -2,7 +2,7 @@
 // Project Detail page
 
 import { useState } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
   Avatar, AvatarStack, Badge, BrandBadge,
@@ -10,26 +10,30 @@ import {
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
 
-export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
-  const project = D.projects.find(p => p.id === projectId);
+export function ProjectDetailScreen({ projectId, setRoute }) {
+  const { currentWorkspace: brand, data, me } = useWorkspace();
+  const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
 
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
 
-  const phases = D.phases[workspace];
-  const tasks = D.tasks.filter(t => t.projectId === projectId);
-  const team = project.team.map(id => D.users.find(u => u.id === id));
-  const owner = D.users.find(u => u.id === project.owner);
+  const phases = data.phases;
+  const tasks = data.tasks.filter((t) => t.projectId === projectId);
+  const team = project.team
+    .map((id) => data.members.find((u) => u.id === id))
+    .filter(Boolean);
+  const owner = data.members.find((u) => u.id === project.owner);
   const due = dueLabel(project.due);
-  const activity = D.activity.filter(a => a.target === projectId || tasks.some(t => t.id === a.target)).slice(0, 10);
+  const activity = data.activity
+    .filter((a) => a.target === projectId || tasks.some((t) => t.id === a.target))
+    .slice(0, 10);
 
   return (
     <div className="page fade-in">
-      {/* Breadcrumb */}
       <div className="row gap-2 mb-3" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
         <button className="btn btn-quiet btn-sm" onClick={() => setRoute('projects')} style={{ padding: '0 6px', height: 22 }}>Projects</button>
         <I.chevron size={11} />
-        <Badge kind="brand" dot>{D.brands[workspace].name}</Badge>
+        <Badge kind="brand" dot>{brand?.name}</Badge>
         <I.chevron size={11} />
         <span>{project.type}</span>
       </div>
@@ -51,7 +55,6 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
         </div>
       </div>
 
-      {/* Phase tracker */}
       <div className="card card-pad mb-4">
         <div className="row between mb-3">
           <div>
@@ -68,14 +71,13 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
             </div>
             <div style={{ width: 180 }}>
               <Progress value={project.progress} brand />
-              <div className="meta mt-1" style={{ textAlign: 'right' }}>{tasks.filter(t => t.status === 'Done').length}/{tasks.length} Tasks done</div>
+              <div className="meta mt-1" style={{ textAlign: 'right' }}>{tasks.filter((t) => t.status === 'Done').length}/{tasks.length} Tasks done</div>
             </div>
           </div>
         </div>
         <PhaseTracker phases={phases} currentIdx={project.phaseIdx} />
       </div>
 
-      {/* Tabs */}
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
@@ -90,18 +92,25 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
               <table className="table">
                 <thead><tr><th>Task</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Due</th></tr></thead>
                 <tbody>
-                  {tasks.map(t => {
-                    const a = D.users.find(u => u.id === t.assignee);
+                  {tasks.map((t) => {
+                    const a = data.members.find((u) => u.id === t.assignee);
+                    const waiting = data.members.find((u) => u.id === t.waitingOn);
                     const td = dueLabel(t.due);
                     return (
                       <tr key={t.id}>
                         <td>
                           <div style={{ fontWeight: 500 }}>{t.title}</div>
                           {t.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {t.blocker}</div>}
-                          {t.waitingOn && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {D.users.find(u => u.id === t.waitingOn)?.name}</div>}
+                          {waiting && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {waiting.name}</div>}
                         </td>
                         <td><StatusBadge status={t.status} /></td>
-                        <td><div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div></td>
+                        <td>
+                          {a ? (
+                            <div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div>
+                          ) : (
+                            <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>
+                          )}
+                        </td>
                         <td><PriorityBadge priority={t.priority} /></td>
                         <td><span className={`badge ${td.danger ? 'danger' : td.today ? 'warning' : 'ghost'}`}>{td.text}</span></td>
                       </tr>
@@ -126,11 +135,11 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
           {tab === 'comments' && (
             <div className="card card-pad">
               <div className="col gap-4">
-                <CommentItem author="tim" time="vor 14 Min" text="@Mara — Rough-Cut bitte heute bis 18 Uhr. Wir brauchen morgen früh die Review-Runde mit Fabian." />
-                <CommentItem author="mara" time="vor 1 Std" text="Schaffe ich. Ich arbeite gerade am Übergang Minute 17–22, da ist noch viel doppelte Audio." />
-                <CommentItem author="fabian" time="gestern" text="Wichtig: Verena hat um Cut bei 32:10 gebeten (Politik-Disclaimer). Bitte unbedingt rausnehmen." />
+                <CommentItem authorId="tim" time="vor 14 Min" text="@Mara — Rough-Cut bitte heute bis 18 Uhr. Wir brauchen morgen früh die Review-Runde mit Fabian." />
+                <CommentItem authorId="mara" time="vor 1 Std" text="Schaffe ich. Ich arbeite gerade am Übergang Minute 17–22, da ist noch viel doppelte Audio." />
+                <CommentItem authorId="fabian" time="gestern" text="Wichtig: Verena hat um Cut bei 32:10 gebeten (Politik-Disclaimer). Bitte unbedingt rausnehmen." />
                 <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
-                  <Avatar user={D.users[0]} />
+                  {me && <Avatar user={me} />}
                   <input className="input" placeholder="Kommentar schreiben — @ für Mention, # für Task…" />
                   <button className="btn btn-brand">Kommentieren</button>
                 </div>
@@ -158,12 +167,15 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
           )}
         </div>
 
-        {/* Right sidebar — details */}
         <div className="col gap-4">
           <div className="card card-pad">
             <div className="label mb-3">Project Details</div>
             <Field label="Owner">
-              <div className="row gap-2"><Avatar user={owner} /><span style={{ fontWeight: 500 }}>{owner.name}</span></div>
+              {owner ? (
+                <div className="row gap-2"><Avatar user={owner} /><span style={{ fontWeight: 500 }}>{owner.name}</span></div>
+              ) : (
+                <span style={{ color: 'var(--text-4)' }}>—</span>
+              )}
             </Field>
             <Field label="Team">
               <AvatarStack users={team} max={6} />
@@ -173,10 +185,9 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
               <div className={due.danger ? 'badge danger' : 'badge ghost'} style={{ marginTop: 4, fontSize: 11 }}>{due.text}</div>
             </Field>
             <Field label="Type">{project.type}</Field>
-            <Field label="Workspace"><BrandBadge workspace={workspace} /></Field>
+            <Field label="Workspace"><BrandBadge brand={brand} /></Field>
           </div>
 
-          {/* Slack panel */}
           <div className="card card-pad">
             <div className="row between mb-3">
               <div className="row gap-2"><I.slack size={16} /><span className="h3">Slack Channel</span></div>
@@ -200,7 +211,6 @@ export function ProjectDetailScreen({ projectId, workspace, setRoute }) {
             )}
           </div>
 
-          {/* Quick links */}
           {project.links?.length > 0 && (
             <div className="card card-pad">
               <div className="label mb-3">Wichtige Links</div>
@@ -226,8 +236,10 @@ export const Field = ({ label, children }) => (
   </div>
 );
 
-function CommentItem({ author, time, text }) {
-  const u = D.users.find(u => u.id === author);
+function CommentItem({ authorId, time, text }) {
+  const { data } = useWorkspace();
+  const u = data.members.find((m) => m.id === authorId);
+  if (!u) return null;
   return (
     <div className="row gap-3 items-start">
       <Avatar user={u} size="md" />
@@ -243,11 +255,22 @@ function CommentItem({ author, time, text }) {
 }
 
 export function ActivityTimeline({ items }) {
+  const { data } = useWorkspace();
   return (
     <div className="col gap-3">
-      {items.map(a => {
-        const u = D.users.find(uu => uu.id === a.user);
-        const iconMap = { check: <I.check size={12} />, message: <I.message size={12} />, paperclip: <I.paperclip size={12} />, block: <I.block size={12} />, plus: <I.plus size={12} />, slack: <I.slack size={12} />, user: <I.user size={12} />, 'arrow-right': <I.arrowRight size={12} />, calendar: <I.calendar size={12} /> };
+      {items.map((a) => {
+        const u = data.members.find((m) => m.id === a.user);
+        const iconMap = {
+          check: <I.check size={12} />,
+          message: <I.message size={12} />,
+          paperclip: <I.paperclip size={12} />,
+          block: <I.block size={12} />,
+          plus: <I.plus size={12} />,
+          slack: <I.slack size={12} />,
+          user: <I.user size={12} />,
+          'arrow-right': <I.arrowRight size={12} />,
+          calendar: <I.calendar size={12} />,
+        };
         return (
           <div key={a.id} className="row gap-3 items-start">
             <div style={{ width: 22, height: 22, borderRadius: 999, background: 'var(--bg-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', flexShrink: 0 }}>

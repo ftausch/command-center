@@ -1,22 +1,34 @@
 'use client';
-// Workspace Switcher — Entry screen
+// Workspace Switcher — Entry screen.
+// Lists every workspace the user can access (from the provider) plus a
+// per-workspace stats footer fetched in parallel from the data layer.
 
-import { useState } from 'react';
-import { D } from '@/lib/data';
+import { useEffect, useState } from 'react';
+import { useWorkspace } from '@/components/WorkspaceProvider';
+import { db } from '@/lib/db';
 import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
 
 export function WorkspaceSwitcher({ onPick }) {
+  const { workspaces, me } = useWorkspace();
   const [hover, setHover] = useState(null);
-  const brands = D.brands;
+  const [stats, setStats] = useState({}); // { [workspaceId]: { projects, tasks, team } }
 
-  const stats = (ws) => {
-    const projects = D.projects.filter(p => p.workspace === ws);
-    const tasks = D.tasks.filter(t => t.workspace === ws);
-    const open = tasks.filter(t => t.status !== 'Done').length;
-    const team = D.users.filter(u => u.workspaces.includes(ws)).length;
-    return { projects: projects.length, tasks: open, team };
-  };
+  // Load stats for each visible workspace in parallel. Mock returns
+  // synchronously; Supabase fires one COUNT(*) query per workspace.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        workspaces.map(async (w) => [w.id, await db.getWorkspaceStats(w.id)]),
+      );
+      if (cancelled) return;
+      setStats(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaces]);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -28,8 +40,8 @@ export function WorkspaceSwitcher({ onPick }) {
         <div className="row gap-3" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
           <span>Eingeloggt als</span>
           <div className="row gap-2">
-            <Avatar user={D.users[0]} />
-            <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>Fabian Tausch</span>
+            {me && <Avatar user={me} />}
+            <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{me?.name ?? 'Fabian Tausch'}</span>
           </div>
           <span style={{ color: 'var(--text-4)' }}>·</span>
           <button className="btn btn-quiet btn-sm">Log out</button>
@@ -41,7 +53,7 @@ export function WorkspaceSwitcher({ onPick }) {
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <div className="label" style={{ marginBottom: 12 }}>Choose your workspace</div>
             <h1 style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.15 }}>
-              Wo arbeitest du heute, Fabian?
+              Wo arbeitest du heute, {me?.name?.split(' ')[0] ?? 'Fabian'}?
             </h1>
             <p style={{ color: 'var(--text-3)', fontSize: 15, marginTop: 10 }}>
               UnicornBakery und SelbstFrei bleiben getrennt — Aufgaben, Deadlines, Slack und Team.
@@ -49,8 +61,8 @@ export function WorkspaceSwitcher({ onPick }) {
           </div>
 
           <div className="grid grid-2 gap-4">
-            {Object.values(brands).map(b => {
-              const s = stats(b.id);
+            {workspaces.map((b) => {
+              const s = stats[b.id] ?? { projects: '—', tasks: '—', team: '—' };
               const isHover = hover === b.id;
               return (
                 <button

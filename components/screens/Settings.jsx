@@ -2,15 +2,15 @@
 // Settings — with Slack integration prominent
 
 import { useState } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge, SlackCard } from '@/components/ui';
 import { Field } from '@/components/screens/ProjectDetail';
 import { Stat2, ToggleRow } from '@/components/screens/Templates';
 
-export function SettingsScreen({ workspace }) {
+export function SettingsScreen() {
+  const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
   const [section, setSection] = useState('slack');
-  const brand = D.brands[workspace];
 
   const sections = [
     { id: 'workspace', label: 'Workspace', icon: <I.folder size={14} /> },
@@ -19,6 +19,8 @@ export function SettingsScreen({ workspace }) {
     { id: 'notifs',    label: 'Notifications', icon: <I.bell size={14} /> },
     { id: 'brand',     label: 'Brand Colors', icon: <I.flag size={14} /> },
   ];
+
+  if (!brand) return null;
 
   return (
     <div className="page fade-in">
@@ -34,7 +36,7 @@ export function SettingsScreen({ workspace }) {
 
       <div className="grid gap-5" style={{ gridTemplateColumns: '220px 1fr' }}>
         <nav>
-          {sections.map(s => (
+          {sections.map((s) => (
             <div key={s.id} className={`nav-item ${section === s.id ? 'active' : ''}`} onClick={() => setSection(s.id)} style={{ margin: '1px 0' }}>
               {s.icon} <span>{s.label}</span>
             </div>
@@ -42,9 +44,9 @@ export function SettingsScreen({ workspace }) {
         </nav>
 
         <div>
-          {section === 'slack' && <SlackSection workspace={workspace} />}
+          {section === 'slack' && <SlackSection />}
           {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} />}
-          {section === 'members' && <MembersSection workspace={workspace} />}
+          {section === 'members' && <MembersSection />}
           {section === 'notifs' && <NotifsSection />}
           {section === 'brand' && <BrandSection brand={brand} />}
         </div>
@@ -53,9 +55,9 @@ export function SettingsScreen({ workspace }) {
   );
 }
 
-function SlackSection({ workspace }) {
-  const brand = D.brands[workspace];
-  const projects = D.projects.filter(p => p.workspace === workspace);
+function SlackSection() {
+  const { currentWorkspace: brand, data } = useWorkspace();
+  const projects = data.projects;
   return (
     <>
       <div className="card card-pad mb-4">
@@ -70,7 +72,7 @@ function SlackSection({ workspace }) {
           <Badge kind="success" dot large>Connected</Badge>
         </div>
         <div className="grid grid-3 gap-4 mt-4">
-          <Stat2 label="Channels gemappt" value={projects.filter(p => p.slackConnected).length} />
+          <Stat2 label="Channels gemappt" value={projects.filter((p) => p.slackConnected).length} />
           <Stat2 label="Posts heute" value="12" />
           <Stat2 label="Letzter Sync" value="vor 2 Min" />
         </div>
@@ -84,7 +86,7 @@ function SlackSection({ workspace }) {
         <table className="table">
           <thead><tr><th>Projekt</th><th>Slack Channel</th><th>Auto-Updates</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {projects.map(p => (
+            {projects.map((p) => (
               <tr key={p.id}>
                 <td><div style={{ fontWeight: 500 }}>{p.name}</div></td>
                 <td><span className="mono" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{p.slackChannel}</span></td>
@@ -104,7 +106,7 @@ function SlackSection({ workspace }) {
       </div>
 
       <div className="card card-pad mb-4">
-        <div className="h3 mb-3">Notification Rules · {brand.name}</div>
+        <div className="h3 mb-3">Notification Rules · {brand?.name}</div>
         <p className="meta mb-3">Welche Events sollen automatisch nach Slack gehen? Settings gelten nur für diesen Workspace.</p>
         <div className="col gap-3">
           <ToggleRow on label="Neue Tasks → Slack" />
@@ -145,8 +147,9 @@ function WorkspaceSection({ brand, workspace }) {
   );
 }
 
-function MembersSection({ workspace }) {
-  const users = D.users.filter(u => u.workspaces.includes(workspace));
+function MembersSection() {
+  const { data, workspaces } = useWorkspace();
+  const users = data.members;
   return (
     <div className="card">
       <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }} className="row between">
@@ -159,11 +162,19 @@ function MembersSection({ workspace }) {
       <table className="table">
         <thead><tr><th>Person</th><th>Rolle</th><th>Workspaces</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {users.map(u => (
+          {users.map((u) => (
             <tr key={u.id}>
               <td><div className="row gap-2"><Avatar user={u} /><div><div style={{ fontWeight: 500 }}>{u.name}</div><div className="meta">{u.role}</div></div></div></td>
-              <td><Badge kind="ghost">{u.role === 'Owner' ? 'Owner' : u.role.includes('Manager') ? 'Manager' : 'Member'}</Badge></td>
-              <td>{u.workspaces.map(w => <Badge key={w} kind="ghost"><span className="dot-indicator" style={{ background: D.brands[w].color }} />{D.brands[w].name}</Badge>)}</td>
+              <td><Badge kind="ghost">{u.role === 'Owner' ? 'Owner' : u.role?.includes('Manager') ? 'Manager' : 'Member'}</Badge></td>
+              <td>{u.workspaces?.map((w) => {
+                const ws = workspaces.find((x) => x.id === w);
+                return ws ? (
+                  <Badge key={w} kind="ghost">
+                    <span className="dot-indicator" style={{ background: ws.color }} />
+                    {ws.name}
+                  </Badge>
+                ) : null;
+              })}</td>
               <td>{u.online ? <span style={{ fontSize: 12, color: 'var(--success)' }}>● Online</span> : <span className="meta">Offline</span>}</td>
               <td><button className="btn btn-quiet btn-sm"><I.more size={14} /></button></td>
             </tr>

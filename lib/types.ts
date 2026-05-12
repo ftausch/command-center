@@ -128,3 +128,101 @@ export interface SlackNotification {
   message: string;
   posted_at: string;
 }
+
+// ─── View types ─────────────────────────────────────────────────────────────
+// Shapes the screens consume. These match the legacy mock-data field names so
+// the UI doesn't have to translate. The data-layer (lib/db) returns these.
+// The mock adapter passes mock objects through as-is; the Supabase adapter
+// transforms DB rows (snake_case, above) into these before returning to UI.
+// This keeps the wire/storage format independent from the UI shape and lets
+// future schema changes happen without churning every screen.
+
+export interface BrandView {
+  id: string;
+  name: string;
+  sub: string;
+  initials: string;
+  color: string;
+  tagline: string;
+}
+
+export interface UserView {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  workspaces: string[];
+  online: boolean;
+}
+
+export interface ProjectView {
+  id: string;
+  workspace: string;
+  name: string;
+  type: string;
+  desc: string;
+  status: ProjectStatus;
+  priority: TaskPriority;
+  progress: number;
+  phaseIdx: number;
+  due: string;
+  owner: string;
+  team: string[];
+  slackChannel: string;
+  slackConnected: boolean;
+  links?: { label: string; url: string }[];
+  blockedReason?: string;
+}
+
+export interface TaskView {
+  id: string;
+  workspace: string;
+  projectId: string;
+  title: string;
+  assignee: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due: string;
+  tags?: string[];
+  waitingOn?: string;
+  blocker?: string;
+}
+
+export interface ActivityView {
+  id: string;
+  workspace: string;
+  user: string;
+  verb: string;
+  target: string;
+  meta: string;
+  time: string;
+  icon: string;
+}
+
+export interface TemplateView {
+  name: string;
+  desc: string;
+  avgDuration: string;
+  tasks: { phase: string; title: string; owner: string; daysFromStart: number }[];
+}
+
+export interface CalendarEventView {
+  date: string;
+  type: string;
+  title: string;
+  projectId: string;
+}
+
+export interface SlackNotificationView {
+  workspace: string;
+  channel: string;
+  user: string;
+  text: string;
+  time: string;
+}
+
+export interface WorkspaceStats {
+  projects: number;
+  tasks: number; // open tasks
+  team: number;
+}

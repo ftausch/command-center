@@ -2,11 +2,12 @@
 // Cmd+K — Command palette overlay
 
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Kbd } from '@/components/ui';
 
-export function CmdK({ open, onClose, workspace, setRoute }) {
+export function CmdK({ open, onClose, setRoute }) {
+  const { currentWorkspace: brand, data } = useWorkspace();
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef(null);
@@ -20,35 +21,62 @@ export function CmdK({ open, onClose, workspace, setRoute }) {
   }, [open]);
 
   const items = useMemo(() => {
-    if (!open) return [];
-    const ws = workspace;
-    const tasks = D.tasks.filter(t => t.workspace === ws).map(t => ({
-      kind: 'Task', id: t.id, label: t.title, sub: 'Task · ' + (D.projects.find(p => p.id === t.projectId)?.name || ''), action: () => { setRoute('project:' + t.projectId); onClose(); },
+    if (!open || !brand) return [];
+    const tasks = data.tasks.map((t) => ({
+      kind: 'Task',
+      id: t.id,
+      label: t.title,
+      sub:
+        'Task · ' +
+        (data.projects.find((p) => p.id === t.projectId)?.name || ''),
+      action: () => {
+        setRoute('project:' + t.projectId);
+        onClose();
+      },
     }));
-    const projects = D.projects.filter(p => p.workspace === ws).map(p => ({
-      kind: 'Project', id: p.id, label: p.name, sub: 'Project · ' + p.status, action: () => { setRoute('project:' + p.id); onClose(); },
+    const projects = data.projects.map((p) => ({
+      kind: 'Project',
+      id: p.id,
+      label: p.name,
+      sub: 'Project · ' + p.status,
+      action: () => {
+        setRoute('project:' + p.id);
+        onClose();
+      },
     }));
-    const users = D.users.filter(u => u.workspaces.includes(ws)).map(u => ({
-      kind: 'Person', id: u.id, label: u.name, sub: u.role, action: () => { setRoute('team'); onClose(); },
+    const users = data.members.map((u) => ({
+      kind: 'Person',
+      id: u.id,
+      label: u.name,
+      sub: u.role,
+      action: () => {
+        setRoute('team');
+        onClose();
+      },
     }));
     const actions = [
-      { kind: 'Action', id: 'new-task',  label: 'New Task',  sub: '⌘N',  action: () => { onClose(); } },
-      { kind: 'Action', id: 'go-board',  label: 'Go to Board', sub: 'Navigation', action: () => { setRoute('kanban'); onClose(); } },
-      { kind: 'Action', id: 'go-dash',   label: 'Go to Dashboard', sub: 'Navigation', action: () => { setRoute('dashboard'); onClose(); } },
+      { kind: 'Action', id: 'new-task', label: 'New Task', sub: '⌘N', action: () => { onClose(); } },
+      { kind: 'Action', id: 'go-board', label: 'Go to Board', sub: 'Navigation', action: () => { setRoute('kanban'); onClose(); } },
+      { kind: 'Action', id: 'go-dash', label: 'Go to Dashboard', sub: 'Navigation', action: () => { setRoute('dashboard'); onClose(); } },
       { kind: 'Action', id: 'switch-ws', label: 'Workspace wechseln', sub: 'Switcher', action: () => { setRoute('__switch__'); onClose(); } },
     ];
     const all = [...actions, ...projects, ...tasks, ...users];
-    const filtered = q.trim() === '' ? all.slice(0, 12) : all.filter(it => (it.label + ' ' + it.sub).toLowerCase().includes(q.toLowerCase())).slice(0, 16);
-    return filtered;
-  }, [q, open, workspace, onClose, setRoute]);
+    return q.trim() === ''
+      ? all.slice(0, 12)
+      : all
+          .filter((it) =>
+            (it.label + ' ' + it.sub).toLowerCase().includes(q.toLowerCase()),
+          )
+          .slice(0, 16);
+  }, [q, open, brand, data, onClose, setRoute]);
 
   useEffect(() => {
     const onKey = (e) => {
       if (!open) return;
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(items.length - 1, i + 1)); }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-      if (e.key === 'Enter') { e.preventDefault(); items[idx]?.action(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(items.length - 1, i + 1)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setIdx((i) => Math.max(0, i - 1)); }
+      if (e.key === 'Enter')     { e.preventDefault(); items[idx]?.action(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -73,7 +101,7 @@ export function CmdK({ open, onClose, workspace, setRoute }) {
         <div style={{ maxHeight: 380, overflowY: 'auto', padding: 6 }}>
           {items.length === 0 && (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
-              Keine Treffer in {D.brands[workspace].name}.
+              Keine Treffer in {brand?.name ?? 'Workspace'}.
             </div>
           )}
           {items.map((it, i) => (
@@ -101,7 +129,7 @@ export function CmdK({ open, onClose, workspace, setRoute }) {
             <span className="row gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> Navigate</span>
             <span className="row gap-1"><Kbd>↵</Kbd> Open</span>
           </span>
-          <span>{D.brands[workspace].name}</span>
+          <span>{brand?.name}</span>
         </div>
       </div>
     </div>

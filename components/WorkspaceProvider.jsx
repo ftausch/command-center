@@ -1,96 +1,214 @@
 'use client';
-// Workspace context. Two responsibilities:
+// Workspace context + data cache.
 //
-//   1. Make the list of workspaces the user can access available to any
-//      component (current Sidebar/Switcher reach into mock data directly —
-//      this is the seam they'll migrate to).
+// Responsibilities:
 //
-//   2. Hold the *currently selected* workspace_id. Every data query the
-//      rest of the app makes is scoped to this value. UnicornBakery and
-//      SelbstFrei data never mix because every db.* call takes a workspace
-//      id and RLS enforces it on the server.
+//   1. List of workspaces the current user can access. Loaded from Supabase
+//      when configured (only workspaces the user is a member of), otherwise
+//      from mock so the preview UI keeps working.
 //
-// When Supabase is configured we load workspaces the signed-in user is a
-// member of. Otherwise we fall back to the mock workspaces so the existing
-// preview / mock-data UI keeps working without a session.
+//   2. The currently-selected workspace id. This is the single source of
+//      truth used by App.jsx for routing and by every screen for data
+//      filtering. Cross-workspace data leakage isn't possible because every
+//      db.* call is keyed by this id (and RLS double-enforces it on the
+//      server).
+//
+//   3. Cached datasets for the current workspace: projects, tasks, members,
+//      activity, calendar events, slack notifications, templates, phases.
+//      Loaded in parallel when the workspace changes; refresh() refetches.
+//
+// Why all the data lives in one place: every screen needs the same handful
+// of arrays. Co-locating the cache means navigating between screens doesn't
+// re-fetch, and there's exactly one loading/error state to reason about.
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { db } from '@/lib/db';
 import { D } from '@/lib/data';
+
+const EMPTY_DATA = {
+  projects: [],
+  tasks: [],
+  members: [],
+  activity: [],
+  calendarEvents: [],
+  slackNotifications: [],
+  templates: {},
+  phases: [],
+};
 
 const WorkspaceContext = createContext({
   workspaces: [],
   currentWorkspaceId: null,
+  currentWorkspace: null,
   setCurrentWorkspaceId: () => {},
+  data: EMPTY_DATA,
   loading: false,
+  error: null,
+  refresh: async () => {},
+  me: null,
   mode: 'mock',
 });
 
 function mockWorkspaces() {
-  return Object.values(D.brands).map((b) => ({
-    id: b.id,
-    slug: b.id,
-    name: b.name,
-    color: b.color ?? null,
-    tagline: b.tagline ?? null,
-    created_at: null,
-  }));
+  return Object.values(D.brands);
 }
 
 export function WorkspaceProvider({ children }) {
   const [workspaces, setWorkspaces] = useState(() => mockWorkspaces());
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState(null);
+  const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [me, setMe] = useState(null);
   const [mode, setMode] = useState(isSupabaseConfigured() ? 'supabase' : 'mock');
 
-  // Load workspaces the user is a member of, when Supabase is configured.
+  // Load the "me" identity once on mount. Works in both modes:
+  //   - mock: returns D.users[0] (Fabian)
+  //   - supabase: returns the auth user's profile
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-    const supabase = createClient();
-    if (!supabase) return;
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        // Not signed in: middleware should have redirected. Leave mock
-        // workspaces in place so the UI doesn't blank out.
-        setMode('mock');
-        setLoading(false);
-        return;
+    (async () => {
+      try {
+        const u = await db.getCurrentUser();
+        if (!cancelled) setMe(u);
+      } catch (e) {
+        console.error('[workspace] getCurrentUser failed', e);
       }
-      const { data, error } = await supabase
-        .from('workspaces')
-        .select('id, slug, name, color, tagline, created_at')
-        .order('name');
-      if (cancelled) return;
-      if (error) {
-        console.error('[workspace] load failed', error);
-      } else if (data) {
-        setWorkspaces(data);
-        setMode('supabase');
-      }
-      setLoading(false);
-    }
-    load();
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Load the workspaces the current user can see, once on mount. With no
+  // Supabase configured we keep the mock list. Failures fall back silently
+  // to the mock list so the UI never blanks out entirely.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setMode('mock');
+        return;
+      }
+      try {
+        const ws = await db.listWorkspaces();
+        if (!cancelled && ws.length > 0) {
+          setWorkspaces(ws);
+          setMode('supabase');
+        }
+      } catch (e) {
+        console.error('[workspace] listWorkspaces failed', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load all data for the selected workspace in parallel whenever it
+  // changes. Clearing the workspace clears the cache.
+  const loadData = useCallback(async (workspaceId) => {
+    if (!workspaceId) {
+      setData(EMPTY_DATA);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const [
+        projects,
+        tasks,
+        members,
+        activity,
+        calendarEvents,
+        slackNotifications,
+        templates,
+        phases,
+      ] = await Promise.all([
+        db.listProjects(workspaceId),
+        db.listTasks(workspaceId),
+        db.listMembers(workspaceId),
+        db.listActivity(workspaceId),
+        db.listCalendarEvents(workspaceId),
+        db.listSlackNotifications(workspaceId),
+        db.listTemplates(workspaceId),
+        db.getWorkspacePhases(workspaceId),
+      ]);
+      setData({
+        projects,
+        tasks,
+        members,
+        activity,
+        calendarEvents,
+        slackNotifications,
+        templates,
+        phases,
+      });
+    } catch (e) {
+      setError(e);
+      console.error('[workspace] loadData failed', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData(currentWorkspaceId);
+  }, [currentWorkspaceId, loadData]);
+
+  const refresh = useCallback(
+    () => loadData(currentWorkspaceId),
+    [currentWorkspaceId, loadData],
+  );
+
+  const currentWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === currentWorkspaceId) ?? null,
+    [workspaces, currentWorkspaceId],
+  );
+
+  const value = useMemo(
+    () => ({
+      workspaces,
+      currentWorkspaceId,
+      currentWorkspace,
+      setCurrentWorkspaceId,
+      data,
+      loading,
+      error,
+      refresh,
+      me,
+      mode,
+    }),
+    [
+      workspaces,
+      currentWorkspaceId,
+      currentWorkspace,
+      data,
+      loading,
+      error,
+      refresh,
+      me,
+      mode,
+    ],
+  );
+
   return (
-    <WorkspaceContext.Provider
-      value={{
-        workspaces,
-        currentWorkspaceId,
-        setCurrentWorkspaceId,
-        loading,
-        mode,
-      }}
-    >
+    <WorkspaceContext.Provider value={value}>
       {children}
     </WorkspaceContext.Provider>
   );

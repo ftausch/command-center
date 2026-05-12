@@ -2,44 +2,47 @@
 // My Tasks screen
 
 import { useState, useMemo } from 'react';
-import { D } from '@/lib/data';
+import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { daysUntil, dueLabel } from '@/lib/utils';
 
-export function MyTasksScreen({ workspace, setRoute }) {
-  const me = D.users[0];
+export function MyTasksScreen({ setRoute }) {
+  const { currentWorkspace: brand, data, me } = useWorkspace();
   const [tab, setTab] = useState('all');
   const [groupBy, setGroupBy] = useState('project');
   const [filterPrio, setFilterPrio] = useState(null);
 
-  const myTasks = useMemo(() => D.tasks.filter(t => t.workspace === workspace && t.assignee === me.id), [workspace, me.id]);
+  const myTasks = useMemo(
+    () => (me ? data.tasks.filter((t) => t.assignee === me.id) : []),
+    [data.tasks, me],
+  );
 
   const filtered = useMemo(() => {
     let r = myTasks;
-    if (tab === 'today')  r = r.filter(t => daysUntil(t.due) === 0 && t.status !== 'Done');
-    if (tab === 'week')   r = r.filter(t => daysUntil(t.due) >= 0 && daysUntil(t.due) <= 7 && t.status !== 'Done');
-    if (tab === 'overdue')r = r.filter(t => daysUntil(t.due) < 0 && t.status !== 'Done');
-    if (tab === 'blocked')r = r.filter(t => t.status === 'Blocked');
-    if (tab === 'waiting')r = r.filter(t => t.status === 'Review' || t.waitingOn);
-    if (filterPrio) r = r.filter(t => t.priority === filterPrio);
+    if (tab === 'today')   r = r.filter((t) => daysUntil(t.due) === 0 && t.status !== 'Done');
+    if (tab === 'week')    r = r.filter((t) => daysUntil(t.due) >= 0 && daysUntil(t.due) <= 7 && t.status !== 'Done');
+    if (tab === 'overdue') r = r.filter((t) => daysUntil(t.due) < 0 && t.status !== 'Done');
+    if (tab === 'blocked') r = r.filter((t) => t.status === 'Blocked');
+    if (tab === 'waiting') r = r.filter((t) => t.status === 'Review' || t.waitingOn);
+    if (filterPrio) r = r.filter((t) => t.priority === filterPrio);
     return r;
   }, [myTasks, tab, filterPrio]);
 
   const counts = {
-    all: myTasks.filter(t => t.status !== 'Done').length,
-    today: myTasks.filter(t => daysUntil(t.due) === 0 && t.status !== 'Done').length,
-    week: myTasks.filter(t => daysUntil(t.due) >= 0 && daysUntil(t.due) <= 7 && t.status !== 'Done').length,
-    overdue: myTasks.filter(t => daysUntil(t.due) < 0 && t.status !== 'Done').length,
-    blocked: myTasks.filter(t => t.status === 'Blocked').length,
-    waiting: myTasks.filter(t => t.status === 'Review' || t.waitingOn).length,
+    all: myTasks.filter((t) => t.status !== 'Done').length,
+    today: myTasks.filter((t) => daysUntil(t.due) === 0 && t.status !== 'Done').length,
+    week: myTasks.filter((t) => daysUntil(t.due) >= 0 && daysUntil(t.due) <= 7 && t.status !== 'Done').length,
+    overdue: myTasks.filter((t) => daysUntil(t.due) < 0 && t.status !== 'Done').length,
+    blocked: myTasks.filter((t) => t.status === 'Blocked').length,
+    waiting: myTasks.filter((t) => t.status === 'Review' || t.waitingOn).length,
   };
 
   const grouped = useMemo(() => {
     if (groupBy === 'project') {
       const groups = {};
-      filtered.forEach(t => {
-        const p = D.projects.find(pr => pr.id === t.projectId);
+      filtered.forEach((t) => {
+        const p = data.projects.find((pr) => pr.id === t.projectId);
         const key = p?.name || 'Ohne Projekt';
         (groups[key] = groups[key] || []).push(t);
       });
@@ -47,18 +50,18 @@ export function MyTasksScreen({ workspace, setRoute }) {
     }
     if (groupBy === 'priority') {
       const groups = { High: [], Medium: [], Low: [] };
-      filtered.forEach(t => groups[t.priority]?.push(t));
+      filtered.forEach((t) => groups[t.priority]?.push(t));
       return groups;
     }
-    return { 'Alle': filtered };
-  }, [filtered, groupBy]);
+    return { Alle: filtered };
+  }, [filtered, groupBy, data.projects]);
 
   return (
     <div className="page fade-in">
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2">
-            <Badge kind="brand" dot>{D.brands[workspace].name}</Badge>
+            <Badge kind="brand" dot>{brand?.name}</Badge>
             <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>Deine persönliche Ansicht</span>
           </div>
           <h1 className="h1">My Tasks</h1>
@@ -72,7 +75,6 @@ export function MyTasksScreen({ workspace, setRoute }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="tabs mb-4">
         {[
           { id: 'all', label: 'All', c: counts.all },
@@ -81,20 +83,19 @@ export function MyTasksScreen({ workspace, setRoute }) {
           { id: 'overdue', label: 'Overdue', c: counts.overdue },
           { id: 'blocked', label: 'Blocked', c: counts.blocked },
           { id: 'waiting', label: 'Waiting on Feedback', c: counts.waiting },
-        ].map(t => (
+        ].map((t) => (
           <div key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label} <span className="count">{t.c}</span>
           </div>
         ))}
       </div>
 
-      {/* Filter chips */}
       <div className="row gap-2 mb-4 wrap">
         <span className="meta" style={{ marginRight: 4 }}>Filter:</span>
-        {['High', 'Medium', 'Low'].map(p => (
+        {['High', 'Medium', 'Low'].map((p) => (
           <button key={p} className={`chip ${filterPrio === p ? 'active' : ''}`} onClick={() => setFilterPrio(filterPrio === p ? null : p)}>
             <span className="dot-indicator" style={{ background: p === 'High' ? 'var(--danger)' : p === 'Medium' ? 'var(--warning)' : 'var(--neutral)' }} />
-            {p} <span className="count">{myTasks.filter(t => t.priority === p && t.status !== 'Done').length}</span>
+            {p} <span className="count">{myTasks.filter((t) => t.priority === p && t.status !== 'Done').length}</span>
           </button>
         ))}
         <button className="chip" onClick={() => setGroupBy(groupBy === 'project' ? 'priority' : groupBy === 'priority' ? 'flat' : 'project')}>
@@ -105,11 +106,10 @@ export function MyTasksScreen({ workspace, setRoute }) {
         </button>
       </div>
 
-      {/* Quick Add inline */}
       <div className="card mb-4" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <I.plus size={14} color="var(--text-3)" />
         <input className="input" placeholder="Quick add — Task-Titel eingeben…" style={{ border: 'none', height: 32 }} />
-        <Badge kind="ghost">in {D.brands[workspace].name}</Badge>
+        <Badge kind="ghost">in {brand?.name}</Badge>
         <button className="btn btn-quiet btn-sm">Detail öffnen <I.arrowRight size={12} /></button>
       </div>
 
@@ -138,7 +138,7 @@ export function MyTasksScreen({ workspace, setRoute }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map(t => <TaskRow key={t.id} task={t} setRoute={setRoute} />)}
+                  {tasks.map((t) => <TaskRow key={t.id} task={t} setRoute={setRoute} />)}
                 </tbody>
               </table>
             </div>
@@ -150,7 +150,9 @@ export function MyTasksScreen({ workspace, setRoute }) {
 }
 
 function TaskRow({ task, setRoute }) {
-  const p = D.projects.find(pr => pr.id === task.projectId);
+  const { data } = useWorkspace();
+  const p = data.projects.find((pr) => pr.id === task.projectId);
+  const waiting = data.members.find((u) => u.id === task.waitingOn);
   const due = dueLabel(task.due);
   return (
     <tr style={{ cursor: 'pointer' }} onClick={() => setRoute('project:' + task.projectId)}>
@@ -159,7 +161,7 @@ function TaskRow({ task, setRoute }) {
       </td>
       <td>
         <div style={{ fontWeight: 500 }}>{task.title}</div>
-        {task.waitingOn && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {D.users.find(u => u.id === task.waitingOn)?.name}</div>}
+        {waiting && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {waiting.name}</div>}
         {task.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {task.blocker}</div>}
       </td>
       <td><StatusBadge status={task.status} /></td>
