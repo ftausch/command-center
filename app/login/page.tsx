@@ -211,6 +211,26 @@ function LoginInner() {
             )}
           </form>
         )}
+
+        {/* Dev-only shortcut. process.env.NODE_ENV is inlined at build time,
+            so in production this entire branch is dead-code-eliminated and
+            no button reaches the browser. The /auth/dev-login route also
+            self-gates on NODE_ENV — belt-and-suspenders. */}
+        {process.env.NODE_ENV === 'development' && (
+          <form
+            method="POST"
+            action="/auth/dev-login"
+            style={{ marginTop: 12 }}
+          >
+            <button
+              type="submit"
+              className="btn"
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              Dev login (fabian)
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
