@@ -15,14 +15,16 @@
 // Role gate:
 //   - Caller must be owner OR admin of the target workspace (enforced
 //     server-side; admin client bypasses RLS so this gate IS the check).
-//   - The role being granted is capped at 'admin' from this entry point.
-//     Owner promotion stays a manual SQL step.
+//   - All five workspace roles can be granted from this entry point.
+//     Owner promotion is rare but permitted — the existing role gate
+//     already ensures the caller is owner/admin, so only an authorized
+//     person can transfer ownership-level access.
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type { ActionResult } from '@/lib/types';
 
-const ALLOWED_INVITE_ROLES = ['admin', 'manager', 'member', 'viewer'] as const;
+const ALLOWED_INVITE_ROLES = ['owner', 'admin', 'manager', 'member', 'viewer'] as const;
 const MAY_INVITE_ROLES = ['owner', 'admin'] as const;
 
 type InvitableRole = (typeof ALLOWED_INVITE_ROLES)[number];
@@ -90,6 +92,28 @@ export async function inviteWorkspaceMember(input: {
   let mode: InviteMode;
   if (existing) {
     userId = existing.id;
+    // Reject early if the user is already a member of THIS workspace —
+    // we don't want to silently overwrite a role via the invite UI, and
+    // we definitely don't want to email a recovery link to a user who
+    // is already signed up here. Role changes for existing members go
+    // through the dedicated change-role flow (P1 follow-up).
+    const { data: existingMember, error: memCheckErr } = await admin
+      .from('workspace_members')
+      .select('role')
+      .eq('workspace_id', ctx.uuid)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (memCheckErr) {
+      console.error('[invite] workspace_members lookup failed', memCheckErr.message);
+      return { ok: false, error: 'Mitgliedschaft konnte nicht geprüft werden.' };
+    }
+    if (existingMember) {
+      console.log('[invite] reject: already a member of', input.workspaceId);
+      return {
+        ok: false,
+        error: `Diese Person ist bereits Mitglied dieses Workspaces (Rolle: ${existingMember.role}).`,
+      };
+    }
     mode = 'recovery';
     const { error } = await admin.auth.resetPasswordForEmail(email, {
       redirectTo,
