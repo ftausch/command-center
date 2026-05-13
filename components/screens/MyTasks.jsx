@@ -12,6 +12,7 @@ import {
   changeTaskStatus,
 } from '@/lib/actions/tasks';
 import { NewTaskModal } from '@/components/NewTaskModal';
+import { TaskDrawer } from '@/components/TaskDrawer';
 
 export function MyTasksScreen({ setRoute }) {
   const {
@@ -29,6 +30,7 @@ export function MyTasksScreen({ setRoute }) {
   const [quickAddPending, setQuickAddPending] = useState(false);
   const [quickAddError, setQuickAddError] = useState(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
 
   // Quick-add defaults the project to the first project of this workspace.
   // No project picker exists in the current UI, so we pick a sensible
@@ -123,6 +125,12 @@ export function MyTasksScreen({ setRoute }) {
         onNeedProject={() => setRoute('projects')}
       />
 
+      <TaskDrawer
+        taskId={drawerTask?.taskId ?? null}
+        projectId={drawerTask?.projectId ?? null}
+        onClose={() => setDrawerTask(null)}
+      />
+
       <div className="tabs mb-4">
         {[
           { id: 'all', label: 'All', c: counts.all },
@@ -208,7 +216,13 @@ export function MyTasksScreen({ setRoute }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((t) => <TaskRow key={t.id} task={t} setRoute={setRoute} />)}
+                  {tasks.map((t) => (
+                    <TaskRow
+                      key={t.id}
+                      task={t}
+                      onOpen={() => setDrawerTask({ taskId: t.id, projectId: t.projectId })}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -219,7 +233,7 @@ export function MyTasksScreen({ setRoute }) {
   );
 }
 
-function TaskRow({ task, setRoute }) {
+function TaskRow({ task, onOpen }) {
   const { data, currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const waiting = data.members.find((u) => u.id === task.waitingOn);
@@ -258,7 +272,7 @@ function TaskRow({ task, setRoute }) {
   };
 
   return (
-    <tr style={{ cursor: 'pointer' }} onClick={() => setRoute('project:' + task.projectId)}>
+    <tr style={{ cursor: 'pointer' }} onClick={onOpen}>
       <td>
         <span
           role="button"
