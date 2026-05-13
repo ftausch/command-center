@@ -101,3 +101,38 @@ export async function addTaskComment(input: {
     activity,
   };
 }
+
+// Load all comments for a single task. The workspace data load
+// doesn't fetch comments by default (they live per-task and are
+// populated lazily as the user opens task detail). The TaskDrawer
+// calls this on open so the thread shows existing rows, not just
+// what was added in-session.
+export async function listTaskComments(input: {
+  workspaceId: string;
+  taskId: string;
+}): Promise<ActionResult<TaskCommentView[]>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: [] };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+
+  const { data, error } = await supabase
+    .from('task_comments')
+    .select('id, task_id, author_id, body, created_at')
+    .eq('workspace_id', ctx.uuid)
+    .eq('task_id', input.taskId)
+    .order('created_at', { ascending: true });
+  if (error) return { ok: false, error: error.message };
+
+  return {
+    ok: true,
+    data: (data ?? []).map((r): TaskCommentView => ({
+      id: r.id,
+      taskId: r.task_id,
+      author: r.author_id,
+      time: r.created_at,
+      text: r.body,
+    })),
+  };
+}
