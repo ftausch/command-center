@@ -63,8 +63,8 @@ export function ProjectsScreen({ setRoute }) {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <button className="chip">View: List <I.chevronDown size={11} /></button>
-        <button className="chip">Sort: Deadline <I.chevronDown size={11} /></button>
+        <button className="chip" disabled title="Noch nicht verfügbar">View: List <I.chevronDown size={11} /></button>
+        <button className="chip" disabled title="Noch nicht verfügbar">Sort: Deadline <I.chevronDown size={11} /></button>
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>

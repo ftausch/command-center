@@ -11,6 +11,8 @@ import {
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
+const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
 export function DashboardScreen({ setRoute }) {
   const { currentWorkspace: brand, data, me } = useWorkspace();
 
@@ -28,6 +30,13 @@ export function DashboardScreen({ setRoute }) {
 
   const activeProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Planning');
 
+  // Current calendar date, in ISO + a human weekday label. Was hardcoded
+  // to "Montag · 11. Mai 2026" — looked wrong every day except one.
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const todayWeekday = WEEKDAY_LABEL[now.getDay()];
+  const unassignedToday = dueToday.filter((t) => !t.assignee).length;
+
   return (
     <div className="page fade-in">
       <div className="page-head">
@@ -35,7 +44,7 @@ export function DashboardScreen({ setRoute }) {
           <div className="row gap-2 mb-2">
             <Badge kind="brand" dot>{brand?.name}</Badge>
             <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>·</span>
-            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>Montag · {formatDateLong('2026-05-11')}</span>
+            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{todayWeekday} · {formatDateLong(todayIso)}</span>
           </div>
           <h1 className="h1">Guten Morgen, {me?.name?.split(' ')[0] ?? 'Fabian'}.</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0' }}>
@@ -43,17 +52,17 @@ export function DashboardScreen({ setRoute }) {
           </p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm"><I.filter size={13} /> Filter</button>
-          <button className="btn btn-ghost btn-sm">Diese Woche <I.chevronDown size={12} /></button>
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.filter size={13} /> Filter</button>
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar">Diese Woche <I.chevronDown size={12} /></button>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-4 gap-3 mb-6">
-        <KPI label="Offene Aufgaben" value={open.length} trend="+4 ggü. letzter Woche" />
-        <KPI label="Heute fällig" value={dueToday.length} trend={dueToday.length ? `${dueToday.length} unassigned: 0` : 'Alles im Plan'} tone={dueToday.length > 0 ? 'warn' : 'ok'} />
+        <KPI label="Offene Aufgaben" value={open.length} trend={`${overdue.length} überfällig`} tone={overdue.length > 0 ? 'bad' : 'ok'} />
+        <KPI label="Heute fällig" value={dueToday.length} trend={dueToday.length ? `${unassignedToday} ohne Zuweisung` : 'Alles im Plan'} tone={dueToday.length > 0 ? 'warn' : 'ok'} />
         <KPI label="Blockiert" value={blocked.length} trend={blocked.length ? 'Aufmerksamkeit nötig' : 'Keine Blocker'} tone={blocked.length > 0 ? 'bad' : 'ok'} />
-        <KPI label="In Review" value={inReview.length} trend="3 davon ⩾ 24h" />
+        <KPI label="In Review" value={inReview.length} trend={inReview.length ? 'Warten auf Feedback' : 'Keine offenen Reviews'} />
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.6fr 1fr' }}>

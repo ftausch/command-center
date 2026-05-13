@@ -47,10 +47,13 @@ export function CalendarScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <button className="btn btn-ghost btn-sm" onClick={() => setMonth({ year: month.year, mo: (month.mo + 11) % 12 })}><I.chevron size={12} style={{ transform: 'rotate(180deg)' }} /></button>
-          <button className="btn btn-ghost btn-sm">{monthLabel} {month.year}</button>
+          <button className="btn btn-ghost btn-sm" disabled>{monthLabel} {month.year}</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setMonth({ year: month.year, mo: (month.mo + 1) % 12 })}><I.chevron size={12} /></button>
-          <button className="btn btn-ghost btn-sm">Heute</button>
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> Termin</button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setMonth({ year: TODAY.getFullYear(), mo: TODAY.getMonth() })}
+          >Heute</button>
+          <button className="btn btn-brand btn-sm" disabled title="Kalender-Termine kommen bald — heute werden Events aus Projekten/Tasks gespiegelt"><I.plus size={13} /> Termin</button>
         </div>
       </div>
 
@@ -67,9 +70,9 @@ export function CalendarScreen({ setRoute }) {
           </div>
         ))}
         <div style={{ flex: 1 }} />
-        <button className="chip active">Monat</button>
-        <button className="chip">Woche</button>
-        <button className="chip">Tag</button>
+        <button className="chip active" disabled>Monat</button>
+        <button className="chip" disabled title="Noch nicht verfügbar">Woche</button>
+        <button className="chip" disabled title="Noch nicht verfügbar">Tag</button>
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -124,6 +127,11 @@ export function CalendarScreen({ setRoute }) {
       <div className="mt-6">
         <div className="label mb-3">Demnächst · {brand?.name}</div>
         <div className="card">
+          {events.length === 0 && (
+            <div className="meta" style={{ padding: '18px 20px' }}>
+              Noch keine Termine in diesem Workspace. Sobald Tasks und Projekte mit Deadlines angelegt sind, tauchen sie hier auf.
+            </div>
+          )}
           {events.slice(0, 8).map((ev, i) => (
             <div key={i} className="row gap-4" style={{ padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)', cursor: 'pointer' }} onClick={() => setRoute('project:' + ev.projectId)}>
               <div style={{ minWidth: 70 }}>

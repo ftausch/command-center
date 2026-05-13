@@ -39,7 +39,7 @@ export function KanbanScreen({ setRoute }) {
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Board</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Status-Spalten über alle Projekte. Drag (visuell) zwischen Spalten zum Verschieben.
+            Status-Spalten über alle Projekte.
           </p>
         </div>
         <div className="row gap-2">
@@ -47,7 +47,7 @@ export function KanbanScreen({ setRoute }) {
             <option value="all">Alle Projekte ({data.projects.length})</option>
             {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <button className="btn btn-ghost btn-sm">Group: Status <I.chevronDown size={12} /></button>
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar">Group: Status <I.chevronDown size={12} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
@@ -61,11 +61,11 @@ export function KanbanScreen({ setRoute }) {
 
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
-        <button className="chip active">Alle <span className="count">{tasks.length}</span></button>
-        <button className="chip"><span className="dot-indicator danger" /> High <span className="count">{tasks.filter((t) => t.priority === 'High').length}</span></button>
-        <button className="chip">Assignee: Me</button>
-        <button className="chip">Has Slack</button>
-        <button className="chip"><I.filter size={11} /> Mehr</button>
+        <button className="chip active" disabled title="Filter kommen bald">Alle <span className="count">{tasks.length}</span></button>
+        <button className="chip" disabled title="Filter kommen bald"><span className="dot-indicator danger" /> High <span className="count">{tasks.filter((t) => t.priority === 'High').length}</span></button>
+        <button className="chip" disabled title="Filter kommen bald">Assignee: Me</button>
+        <button className="chip" disabled title="Filter kommen bald">Has Slack</button>
+        <button className="chip" disabled title="Filter kommen bald"><I.filter size={11} /> Mehr</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
@@ -87,7 +87,11 @@ function KColumn({ title, tasks, blocked, setRoute }) {
           <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.005em' }}>{title}</span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{allTasks.length}</span>
         </div>
-        <button className="btn btn-icon btn-sm btn-quiet"><I.plus size={13} /></button>
+        <button
+          className="btn btn-icon btn-sm btn-quiet"
+          disabled
+          title="Per-Spalten-Anlage kommt bald — bis dahin oben '+ New Task' nutzen"
+        ><I.plus size={13} /></button>
       </div>
 
       <div className="col gap-2">
@@ -97,13 +101,9 @@ function KColumn({ title, tasks, blocked, setRoute }) {
             padding: 14, borderRadius: 8, border: '1.5px dashed var(--border)',
             color: 'var(--text-4)', fontSize: 12, textAlign: 'center',
           }}>
-            Leer. Tasks hier ablegen.
+            Leer.
           </div>
         )}
-        <button style={{
-          padding: '8px 10px', border: '1px solid transparent', background: 'transparent', color: 'var(--text-3)',
-          textAlign: 'left', fontSize: 12.5, borderRadius: 6, cursor: 'pointer',
-        }}><I.plus size={12} /> Add task</button>
       </div>
     </div>
   );

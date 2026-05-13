@@ -149,7 +149,7 @@ export function MyTasksScreen({ setRoute }) {
         <button className="chip" onClick={() => setGroupBy(groupBy === 'project' ? 'priority' : groupBy === 'priority' ? 'flat' : 'project')}>
           Group: {groupBy}
         </button>
-        <button className="chip">
+        <button className="chip" disabled title="Noch nicht verfügbar">
           <I.filter size={12} /> Mehr Filter
         </button>
       </div>

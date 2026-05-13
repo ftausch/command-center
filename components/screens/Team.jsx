@@ -26,7 +26,7 @@ export function TeamScreen({ setRoute }) {
           </p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm"><I.filter size={13} /> Filter</button>
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.filter size={13} /> Filter</button>
           <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Person einladen</button>
         </div>
       </div>
@@ -65,7 +65,7 @@ export function TeamScreen({ setRoute }) {
                     <div className="meta">{u.role}</div>
                   </div>
                 </div>
-                <button className="btn btn-quiet btn-sm"><I.more size={14} /></button>
+                <button className="btn btn-quiet btn-sm" disabled title="Rollen-Änderung kommt bald"><I.more size={14} /></button>
               </div>
 
               <div className="row gap-4 mb-3">

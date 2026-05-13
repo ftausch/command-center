@@ -90,8 +90,21 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0', maxWidth: 720 }}>{project.desc}</p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm"><I.slack size={13} /> Open in Slack</button>
-          <button className="btn btn-ghost btn-sm"><I.more size={14} /></button>
+          {project.slackConnected && project.slackChannel ? (
+            <a
+              className="btn btn-ghost btn-sm"
+              href={`https://slack.com/app_redirect?channel=${encodeURIComponent(project.slackChannel.replace(/^#/, ''))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <I.slack size={13} /> Open in Slack
+            </a>
+          ) : (
+            <button className="btn btn-ghost btn-sm" disabled title="Kein Slack-Channel verknüpft">
+              <I.slack size={13} /> Open in Slack
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.more size={14} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
