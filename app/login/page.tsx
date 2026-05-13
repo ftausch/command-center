@@ -63,8 +63,12 @@ function LoginInner() {
   const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // 'signin' = email + password form. 'forgot' = email-only recovery
+  // form. The forgot mode is a sibling form on the same card, not a
+  // new route — keeps the auth surface in one place.
+  const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
 
   const configured = isSupabaseConfigured();
 
@@ -114,6 +118,35 @@ function LoginInner() {
     window.location.href = next;
   }
 
+  async function onForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg(null);
+    setStatus('submitting');
+    const supabase = createClient();
+    if (!supabase) {
+      setErrorMsg('Auth is not configured in this environment.');
+      setStatus('error');
+      return;
+    }
+    try {
+      sessionStorage.setItem(EMAIL_KEY, email);
+    } catch {}
+    const redirectTo = `${window.location.origin.replace(/\/+$/, '')}/auth/callback`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      // Surface Supabase's error directly — typically rate limit hits.
+      // resetPasswordForEmail is otherwise silent on success/failure;
+      // it does not leak whether the email exists.
+      setErrorMsg(error.message);
+      setStatus('error');
+      return;
+    }
+    // Same message regardless of whether the email exists. Don't leak
+    // account existence — same security principle as the sign-in
+    // "Invalid login credentials" error.
+    setStatus('sent');
+  }
+
   return (
     <div
       style={{
@@ -147,58 +180,169 @@ function LoginInner() {
           <span style={{ fontWeight: 600 }}>Command Center</span>
         </div>
 
-        <h1 className="h2" style={{ margin: '4px 0 4px' }}>Sign in</h1>
+        <h1 className="h2" style={{ margin: '4px 0 4px' }}>
+          {mode === 'forgot' ? 'Reset password' : 'Sign in'}
+        </h1>
         <p className="meta" style={{ margin: '0 0 16px' }}>
-          {configured
-            ? 'Sign in with email and password.'
-            : 'Auth is not configured in this environment — preview / mock mode.'}
+          {!configured
+            ? 'Auth is not configured in this environment — preview / mock mode.'
+            : mode === 'forgot'
+              ? 'Enter your email. If an account exists, we send a recovery link.'
+              : 'Sign in with email and password.'}
         </p>
 
-        <form onSubmit={onSubmit} className="col gap-3">
-          <input
-            type="email"
-            className="input"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={!configured || status === 'submitting'}
-            autoFocus
-            autoComplete="email"
-          />
-          <input
-            type="password"
-            className="input"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={!configured || status === 'submitting'}
-            autoComplete="current-password"
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={!configured || !email || !password || status === 'submitting'}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {status === 'submitting' ? 'Signing in…' : 'Sign in'}
-          </button>
-          {errorMsg && (
-            <div
+        {mode === 'signin' ? (
+          <form onSubmit={onSubmit} className="col gap-3">
+            <input
+              type="email"
+              className="input"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={!configured || status === 'submitting'}
+              autoFocus
+              autoComplete="email"
+            />
+            <input
+              type="password"
+              className="input"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={!configured || status === 'submitting'}
+              autoComplete="current-password"
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!configured || !email || !password || status === 'submitting'}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              {status === 'submitting' ? 'Signing in…' : 'Sign in'}
+            </button>
+            {errorMsg && (
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--danger)',
+                  padding: '6px 8px',
+                  background: 'var(--danger-bg)',
+                  borderRadius: 6,
+                  border: '1px solid var(--danger-border)',
+                }}
+              >
+                {errorMsg}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('forgot');
+                setErrorMsg(null);
+                setStatus('idle');
+              }}
+              disabled={!configured}
               style={{
+                background: 'none',
+                border: 0,
+                padding: '4px 0 0',
+                color: 'var(--text-3)',
                 fontSize: 12.5,
-                color: 'var(--danger)',
-                padding: '6px 8px',
-                background: 'var(--danger-bg)',
-                borderRadius: 6,
-                border: '1px solid var(--danger-border)',
+                cursor: 'pointer',
+                alignSelf: 'flex-start',
+                textDecoration: 'underline',
               }}
             >
-              {errorMsg}
+              Passwort vergessen?
+            </button>
+          </form>
+        ) : status === 'sent' ? (
+          <div className="col gap-3">
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--success)',
+                padding: '10px 12px',
+                background: 'var(--success-bg)',
+                borderRadius: 6,
+                border: '1px solid var(--success-border)',
+              }}
+            >
+              Falls ein Konto mit dieser E-Mail existiert, wurde eine Recovery-Mail gesendet. Bitte Posteingang prüfen.
             </div>
-          )}
-        </form>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg(null);
+                setStatus('idle');
+              }}
+              className="btn btn-ghost"
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              Zurück zur Anmeldung
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={onForgotSubmit} className="col gap-3">
+            <input
+              type="email"
+              className="input"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={!configured || status === 'submitting'}
+              autoFocus
+              autoComplete="email"
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!configured || !email || status === 'submitting'}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              {status === 'submitting' ? 'Wird gesendet…' : 'Recovery-Mail senden'}
+            </button>
+            {errorMsg && (
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--danger)',
+                  padding: '6px 8px',
+                  background: 'var(--danger-bg)',
+                  borderRadius: 6,
+                  border: '1px solid var(--danger-border)',
+                }}
+              >
+                {errorMsg}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setErrorMsg(null);
+                setStatus('idle');
+              }}
+              disabled={status === 'submitting'}
+              style={{
+                background: 'none',
+                border: 0,
+                padding: '4px 0 0',
+                color: 'var(--text-3)',
+                fontSize: 12.5,
+                cursor: 'pointer',
+                alignSelf: 'flex-start',
+                textDecoration: 'underline',
+              }}
+            >
+              Zurück zur Anmeldung
+            </button>
+          </form>
+        )}
 
         {/* Dev-only shortcut. process.env.NODE_ENV is inlined at build time,
             so in production this entire branch is dead-code-eliminated and
