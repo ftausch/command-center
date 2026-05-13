@@ -6,7 +6,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
   Avatar, AvatarStack, Badge, BrandBadge,
-  PhaseTracker, PriorityBadge, Progress, SlackCard, StatusBadge,
+  PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
 import { addTaskComment } from '@/lib/actions/comments';
@@ -128,8 +128,8 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
-        <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">4</span></div>
-        <div className={`tab ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')}>Files <span className="count">{project.links?.length || 3}</span></div>
+        <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
+        <div className={`tab ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')}>Files <span className="count">{project.links?.length ?? 0}</span></div>
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
@@ -182,9 +182,11 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           {tab === 'comments' && (
             <div className="card card-pad">
               <div className="col gap-4">
-                <CommentItem authorId="tim" time="vor 14 Min" text="@Mara — Rough-Cut bitte heute bis 18 Uhr. Wir brauchen morgen früh die Review-Runde mit Fabian." />
-                <CommentItem authorId="mara" time="vor 1 Std" text="Schaffe ich. Ich arbeite gerade am Übergang Minute 17–22, da ist noch viel doppelte Audio." />
-                <CommentItem authorId="fabian" time="gestern" text="Wichtig: Verena hat um Cut bei 32:10 gebeten (Politik-Disclaimer). Bitte unbedingt rausnehmen." />
+                {projectComments.length === 0 && (
+                  <div className="meta" style={{ padding: '8px 0' }}>
+                    Noch keine Kommentare zu Tasks dieses Projekts. Erste Diskussion startet unten.
+                  </div>
+                )}
                 {projectComments.map((c) => (
                   <CommentItem key={c.id} authorId={c.author} time={timeAgo(c.time)} text={c.text} />
                 ))}
@@ -218,18 +220,19 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           {tab === 'files' && (
             <div className="card card-pad">
               <div className="col gap-2">
-                {(project.links || [
-                  { label: 'Recording File', url: '#' },
-                  { label: 'Briefing Notion', url: '#' },
-                  { label: 'Cover-Concepts', url: '#' },
-                ]).map((l, i) => (
+                {(project.links ?? []).length === 0 && (
+                  <div className="meta" style={{ padding: '8px 0' }}>
+                    Keine Dateien oder Links zu diesem Projekt.
+                  </div>
+                )}
+                {(project.links ?? []).map((l, i) => (
                   <div key={i} className="row gap-3" style={{ padding: '10px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)' }}>
                     <I.link size={14} color="var(--text-3)" />
                     <span style={{ flex: 1, fontSize: 13 }}>{l.label}</span>
-                    <button className="btn btn-quiet btn-sm">Open <I.arrowRight size={11} /></button>
+                    <button className="btn btn-quiet btn-sm" disabled title="Noch nicht verfügbar">Open <I.arrowRight size={11} /></button>
                   </div>
                 ))}
-                <button className="btn btn-ghost btn-sm mt-2" style={{ alignSelf: 'flex-start' }}><I.plus size={13} /> Link hinzufügen</button>
+                <button className="btn btn-ghost btn-sm mt-2" style={{ alignSelf: 'flex-start' }} disabled title="Noch nicht verfügbar"><I.plus size={13} /> Link hinzufügen</button>
               </div>
             </div>
           )}
@@ -265,10 +268,9 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               <>
                 <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{project.slackChannel}</div>
                 <div className="meta mt-1">Automatische Updates: Status-Wechsel, neue Tasks, Deadlines</div>
-                <div className="mt-3"><SlackCard notif={{ channel: project.slackChannel, user: 'Tim', text: '@channel Rough-Cut hochgeladen — bitte 1× Review.', time: 'vor 14 Min' }} /></div>
                 <div className="row gap-2 mt-3">
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}>Open Channel</button>
-                  <button className="btn btn-quiet btn-sm"><I.settings size={13} /></button>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled title="Direkt-Link kommt mit der nächsten Slack-Slice">Open Channel</button>
+                  <button className="btn btn-quiet btn-sm" disabled title="Noch nicht verfügbar"><I.settings size={13} /></button>
                 </div>
               </>
             ) : (

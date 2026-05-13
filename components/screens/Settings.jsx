@@ -8,6 +8,7 @@ import { Avatar, Badge, SlackCard } from '@/components/ui';
 import { Field } from '@/components/screens/ProjectDetail';
 import { Stat2, ToggleRow } from '@/components/screens/Templates';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
+import { timeAgo } from '@/lib/utils';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
@@ -59,6 +60,21 @@ export function SettingsScreen() {
 function SlackSection() {
   const { currentWorkspace: brand, data } = useWorkspace();
   const projects = data.projects;
+  const notifs = data.slackNotifications;
+  // "Posts heute" + "Letzter Sync" — derived from the slack_notifications
+  // mirror table. Both are best-effort: an admin who hasn't opened the
+  // settings screen sees a slightly stale count, which is fine.
+  const startOfDay = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const postsToday = notifs.filter((n) => {
+    const t = new Date(n.time).getTime();
+    return Number.isFinite(t) && t >= startOfDay;
+  }).length;
+  const mostRecentNotif = notifs[0];
+  const lastSyncText = mostRecentNotif ? timeAgo(mostRecentNotif.time) : '—';
   return (
     <>
       <div className="card card-pad mb-4">
@@ -74,8 +90,8 @@ function SlackSection() {
         </div>
         <div className="grid grid-3 gap-4 mt-4">
           <Stat2 label="Channels gemappt" value={projects.filter((p) => p.slackConnected).length} />
-          <Stat2 label="Posts heute" value="12" />
-          <Stat2 label="Letzter Sync" value="vor 2 Min" />
+          <Stat2 label="Posts heute" value={postsToday} />
+          <Stat2 label="Letzter Sync" value={lastSyncText} />
         </div>
       </div>
 
