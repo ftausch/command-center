@@ -7,6 +7,7 @@ import { I } from '@/components/icons';
 import { Avatar, Badge, PriorityBadge } from '@/components/ui';
 import { dueLabel, kColColor } from '@/lib/utils';
 import { NewTaskModal } from '@/components/NewTaskModal';
+import { TaskDrawer } from '@/components/TaskDrawer';
 
 const KANBAN_COLS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Done'];
 
@@ -14,6 +15,7 @@ export function KanbanScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const [projectFilter, setProjectFilter] = useState('all');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [drawerTask, setDrawerTask] = useState(null);
 
   const tasks = useMemo(() => {
     let r = data.tasks;
@@ -59,6 +61,12 @@ export function KanbanScreen({ setRoute }) {
         onNeedProject={() => setRoute('projects')}
       />
 
+      <TaskDrawer
+        taskId={drawerTask?.taskId ?? null}
+        projectId={drawerTask?.projectId ?? null}
+        onClose={() => setDrawerTask(null)}
+      />
+
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
         <button className="chip active" disabled title="Filter kommen bald">Alle <span className="count">{tasks.length}</span></button>
@@ -70,14 +78,14 @@ export function KanbanScreen({ setRoute }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
         {KANBAN_COLS.map((col) => (
-          <KColumn key={col} title={col} tasks={grouped[col] || []} blocked={col === 'In Progress' ? grouped['Blocked'] : null} setRoute={setRoute} />
+          <KColumn key={col} title={col} tasks={grouped[col] || []} blocked={col === 'In Progress' ? grouped['Blocked'] : null} onOpenTask={(t) => setDrawerTask({ taskId: t.id, projectId: t.projectId })} />
         ))}
       </div>
     </div>
   );
 }
 
-function KColumn({ title, tasks, blocked, setRoute }) {
+function KColumn({ title, tasks, blocked, onOpenTask }) {
   const allTasks = blocked ? [...tasks, ...(blocked || [])] : tasks;
   return (
     <div style={{ background: 'transparent', minHeight: 400 }}>
@@ -95,7 +103,7 @@ function KColumn({ title, tasks, blocked, setRoute }) {
       </div>
 
       <div className="col gap-2">
-        {allTasks.map((t) => <KCard key={t.id} task={t} setRoute={setRoute} />)}
+        {allTasks.map((t) => <KCard key={t.id} task={t} onOpen={() => onOpenTask(t)} />)}
         {allTasks.length === 0 && (
           <div style={{
             padding: 14, borderRadius: 8, border: '1.5px dashed var(--border)',
@@ -109,7 +117,7 @@ function KColumn({ title, tasks, blocked, setRoute }) {
   );
 }
 
-function KCard({ task, setRoute }) {
+function KCard({ task, onOpen }) {
   const { data } = useWorkspace();
   const a = data.members.find((u) => u.id === task.assignee);
   const p = data.projects.find((pr) => pr.id === task.projectId);
@@ -117,7 +125,7 @@ function KCard({ task, setRoute }) {
   const td = dueLabel(task.due);
   return (
     <div
-      onClick={() => setRoute('project:' + task.projectId)}
+      onClick={onOpen}
       style={{
         background: 'var(--bg-elev)',
         border: `1px solid ${task.status === 'Blocked' ? 'var(--danger-border)' : 'var(--border)'}`,
