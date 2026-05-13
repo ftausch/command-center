@@ -1,14 +1,53 @@
 'use client';
 // Activity Feed
 
+import { useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { ActivityTimeline } from '@/components/screens/ProjectDetail';
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Compute Last-7-days counts from the in-memory activity log. No new
+// server query needed; the same items the timeline renders are the
+// source of truth.
+function useRecentStats(items) {
+  return useMemo(() => {
+    const cutoff = Date.now() - SEVEN_DAYS_MS;
+    const recent = items.filter((a) => {
+      const t = new Date(a.time).getTime();
+      return Number.isFinite(t) && t >= cutoff;
+    });
+    let tasksCompleted = 0;
+    let tasksCreated = 0;
+    let projectsCreated = 0;
+    let comments = 0;
+    let statusChanges = 0;
+    let blockersOpened = 0;
+    for (const a of recent) {
+      if (a.icon === 'check') tasksCompleted++;
+      else if (a.icon === 'plus' && /Task/i.test(a.verb)) tasksCreated++;
+      else if (a.icon === 'plus' && /Project/i.test(a.verb)) projectsCreated++;
+      else if (a.icon === 'message') comments++;
+      else if (a.icon === 'arrow-right') statusChanges++;
+      else if (a.icon === 'block') blockersOpened++;
+    }
+    return {
+      tasksCompleted,
+      tasksCreated,
+      projectsCreated,
+      comments,
+      statusChanges,
+      blockersOpened,
+    };
+  }, [items]);
+}
+
 export function ActivityScreen() {
   const { currentWorkspace: brand, data } = useWorkspace();
   const items = data.activity;
+  const stats = useRecentStats(items);
 
   return (
     <div className="page fade-in">
@@ -43,13 +82,12 @@ export function ActivityScreen() {
           <div className="card card-pad">
             <div className="label mb-3">Stats · Letzte 7 Tage</div>
             <div className="col gap-3">
-              <StatRow label="Tasks abgeschlossen" value="12" tone="up" />
-              <StatRow label="Tasks erstellt" value="18" />
-              <StatRow label="Kommentare" value="34" />
-              <StatRow label="Slack-Notifications" value="9" />
-              <StatRow label="Status-Wechsel" value="47" />
-              <StatRow label="Blocker geöffnet" value="3" tone="down" />
-              <StatRow label="Blocker gelöst" value="2" />
+              <StatRow label="Tasks abgeschlossen" value={stats.tasksCompleted} />
+              <StatRow label="Tasks erstellt" value={stats.tasksCreated} />
+              <StatRow label="Projekte erstellt" value={stats.projectsCreated} />
+              <StatRow label="Kommentare" value={stats.comments} />
+              <StatRow label="Status-Wechsel" value={stats.statusChanges} />
+              <StatRow label="Blocker geöffnet" value={stats.blockersOpened} />
             </div>
           </div>
 
@@ -61,9 +99,10 @@ export function ActivityScreen() {
             <div className="col gap-2 mt-3">
               <SlackEventRow label="Task erstellt" />
               <SlackEventRow label="Status → Review" />
-              <SlackEventRow label="Status → Blocked" />
-              <SlackEventRow label="Task abgeschlossen" off />
-              <SlackEventRow label="Deadline geändert" />
+              <SlackEventRow label="Task abgeschlossen" />
+              <SlackEventRow label="Task blockiert" />
+              <SlackEventRow label="Projekt erstellt" />
+              <SlackEventRow label="Kommentar zu einem Task" />
             </div>
           </div>
         </div>
