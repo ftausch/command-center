@@ -7,6 +7,7 @@ import { I } from '@/components/icons';
 import { Avatar, Badge, SlackCard } from '@/components/ui';
 import { Field } from '@/components/screens/ProjectDetail';
 import { Stat2, ToggleRow } from '@/components/screens/Templates';
+import { InvitePersonModal } from '@/components/InvitePersonModal';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
@@ -150,14 +151,16 @@ function WorkspaceSection({ brand, workspace }) {
 function MembersSection() {
   const { data, workspaces } = useWorkspace();
   const users = data.members;
+  const [inviteOpen, setInviteOpen] = useState(false);
   return (
     <div className="card">
+      <InvitePersonModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }} className="row between">
         <div>
           <div className="h3">Mitglieder · {users.length}</div>
           <div className="meta mt-1">Rollen: Owner · Admin · Manager · Member · Viewer</div>
         </div>
-        <button className="btn btn-brand btn-sm"><I.plus size={13} /> Einladen</button>
+        <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Einladen</button>
       </div>
       <table className="table">
         <thead><tr><th>Person</th><th>Rolle</th><th>Workspaces</th><th>Status</th><th></th></tr></thead>
