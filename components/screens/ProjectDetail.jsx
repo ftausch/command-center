@@ -34,7 +34,10 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   // stores comments per-task. Attach new comments to the first task of the
   // project so the wiring works without introducing a task picker.
   const commentTargetTaskId = tasks[0]?.id ?? null;
-  const projectComments = tasks.flatMap((t) => data.taskComments[t.id] ?? []);
+  // taskComments is lazily populated per-task, so the top-level map may be
+  // undefined on first render when no task detail has been opened yet —
+  // optional-chain through it instead of crashing on data.taskComments[id].
+  const projectComments = tasks.flatMap((t) => data.taskComments?.[t.id] ?? []);
 
   const submitComment = async () => {
     const body = commentText.trim();
