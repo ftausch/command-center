@@ -123,3 +123,36 @@ export async function toggleChecklistItem(input: {
 
   return { ok: true, data: { id: input.itemId, done: input.done }, activity };
 }
+
+// Load all checklist items for a single task. Same reason as
+// listTaskComments — items live per-task and aren't preloaded by the
+// workspace fetch; the TaskDrawer calls this on open.
+export async function listTaskChecklist(input: {
+  workspaceId: string;
+  taskId: string;
+}): Promise<ActionResult<TaskChecklistItemView[]>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: [] };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+
+  const { data, error } = await supabase
+    .from('task_checklist_items')
+    .select('id, task_id, label, done, position')
+    .eq('workspace_id', ctx.uuid)
+    .eq('task_id', input.taskId)
+    .order('position', { ascending: true });
+  if (error) return { ok: false, error: error.message };
+
+  return {
+    ok: true,
+    data: (data ?? []).map((r): TaskChecklistItemView => ({
+      id: r.id,
+      taskId: r.task_id,
+      label: r.label,
+      done: r.done,
+      position: r.position,
+    })),
+  };
+}

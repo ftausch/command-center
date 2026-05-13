@@ -9,57 +9,26 @@ import {
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
-import { addTaskComment } from '@/lib/actions/comments';
 import { NewTaskModal } from '@/components/NewTaskModal';
+import { TaskDrawer } from '@/components/TaskDrawer';
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const {
-    currentWorkspace: brand,
-    currentWorkspaceId,
-    data,
-    me,
-    addTaskComment: addTaskCommentToCache,
-    pushActivity,
-  } = useWorkspace();
+  const { currentWorkspace: brand, data } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
-  const [commentText, setCommentText] = useState('');
-  const [commentPending, setCommentPending] = useState(false);
-  const [commentError, setCommentError] = useState(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [drawerTaskId, setDrawerTaskId] = useState(null);
 
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
 
   const phases = data.phases;
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
-  // The comments form is project-scoped in the existing UI but the schema
-  // stores comments per-task. Attach new comments to the first task of the
-  // project so the wiring works without introducing a task picker.
-  const commentTargetTaskId = tasks[0]?.id ?? null;
-  // taskComments is lazily populated per-task, so the top-level map may be
-  // undefined on first render when no task detail has been opened yet —
-  // optional-chain through it instead of crashing on data.taskComments[id].
+  // Project-wide read-only roll-up of comments already in cache. The
+  // per-task write surface lives in the TaskDrawer (open a task to add a
+  // comment) — anchoring the write to a specific task is the whole
+  // reason the drawer exists.
   const projectComments = tasks.flatMap((t) => data.taskComments?.[t.id] ?? []);
 
-  const submitComment = async () => {
-    const body = commentText.trim();
-    if (!body || !commentTargetTaskId) return;
-    setCommentPending(true);
-    setCommentError(null);
-    const result = await addTaskComment({
-      workspaceId: currentWorkspaceId,
-      taskId: commentTargetTaskId,
-      body,
-    });
-    setCommentPending(false);
-    if (result.ok && result.data) {
-      addTaskCommentToCache(result.data);
-      if (result.activity) pushActivity(result.activity);
-      setCommentText('');
-    } else {
-      setCommentError(result.error ?? 'Kommentar konnte nicht gesendet werden');
-    }
-  };
   const team = project.team
     .map((id) => data.members.find((u) => u.id === id))
     .filter(Boolean);
@@ -115,6 +84,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         initialProjectId={projectId}
       />
 
+      <TaskDrawer
+        taskId={drawerTaskId}
+        projectId={projectId}
+        onClose={() => setDrawerTaskId(null)}
+      />
+
       <div className="card card-pad mb-4">
         <div className="row between mb-3">
           <div>
@@ -157,7 +132,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                     const waiting = data.members.find((u) => u.id === t.waitingOn);
                     const td = dueLabel(t.due);
                     return (
-                      <tr key={t.id}>
+                      <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer' }}>
                         <td>
                           <div style={{ fontWeight: 500 }}>{t.title}</div>
                           {t.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {t.blocker}</div>}
@@ -195,36 +170,17 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           {tab === 'comments' && (
             <div className="card card-pad">
               <div className="col gap-4">
-                {projectComments.length === 0 && (
+                {projectComments.length === 0 ? (
                   <div className="meta" style={{ padding: '8px 0' }}>
-                    Noch keine Kommentare zu Tasks dieses Projekts. Erste Diskussion startet unten.
+                    Noch keine Kommentare zu Tasks dieses Projekts. Öffne einen Task im Tasks-Tab, um zu kommentieren.
                   </div>
-                )}
-                {projectComments.map((c) => (
-                  <CommentItem key={c.id} authorId={c.author} time={timeAgo(c.time)} text={c.text} />
-                ))}
-                <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
-                  {me && <Avatar user={me} />}
-                  <input
-                    className="input"
-                    placeholder="Kommentar schreiben — @ für Mention, # für Task…"
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !commentPending) submitComment();
-                    }}
-                    disabled={commentPending || !commentTargetTaskId}
-                  />
-                  <button
-                    className="btn btn-brand"
-                    onClick={submitComment}
-                    disabled={commentPending || !commentText.trim() || !commentTargetTaskId}
-                  >
-                    Kommentieren
-                  </button>
-                </div>
-                {commentError && (
-                  <div className="meta" style={{ color: 'var(--danger)' }}>{commentError}</div>
+                ) : (
+                  <>
+                    <div className="meta">Antworten direkt im Task öffnen (Tab "Tasks").</div>
+                    {projectComments.map((c) => (
+                      <CommentItem key={c.id} authorId={c.author} time={timeAgo(c.time)} text={c.text} />
+                    ))}
+                  </>
                 )}
               </div>
             </div>
