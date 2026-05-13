@@ -44,7 +44,9 @@ export function WorkspaceSwitcher({ onPick }) {
             <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{me?.name ?? 'Fabian Tausch'}</span>
           </div>
           <span style={{ color: 'var(--text-4)' }}>·</span>
-          <button className="btn btn-quiet btn-sm">Log out</button>
+          <form method="POST" action="/auth/logout" style={{ margin: 0 }}>
+            <button type="submit" className="btn btn-quiet btn-sm">Log out</button>
+          </form>
         </div>
       </header>
 

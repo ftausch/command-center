@@ -115,7 +115,7 @@ function SlackSection() {
                   </div>
                 </td>
                 <td>{p.slackConnected ? <Badge kind="success" dot>Connected</Badge> : <Badge kind="warning" dot>Not connected</Badge>}</td>
-                <td><button className="btn btn-quiet btn-sm">Edit</button></td>
+                <td><button className="btn btn-quiet btn-sm" disabled title="Per-Projekt Channel-Mapping kommt mit der nächsten Slack-Slice">Edit</button></td>
               </tr>
             ))}
           </tbody>
@@ -157,8 +157,8 @@ function WorkspaceSection({ brand, workspace }) {
       <Field label="Zeitzone">Europe/Berlin</Field>
       <Field label="Arbeitswoche">Mo – Fr</Field>
       <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
-        <button className="btn btn-brand btn-sm">Änderungen speichern</button>
-        <button className="btn btn-ghost btn-sm">Verwerfen</button>
+        <button className="btn btn-brand btn-sm" disabled title="Workspace-Einstellungen speichern kommt im nächsten Slice">Änderungen speichern</button>
+        <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar">Verwerfen</button>
       </div>
     </div>
   );
@@ -195,7 +195,7 @@ function MembersSection() {
                 ) : null;
               })}</td>
               <td>{u.online ? <span style={{ fontSize: 12, color: 'var(--success)' }}>● Online</span> : <span className="meta">Offline</span>}</td>
-              <td><button className="btn btn-quiet btn-sm"><I.more size={14} /></button></td>
+              <td><button className="btn btn-quiet btn-sm" disabled title="Rollen-Änderung kommt bald"><I.more size={14} /></button></td>
             </tr>
           ))}
         </tbody>

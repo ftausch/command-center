@@ -60,17 +60,17 @@ export function ActivityScreen() {
           </p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm"><I.filter size={13} /> Filter</button>
+          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.filter size={13} /> Filter</button>
         </div>
       </div>
 
       <div className="row gap-2 mb-4 wrap">
-        <button className="chip active">Alle <span className="count">{items.length}</span></button>
-        <button className="chip">Status</button>
-        <button className="chip">Comments</button>
-        <button className="chip">Slack</button>
-        <button className="chip">Assignments</button>
-        <button className="chip">Blocked</button>
+        <button className="chip active" disabled title="Filter kommen bald">Alle <span className="count">{items.length}</span></button>
+        <button className="chip" disabled title="Filter kommen bald">Status</button>
+        <button className="chip" disabled title="Filter kommen bald">Comments</button>
+        <button className="chip" disabled title="Filter kommen bald">Slack</button>
+        <button className="chip" disabled title="Filter kommen bald">Assignments</button>
+        <button className="chip" disabled title="Filter kommen bald">Blocked</button>
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
