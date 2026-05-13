@@ -11,6 +11,7 @@ import {
   markTaskDone,
   changeTaskStatus,
 } from '@/lib/actions/tasks';
+import { NewTaskModal } from '@/components/NewTaskModal';
 
 export function MyTasksScreen({ setRoute }) {
   const {
@@ -27,6 +28,7 @@ export function MyTasksScreen({ setRoute }) {
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddPending, setQuickAddPending] = useState(false);
   const [quickAddError, setQuickAddError] = useState(null);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   // Quick-add defaults the project to the first project of this workspace.
   // No project picker exists in the current UI, so we pick a sensible
@@ -111,9 +113,15 @@ export function MyTasksScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <button className="btn btn-ghost btn-sm">Group: {groupBy === 'project' ? 'Project' : groupBy === 'priority' ? 'Priority' : 'Flat'} <I.chevronDown size={12} /></button>
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> Quick Add</button>
+          <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> Quick Add</button>
         </div>
       </div>
+
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        onNeedProject={() => setRoute('projects')}
+      />
 
       <div className="tabs mb-4">
         {[

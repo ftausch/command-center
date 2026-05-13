@@ -140,7 +140,7 @@ export function App() {
         counts={counts}
       />
       <main className="main">
-        <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} />
+        <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} setRoute={setRoute} />
         {loading && data.projects.length === 0 ? (
           // First load only — flicker-free render once the cache is warm.
           <div
