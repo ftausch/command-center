@@ -1,16 +1,19 @@
 'use client';
 // Team View
 
+import { useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge } from '@/components/ui';
 import { daysUntil } from '@/lib/utils';
 import { KPI } from '@/components/screens/Dashboard';
+import { InvitePersonModal } from '@/components/InvitePersonModal';
 
 export function TeamScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const users = data.members;
   const tasks = data.tasks;
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   return (
     <div className="page fade-in">
@@ -24,9 +27,11 @@ export function TeamScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <button className="btn btn-ghost btn-sm"><I.filter size={13} /> Filter</button>
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> Person einladen</button>
+          <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Person einladen</button>
         </div>
       </div>
+
+      <InvitePersonModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
 
       <div className="grid grid-4 gap-3 mb-6">
         <KPI label="Teammitglieder" value={users.length} trend={`${users.filter((u) => u.online).length} online`} />
