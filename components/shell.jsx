@@ -89,6 +89,28 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
           <span>Concept Doc</span>
           <span className="nav-count" style={{ background: 'var(--bg-sunk)', color: 'var(--text-3)' }}>read</span>
         </div>
+        {/* Sign-out: <form> POST works without JS so it survives even if the
+            client bundle fails to hydrate. Reuses .nav-item styling so it
+            sits naturally with the other bottom items, no new chrome. */}
+        <form method="POST" action="/auth/logout" style={{ margin: 0 }}>
+          <button
+            type="submit"
+            title="Sign out"
+            className="nav-item"
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              background: 'none',
+              border: 0,
+              cursor: 'pointer',
+              font: 'inherit',
+              color: 'inherit',
+            }}
+          >
+            <I.x size={16} />
+            <span>Sign out</span>
+          </button>
+        </form>
         {me && (
           <div className="nav-item" style={{ marginTop: 4 }}>
             <Avatar user={me} />
