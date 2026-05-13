@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
+import { postSlackNotification, actorDisplayName } from '@/lib/integrations/slack';
 import type {
   ActionResult,
   ActivityView,
@@ -119,6 +120,12 @@ export async function createProject(input: {
     target_type: 'project',
     target_id: data.id,
     meta: { name },
+  });
+
+  const actorName = await actorDisplayName(userId);
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: `🆕 ${actorName} created project: "${name}"`,
   });
 
   const project: ProjectView = {
