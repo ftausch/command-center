@@ -157,3 +157,155 @@ export async function inviteWorkspaceMember(input: {
   );
   return { ok: true, data: { userId, mode, email } };
 }
+
+// ── Member management ─────────────────────────────────────────────────────
+//
+// Role change + removal. Shared sanity checks:
+//   - Caller must be owner OR admin of the workspace.
+//   - Only an owner can change OR remove someone whose current role is
+//     owner. Otherwise an admin could lock the workspace's actual owner
+//     out.
+//   - Only an owner can grant the owner role (no privilege escalation
+//     via "make me owner" by an admin).
+//   - The LAST owner can't be demoted or removed — we'd leave the
+//     workspace with nobody who can grant owner-level access back.
+
+type ManageableRole = 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
+
+const VALID_ROLES: readonly ManageableRole[] = [
+  'owner', 'admin', 'manager', 'member', 'viewer',
+];
+
+async function loadMemberRole(
+  admin: ReturnType<typeof createAdminClient>,
+  workspaceUuid: string,
+  userId: string,
+): Promise<ManageableRole | null> {
+  if (!admin) return null;
+  const { data } = await admin
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', workspaceUuid)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data?.role as ManageableRole | undefined) ?? null;
+}
+
+async function countOwners(
+  admin: ReturnType<typeof createAdminClient>,
+  workspaceUuid: string,
+): Promise<number> {
+  if (!admin) return 0;
+  const { count } = await admin
+    .from('workspace_members')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceUuid)
+    .eq('role', 'owner');
+  return count ?? 0;
+}
+
+export async function updateMemberRole(input: {
+  workspaceId: string;
+  userId: string;
+  role: ManageableRole;
+}): Promise<ActionResult<{ userId: string; role: ManageableRole }>> {
+  const caller = await currentUser();
+  if (!caller) return { ok: false, error: 'Not signed in' };
+
+  if (!VALID_ROLES.includes(input.role)) {
+    return { ok: false, error: `Ungültige Rolle "${input.role}"` };
+  }
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden oder kein Zugriff.' };
+  if (!canWriteAsRole(ctx.role, [...MAY_INVITE_ROLES])) {
+    return { ok: false, error: 'Nur Owner und Admins können Rollen ändern.' };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: 'Server nicht konfiguriert.' };
+
+  // Target's current role.
+  const targetRole = await loadMemberRole(admin, ctx.uuid, input.userId);
+  if (!targetRole) {
+    return { ok: false, error: 'Person ist kein Mitglied dieses Workspaces.' };
+  }
+  if (targetRole === input.role) {
+    return { ok: true, data: { userId: input.userId, role: input.role } };
+  }
+
+  // An admin can't touch an owner, and can't grant owner.
+  if (targetRole === 'owner' && ctx.role !== 'owner') {
+    return { ok: false, error: 'Nur Owner können die Rolle eines anderen Owners ändern.' };
+  }
+  if (input.role === 'owner' && ctx.role !== 'owner') {
+    return { ok: false, error: 'Nur Owner können die Owner-Rolle vergeben.' };
+  }
+
+  // Don't strand the workspace without any owner.
+  if (targetRole === 'owner' && input.role !== 'owner') {
+    const owners = await countOwners(admin, ctx.uuid);
+    if (owners <= 1) {
+      return { ok: false, error: 'Der letzte Owner kann nicht degradiert werden.' };
+    }
+  }
+
+  const { error } = await admin
+    .from('workspace_members')
+    .update({ role: input.role })
+    .eq('workspace_id', ctx.uuid)
+    .eq('user_id', input.userId);
+  if (error) {
+    console.error('[member-role] update failed', error.message);
+    return { ok: false, error: error.message };
+  }
+  console.log(
+    `[member-role] ✓ ${input.userId} → ${input.role} in ${input.workspaceId}`,
+  );
+  return { ok: true, data: { userId: input.userId, role: input.role } };
+}
+
+export async function removeMember(input: {
+  workspaceId: string;
+  userId: string;
+}): Promise<ActionResult<{ userId: string }>> {
+  const caller = await currentUser();
+  if (!caller) return { ok: false, error: 'Not signed in' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden oder kein Zugriff.' };
+  if (!canWriteAsRole(ctx.role, [...MAY_INVITE_ROLES])) {
+    return { ok: false, error: 'Nur Owner und Admins können Mitglieder entfernen.' };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: 'Server nicht konfiguriert.' };
+
+  const targetRole = await loadMemberRole(admin, ctx.uuid, input.userId);
+  if (!targetRole) {
+    return { ok: false, error: 'Person ist kein Mitglied dieses Workspaces.' };
+  }
+
+  if (targetRole === 'owner' && ctx.role !== 'owner') {
+    return { ok: false, error: 'Nur Owner können andere Owner entfernen.' };
+  }
+
+  if (targetRole === 'owner') {
+    const owners = await countOwners(admin, ctx.uuid);
+    if (owners <= 1) {
+      return { ok: false, error: 'Der letzte Owner kann nicht entfernt werden.' };
+    }
+  }
+
+  const { error } = await admin
+    .from('workspace_members')
+    .delete()
+    .eq('workspace_id', ctx.uuid)
+    .eq('user_id', input.userId);
+  if (error) {
+    console.error('[member-remove] delete failed', error.message);
+    return { ok: false, error: error.message };
+  }
+  console.log(`[member-remove] ✓ ${input.userId} from ${input.workspaceId}`);
+  return { ok: true, data: { userId: input.userId } };
+}
