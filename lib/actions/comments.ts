@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
+import { postSlackNotification, actorDisplayName } from '@/lib/integrations/slack';
 import type { ActionResult, ActivityView, TaskCommentView } from '@/lib/types';
 
 const COMMENT_ROLES = ['owner', 'admin', 'manager', 'member'] as const;
@@ -74,6 +75,18 @@ export async function addTaskComment(input: {
     target_type: 'task',
     target_id: input.taskId,
     meta: { comment_id: data.id },
+  });
+
+  const name = await actorDisplayName(userId);
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('id', input.taskId)
+    .maybeSingle();
+  const preview = body.length > 120 ? body.slice(0, 117) + '…' : body;
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: `💬 ${name} commented on "${task?.title ?? input.taskId}": ${preview}`,
   });
 
   return {

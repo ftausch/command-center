@@ -16,6 +16,7 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
+import { postSlackNotification, actorDisplayName } from '@/lib/integrations/slack';
 import type {
   ActionResult,
   ActivityView,
@@ -129,6 +130,12 @@ export async function createTask(input: {
     meta: { title },
   });
 
+  const name = await actorDisplayName(userId);
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: `🆕 ${name} created task: "${title}"`,
+  });
+
   const task: TaskView = {
     id: data.id,
     workspace: input.workspaceId,
@@ -235,6 +242,22 @@ export async function changeTaskStatus(input: {
     meta: { from: input.from, to: input.to },
   });
 
+  // Only ping Slack on transitions that the team typically wants to see.
+  // "Review" is the canonical "someone please look" signal; the others
+  // have dedicated actions (markTaskDone, markTaskBlocked) that ping.
+  if (input.to === 'Review') {
+    const name = await actorDisplayName(userId);
+    const { data: task } = await supabase
+      .from('tasks')
+      .select('title')
+      .eq('id', input.taskId)
+      .maybeSingle();
+    await postSlackNotification({
+      workspaceUuid: ctx.uuid,
+      text: `👀 ${name} moved task to Review: "${task?.title ?? input.taskId}"`,
+    });
+  }
+
   return { ok: true, data: { id: input.taskId, status: input.to }, activity };
 }
 
@@ -278,6 +301,17 @@ export async function markTaskDone(input: {
     target_type: 'task',
     target_id: input.taskId,
     meta: { from: input.from },
+  });
+
+  const name = await actorDisplayName(userId);
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('id', input.taskId)
+    .maybeSingle();
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: `✅ ${name} completed task: "${task?.title ?? input.taskId}"`,
   });
 
   return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
@@ -329,6 +363,17 @@ export async function markTaskBlocked(input: {
     target_type: 'task',
     target_id: input.taskId,
     meta: { reason },
+  });
+
+  const name = await actorDisplayName(userId);
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('id', input.taskId)
+    .maybeSingle();
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: `🚫 ${name} blocked task: "${task?.title ?? input.taskId}"${reason ? ` — ${reason}` : ''}`,
   });
 
   return {
