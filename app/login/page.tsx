@@ -1,29 +1,41 @@
 'use client';
-// Minimal login page — magic-link email. Inherits the existing visual
-// system from globals.css (card, btn, input). When Supabase isn't
-// configured (e.g. preview deploys with no env vars) we render a hint
-// instead of crashing.
+// Email + password sign-in page. Magic-link was removed in favor of an
+// invite-only flow: an admin invites users via scripts/invite-user.mjs,
+// they receive a one-shot link, set a password on /auth/set-password,
+// then always sign in here with email + password.
 //
-// Error display: Supabase's /auth/v1/verify endpoint may redirect here
-// (via /auth/callback) with ?error_code=otp_expired etc. on a failed or
-// expired magic link. We also fall back to reading window.location.hash
-// in case a legacy implicit-flow project still uses fragment errors. The
-// existing error slot in the form renders whichever shape arrived — no
-// new UI added.
+// Error display: Supabase's signInWithPassword returns "Invalid login
+// credentials" for both wrong password AND unknown email (intentional —
+// don't leak which addresses exist). We surface one humanized message
+// for both cases. The error slot also renders any error_code params
+// forwarded by /auth/callback (expired invite, denied access, etc).
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
-function humanizeError(code: string | null, desc: string | null, fallback: string | null): string {
-  if (code === 'otp_expired') {
-    // Common causes: email scanner/preview consumed the link before the user
-    // clicked, link was clicked twice, or > 1h passed. Tell the user the
-    // realistic next step rather than just "expired".
-    return 'Magic Link bereits verwendet oder abgelaufen. Häufige Ursache: dein Mail-Programm hat den Link beim Anzeigen automatisch geöffnet. Bitte unten neu anfordern und den Link direkt klicken (nicht hovern, nicht in Vorschau öffnen).';
+function humanizeError(
+  code: string | null,
+  desc: string | null,
+  fallback: string | null,
+  raw: string | null,
+): string {
+  if (raw) {
+    // Match Supabase's response text. "Invalid login credentials" is the
+    // unified "wrong password or unknown user" response; do NOT split
+    // these into separate messages.
+    if (raw === 'Invalid login credentials') {
+      return 'Falsche E-Mail oder falsches Passwort.';
+    }
+    if (raw === 'Email not confirmed') {
+      return 'Bitte aktiviere dein Konto über den Einladungs-Link in deiner Mail.';
+    }
   }
   if (code === 'access_denied') {
     return 'Zugriff verweigert. Bitte erneut anmelden.';
+  }
+  if (code === 'otp_expired') {
+    return 'Einladungs-Link bereits verwendet oder abgelaufen. Bitte beim Admin einen neuen Link anfordern.';
   }
   if (code === 'unauthorized_client' || code === 'invalid_request') {
     return 'Diese Redirect-URL ist nicht in den Supabase Auth-Settings erlaubt. Bitte beim Admin prüfen lassen.';
@@ -31,36 +43,31 @@ function humanizeError(code: string | null, desc: string | null, fallback: strin
   if (fallback === 'not_configured') {
     return 'Auth ist in dieser Umgebung nicht konfiguriert (mock mode).';
   }
-  if (fallback === 'exchange_failed') {
+  if (fallback === 'exchange_failed' || fallback === 'verify_failed') {
     return (
       desc ||
-      'Verifizierung fehlgeschlagen — möglicherweise wurde der Link in einem anderen Browser oder einer anderen Session geöffnet. Bitte neu anfordern.'
+      'Verifizierung fehlgeschlagen. Bitte einen neuen Einladungs-Link anfordern.'
     );
   }
-  if (fallback === 'verify_failed') {
-    return desc || 'Verifizierung fehlgeschlagen — bitte erneut anfordern.';
-  }
   if (fallback === 'missing_code') {
-    return desc || 'Auth callback ohne Token. Bitte neuen Magic Link anfordern.';
+    return desc || 'Auth callback ohne Token. Bitte neuen Link anfordern.';
   }
-  return desc || fallback || 'Unbekannter Fehler.';
+  return desc || raw || fallback || 'Unbekannter Fehler.';
 }
 
-// sessionStorage key for the email between requests. Lets the user click
-// "Send magic link" again after an otp_expired error without retyping.
+// sessionStorage key for the email between requests. Lets a user who got
+// the password wrong correct it without retyping the address.
 const EMAIL_KEY = 'cc.login.email';
 
 function LoginInner() {
   const params = useSearchParams();
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const configured = isSupabaseConfigured();
 
-  // Restore previously-typed email so clicking "Send magic link" again after
-  // an otp_expired error doesn't require retyping. Same input field, just
-  // pre-filled — no visual change.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -69,27 +76,15 @@ function LoginInner() {
     } catch {}
   }, []);
 
-  // Pick up errors forwarded by /auth/callback (query string) AND any
-  // fragment errors a legacy flow might leave on the URL (e.g. when the
-  // user lands here directly from Supabase rather than via the callback).
+  // Pick up errors forwarded by /auth/callback (query string) — the
+  // callback uses these to communicate failures from a click on an
+  // expired invite or recovery link.
   useEffect(() => {
-    let errorCode = params.get('error_code');
-    let errorDescription = params.get('error_description');
-    let error = params.get('error');
-
-    if (!errorCode && !error && typeof window !== 'undefined' && window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.slice(1));
-      errorCode = errorCode || hashParams.get('error_code');
-      errorDescription = errorDescription || hashParams.get('error_description');
-      error = error || hashParams.get('error');
-      // Strip the hash so the message doesn't survive a refresh.
-      if (errorCode || error) {
-        history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-    }
-
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+    const error = params.get('error');
     if (errorCode || error) {
-      setErrorMsg(humanizeError(errorCode, errorDescription, error));
+      setErrorMsg(humanizeError(errorCode, errorDescription, error, null));
       setStatus('error');
     }
   }, [params]);
@@ -97,30 +92,26 @@ function LoginInner() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
-    setStatus('sending');
+    setStatus('submitting');
     const supabase = createClient();
     if (!supabase) {
       setErrorMsg('Auth is not configured in this environment.');
       setStatus('error');
       return;
     }
-    // Normalize the redirect target. window.location.origin handles both
-    // localhost:3000 and localhost:3002 automatically; we just trim any
-    // accidental trailing slash on the path and ensure exactly one '/'.
-    const redirectTo = `${window.location.origin.replace(/\/+$/, '')}/auth/callback`;
     try {
       sessionStorage.setItem(EMAIL_KEY, email);
     } catch {}
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setErrorMsg(error.message);
+      setErrorMsg(humanizeError(null, null, null, error.message));
       setStatus('error');
-    } else {
-      setStatus('sent');
+      return;
     }
+    // Hard navigation so server components re-render with the new auth
+    // cookie. SPA navigation would render against the pre-login session.
+    const next = params.get('next') || '/';
+    window.location.href = next;
   }
 
   return (
@@ -159,58 +150,55 @@ function LoginInner() {
         <h1 className="h2" style={{ margin: '4px 0 4px' }}>Sign in</h1>
         <p className="meta" style={{ margin: '0 0 16px' }}>
           {configured
-            ? 'We email you a magic link. No password.'
+            ? 'Sign in with email and password.'
             : 'Auth is not configured in this environment — preview / mock mode.'}
         </p>
 
-        {status === 'sent' ? (
-          <div
-            className="card card-pad"
-            style={{
-              background: 'var(--success-bg)',
-              borderColor: 'var(--success-border)',
-              color: 'var(--success)',
-              fontSize: 13,
-            }}
+        <form onSubmit={onSubmit} className="col gap-3">
+          <input
+            type="email"
+            className="input"
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={!configured || status === 'submitting'}
+            autoFocus
+            autoComplete="email"
+          />
+          <input
+            type="password"
+            className="input"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={!configured || status === 'submitting'}
+            autoComplete="current-password"
+          />
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!configured || !email || !password || status === 'submitting'}
+            style={{ width: '100%', justifyContent: 'center' }}
           >
-            Check your inbox for a sign-in link.
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="col gap-3">
-            <input
-              type="email"
-              className="input"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={!configured || status === 'sending'}
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!configured || !email || status === 'sending'}
-              style={{ width: '100%', justifyContent: 'center' }}
+            {status === 'submitting' ? 'Signing in…' : 'Sign in'}
+          </button>
+          {errorMsg && (
+            <div
+              style={{
+                fontSize: 12.5,
+                color: 'var(--danger)',
+                padding: '6px 8px',
+                background: 'var(--danger-bg)',
+                borderRadius: 6,
+                border: '1px solid var(--danger-border)',
+              }}
             >
-              {status === 'sending' ? 'Sending…' : 'Send magic link'}
-            </button>
-            {errorMsg && (
-              <div
-                style={{
-                  fontSize: 12.5,
-                  color: 'var(--danger)',
-                  padding: '6px 8px',
-                  background: 'var(--danger-bg)',
-                  borderRadius: 6,
-                  border: '1px solid var(--danger-border)',
-                }}
-              >
-                {errorMsg}
-              </div>
-            )}
-          </form>
-        )}
+              {errorMsg}
+            </div>
+          )}
+        </form>
 
         {/* Dev-only shortcut. process.env.NODE_ENV is inlined at build time,
             so in production this entire branch is dead-code-eliminated and

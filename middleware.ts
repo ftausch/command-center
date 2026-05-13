@@ -82,6 +82,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Invited users who never set a password (or recovery-link users who
+  // bailed before saving) must go through /auth/set-password before
+  // touching the app. The set-password form stamps user_metadata.
+  // password_set = true so this check passes on subsequent requests.
+  // We let any /auth/* path through so the callback can finish and so
+  // the set-password page itself isn't blocked by its own gate.
+  if (
+    user &&
+    user.user_metadata?.password_set !== true &&
+    !pathname.startsWith('/auth/')
+  ) {
+    const setPwdUrl = request.nextUrl.clone();
+    setPwdUrl.pathname = '/auth/set-password';
+    setPwdUrl.search = '';
+    return NextResponse.redirect(setPwdUrl);
+  }
+
   // Already signed in but visiting /login? Send them home. Skip for
   // /auth/callback so the code exchange still runs.
   if (user && pathname === '/login') {
