@@ -14,6 +14,7 @@ import { I } from '@/components/icons';
 import { inviteWorkspaceMember } from '@/lib/actions/members';
 
 const ROLE_OPTIONS = [
+  { value: 'owner',   label: 'Owner — voller Zugriff inkl. Workspace-Einstellungen' },
   { value: 'admin',   label: 'Admin — kann einladen und alles bearbeiten' },
   { value: 'manager', label: 'Manager — kann Projekte und Tasks anlegen' },
   { value: 'member',  label: 'Member — kann Tasks bearbeiten' },
