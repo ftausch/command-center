@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "verify:supabase": "node --env-file=.env.local scripts/verify-supabase.mjs",
-    "test:slack": "node --env-file=.env.local scripts/test-slack.mjs"
+    "test:slack": "node --env-file=.env.local scripts/test-slack.mjs",
+    "invite": "node --env-file=.env.local scripts/invite-user.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

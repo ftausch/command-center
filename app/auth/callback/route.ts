@@ -1,14 +1,15 @@
-// Magic-link / OAuth callback.
+// Auth callback. Handles invite, recovery, and email-confirmation links.
 //
 // Three possible shapes Supabase hits this route with:
 //
 //   1. Success (PKCE):     ?code=<pkce-code>
-//   2. Success (token):    ?token_hash=<hash>&type=magiclink|email|recovery|invite|email_change
+//   2. Success (token):    ?token_hash=<hash>&type=invite|recovery|email|email_change|magiclink
 //   3. Failure:            ?error=...&error_code=otp_expired&error_description=...
 //
-// We translate all three into a redirect to /login with either a session
-// cookie set (success) or readable error params (failure). The login page
-// reads the error params and shows them in the existing error slot.
+// We translate all three into a redirect:
+//   - invite / recovery success → /auth/set-password (force-set a password)
+//   - any other success         → next ?? '/'
+//   - failure                   → /login?error=...&error_code=...
 //
 // If Supabase isn't configured we just bounce to /login with a hint.
 
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 
-  // 2. Token-hash success: some email templates use this format.
+  // 2. Token-hash success: invite, recovery, magiclink, email confirmation.
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
   if (tokenHash && type) {
@@ -93,6 +94,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${origin}/login?${params.toString()}`);
     }
     await ensureProfile();
+    // Invite + recovery flows must force-set a password before the user
+    // can use the app. Other types (magiclink, email confirmation) drop
+    // straight into the requested page.
+    if (type === 'invite' || type === 'recovery') {
+      return NextResponse.redirect(`${origin}/auth/set-password`);
+    }
     return NextResponse.redirect(`${origin}${next}`);
   }
 
