@@ -1,13 +1,15 @@
 'use client';
 // Sidebar — left nav with brand pill + nav sections; Topbar with breadcrumb + search
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
+import { NewTaskModal } from '@/components/NewTaskModal';
 
 export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
   const { currentWorkspace: brand, data } = useWorkspace();
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   if (!brand) return <aside className="sidebar" />;
 
@@ -46,11 +48,16 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
 
       {/* Quick add */}
       <div style={{ padding: '0 12px 8px' }}>
-        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setRoute('quickadd')}>
+        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setNewTaskOpen(true)}>
           <span className="row gap-2"><I.plus size={14} /> New Task</span>
           <span style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>N</Kbd></span>
         </button>
       </div>
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        onNeedProject={() => setRoute('projects')}
+      />
 
       {/* Main nav */}
       <nav style={{ flex: 1 }}>
@@ -125,11 +132,17 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
   );
 }
 
-export function Topbar({ openCmdK, breadcrumb }) {
+export function Topbar({ openCmdK, breadcrumb, setRoute }) {
   const { currentWorkspace: brand } = useWorkspace();
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   return (
     <div className="topbar">
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        onNeedProject={() => setRoute && setRoute('projects')}
+      />
       {/* Breadcrumb */}
       <div className="row gap-2" style={{ flex: 1, minWidth: 0 }}>
         <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{brand?.name}</span>
@@ -156,10 +169,10 @@ export function Topbar({ openCmdK, breadcrumb }) {
         <span style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
       </button>
 
-      <button className="btn btn-icon btn-quiet" title="Notifications">
+      <button className="btn btn-icon btn-quiet" title="Notifications" disabled>
         <I.bell size={16} />
       </button>
-      <button className="btn btn-brand btn-sm">
+      <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
         <I.plus size={14} /> New
       </button>
     </div>

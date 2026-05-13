@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
 import { addTaskComment } from '@/lib/actions/comments';
+import { NewTaskModal } from '@/components/NewTaskModal';
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
   const {
@@ -25,6 +26,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const [commentText, setCommentText] = useState('');
   const [commentPending, setCommentPending] = useState(false);
   const [commentError, setCommentError] = useState(null);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
 
@@ -90,9 +92,15 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className="row gap-2">
           <button className="btn btn-ghost btn-sm"><I.slack size={13} /> Open in Slack</button>
           <button className="btn btn-ghost btn-sm"><I.more size={14} /></button>
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> New Task</button>
+          <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
+
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        initialProjectId={projectId}
+      />
 
       <div className="card card-pad mb-4">
         <div className="row between mb-3">

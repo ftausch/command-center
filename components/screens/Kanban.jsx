@@ -6,12 +6,14 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge, PriorityBadge } from '@/components/ui';
 import { dueLabel, kColColor } from '@/lib/utils';
+import { NewTaskModal } from '@/components/NewTaskModal';
 
 const KANBAN_COLS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Done'];
 
 export function KanbanScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const [projectFilter, setProjectFilter] = useState('all');
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   const tasks = useMemo(() => {
     let r = data.tasks;
@@ -46,9 +48,16 @@ export function KanbanScreen({ setRoute }) {
             {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="btn btn-ghost btn-sm">Group: Status <I.chevronDown size={12} /></button>
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> New Task</button>
+          <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
+
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        initialProjectId={projectFilter !== 'all' ? projectFilter : undefined}
+        onNeedProject={() => setRoute('projects')}
+      />
 
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
