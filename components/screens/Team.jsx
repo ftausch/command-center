@@ -8,12 +8,14 @@ import { Avatar, Badge } from '@/components/ui';
 import { daysUntil } from '@/lib/utils';
 import { KPI } from '@/components/screens/Dashboard';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
+import { MemberManageModal } from '@/components/MemberManageModal';
 
 export function TeamScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const users = data.members;
   const tasks = data.tasks;
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [manageMember, setManageMember] = useState(null);
 
   return (
     <div className="page fade-in">
@@ -32,6 +34,11 @@ export function TeamScreen({ setRoute }) {
       </div>
 
       <InvitePersonModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <MemberManageModal
+        open={manageMember !== null}
+        member={manageMember}
+        onClose={() => setManageMember(null)}
+      />
 
       <div className="grid grid-4 gap-3 mb-6">
         <KPI label="Teammitglieder" value={users.length} trend={`${users.filter((u) => u.online).length} online`} />
@@ -65,7 +72,11 @@ export function TeamScreen({ setRoute }) {
                     <div className="meta">{u.role}</div>
                   </div>
                 </div>
-                <button className="btn btn-quiet btn-sm" disabled title="Rollen-Änderung kommt bald"><I.more size={14} /></button>
+                <button
+                  className="btn btn-quiet btn-sm"
+                  onClick={() => setManageMember(u)}
+                  title="Mitglied verwalten"
+                ><I.more size={14} /></button>
               </div>
 
               <div className="row gap-4 mb-3">

@@ -8,6 +8,7 @@ import { Avatar, Badge, SlackCard } from '@/components/ui';
 import { Field } from '@/components/screens/ProjectDetail';
 import { Stat2, ToggleRow } from '@/components/screens/Templates';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
+import { MemberManageModal } from '@/components/MemberManageModal';
 import { timeAgo } from '@/lib/utils';
 
 export function SettingsScreen() {
@@ -168,9 +169,15 @@ function MembersSection() {
   const { data, workspaces } = useWorkspace();
   const users = data.members;
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [manageMember, setManageMember] = useState(null);
   return (
     <div className="card">
       <InvitePersonModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <MemberManageModal
+        open={manageMember !== null}
+        member={manageMember}
+        onClose={() => setManageMember(null)}
+      />
       <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }} className="row between">
         <div>
           <div className="h3">Mitglieder · {users.length}</div>
@@ -195,7 +202,11 @@ function MembersSection() {
                 ) : null;
               })}</td>
               <td>{u.online ? <span style={{ fontSize: 12, color: 'var(--success)' }}>● Online</span> : <span className="meta">Offline</span>}</td>
-              <td><button className="btn btn-quiet btn-sm" disabled title="Rollen-Änderung kommt bald"><I.more size={14} /></button></td>
+              <td><button
+                className="btn btn-quiet btn-sm"
+                onClick={() => setManageMember(u)}
+                title="Mitglied verwalten"
+              ><I.more size={14} /></button></td>
             </tr>
           ))}
         </tbody>
