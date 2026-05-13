@@ -6,11 +6,13 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
 import { dueLabel, statusColor } from '@/lib/utils';
+import { NewProjectModal } from '@/components/NewProjectModal';
 
 export function ProjectsScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const all = data.projects;
   const filtered = useMemo(() => {
@@ -43,9 +45,15 @@ export function ProjectsScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <input className="input" placeholder="Projekt suchen…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220, height: 32 }} />
-          <button className="btn btn-brand btn-sm"><I.plus size={13} /> New Project</button>
+          <button className="btn btn-brand btn-sm" onClick={() => setCreateOpen(true)}><I.plus size={13} /> New Project</button>
         </div>
       </div>
+
+      <NewProjectModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(p) => setRoute('project:' + p.id)}
+      />
 
       <div className="row gap-2 mb-4 wrap">
         {Object.entries(counts).map(([s, c]) => (
