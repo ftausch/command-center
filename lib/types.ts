@@ -187,6 +187,7 @@ export interface TaskView {
   tags?: string[];
   waitingOn?: string;
   blocker?: string;
+  episodeId?: string;
 }
 
 export interface ActivityView {

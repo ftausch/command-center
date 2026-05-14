@@ -86,6 +86,7 @@ export function rowToTask(row: any, workspaceSlug: string): TaskView {
     tags: row.tags ?? [],
     waitingOn: row.waiting_on_id ?? undefined,
     blocker: row.blocker ?? undefined,
+    episodeId: row.episode_id ?? undefined,
   };
 }
 

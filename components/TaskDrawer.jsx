@@ -411,6 +411,24 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
               ))}
             </select>
           </DetailRow>
+          {(data.episodes ?? []).length > 0 && (
+            <DetailRow label="Episode">
+              <select
+                className="input"
+                value={task.episodeId || ''}
+                onChange={(e) => saveField('episodeId', e.target.value)}
+                disabled={fieldPending === 'episodeId'}
+                style={{ height: 28, fontSize: 12.5, flex: 1 }}
+              >
+                <option value="">— Keine Episode —</option>
+                {(data.episodes ?? []).map((ep) => (
+                  <option key={ep.id} value={ep.id}>
+                    {ep.num ? `Ep. ${ep.num} · ` : ''}{ep.title}
+                  </option>
+                ))}
+              </select>
+            </DetailRow>
+          )}
         </div>
 
         {/* ── Description ── */}
