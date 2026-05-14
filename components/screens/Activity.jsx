@@ -1,13 +1,22 @@
 'use client';
 // Activity Feed
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { ActivityTimeline } from '@/components/screens/ProjectDetail';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+const FILTERS = [
+  { id: 'all',         label: 'Alle',        match: () => true },
+  { id: 'status',      label: 'Status',      match: (a) => a.icon === 'arrow-right' },
+  { id: 'comments',    label: 'Comments',    match: (a) => a.icon === 'message' },
+  { id: 'slack',       label: 'Slack',       match: (a) => a.icon === 'slack' },
+  { id: 'assignments', label: 'Assignments', match: (a) => a.icon === 'user' },
+  { id: 'blocked',     label: 'Blocked',     match: (a) => a.icon === 'block' },
+];
 
 // Compute Last-7-days counts from the in-memory activity log. No new
 // server query needed; the same items the timeline renders are the
@@ -48,6 +57,12 @@ export function ActivityScreen() {
   const { currentWorkspace: brand, data } = useWorkspace();
   const items = data.activity;
   const stats = useRecentStats(items);
+  const [activeFilter, setActiveFilter] = useState('all');
+
+  const filtered = useMemo(() => {
+    const f = FILTERS.find((f) => f.id === activeFilter);
+    return f ? items.filter(f.match) : items;
+  }, [items, activeFilter]);
 
   return (
     <div className="page fade-in">
@@ -59,23 +74,30 @@ export function ActivityScreen() {
             Chronologischer Verlauf aller wichtigen Änderungen in diesem Workspace.
           </p>
         </div>
-        <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.filter size={13} /> Filter</button>
-        </div>
       </div>
 
       <div className="row gap-2 mb-4 wrap">
-        <button className="chip active" disabled title="Filter kommen bald">Alle <span className="count">{items.length}</span></button>
-        <button className="chip" disabled title="Filter kommen bald">Status</button>
-        <button className="chip" disabled title="Filter kommen bald">Comments</button>
-        <button className="chip" disabled title="Filter kommen bald">Slack</button>
-        <button className="chip" disabled title="Filter kommen bald">Assignments</button>
-        <button className="chip" disabled title="Filter kommen bald">Blocked</button>
+        {FILTERS.map((f) => {
+          const count = f.id === 'all' ? items.length : items.filter(f.match).length;
+          return (
+            <button
+              key={f.id}
+              className={`chip ${activeFilter === f.id ? 'active' : ''}`}
+              onClick={() => setActiveFilter(f.id)}
+            >
+              {f.label} <span className="count">{count}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
         <div className="card card-pad">
-          <ActivityTimeline items={items} />
+          {filtered.length === 0 ? (
+            <p className="meta" style={{ textAlign: 'center', padding: '32px 0' }}>Keine Einträge für diesen Filter.</p>
+          ) : (
+            <ActivityTimeline items={filtered} />
+          )}
         </div>
 
         <div className="col gap-4">
