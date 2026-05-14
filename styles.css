@@ -714,9 +714,50 @@ a { color: inherit; text-decoration: none; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .fade-in { animation: fadeIn 0.2s ease-out; }
 
-/* Mobile note (the prototype targets desktop but stays viewable) */
+/* ===== Mobile / responsive ===== */
+
+/* Hamburger — hidden on desktop, shown on mobile */
+.topbar-hamburger { display: none; }
+
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .page { padding: 16px; }
+
+  /* Sidebar hidden by default; .mobile-open turns it into a fixed overlay */
+  .sidebar {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 260px;
+    z-index: 100;
+    box-shadow: 4px 0 32px rgba(20, 22, 28, 0.14);
+  }
+  .sidebar.mobile-open { display: flex; }
+
+  /* Dim backdrop behind the sidebar when open */
+  .sidebar-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(20, 22, 28, 0.45);
+    z-index: 99;
+  }
+
+  /* Show hamburger in topbar */
+  .topbar-hamburger { display: flex; }
+
+  /* Shrink the topbar search box so it doesn't overflow */
+  .topbar-search { min-width: 0 !important; flex: 1; max-width: 220px; }
+  .topbar-search .topbar-search-hint { display: none; }
+
+  .page { padding: 16px 14px 80px; }
+  .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+
+  /* Collapse helper grid classes to single column */
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-4 { grid-template-columns: 1fr 1fr !important; }
+
+  /* Tables scroll horizontally instead of overflowing */
+  .card table, .table { display: block; overflow-x: auto; }
+
+  /* Kanban: allow horizontal scroll */
+  .kanban-board { overflow-x: auto; }
 }

@@ -43,4 +43,5 @@ export const I = {
   zap:       (p) => <Icon {...p}><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></Icon>,
   trend:     (p) => <Icon {...p}><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></Icon>,
   archive:   (p) => <Icon {...p}><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></Icon>,
+  menu:      (p) => <Icon {...p}><path d="M3 7h18M3 12h18M3 17h18"/></Icon>,
 };

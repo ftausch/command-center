@@ -35,6 +35,7 @@ export function App() {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // 'g' prefix state for two-key nav shortcuts (g→d, g→p, g→t, g→b, g→c)
   const gPending = useRef(false);
   const gTimer = useRef(null);
@@ -179,12 +180,14 @@ export function App() {
     <div className="app" data-workspace={workspace} data-brand={workspace}>
       <Sidebar
         route={route}
-        setRoute={setRoute}
-        onSwitchWorkspace={() => setCurrentWorkspaceId(null)}
+        setRoute={(r) => { setRoute(r); setSidebarOpen(false); }}
+        onSwitchWorkspace={() => { setCurrentWorkspaceId(null); setSidebarOpen(false); }}
         counts={counts}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
       />
       <main className="main">
-        <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} setRoute={setRoute} />
+        <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} setRoute={setRoute} onOpenSidebar={() => setSidebarOpen(true)} />
         {loading && data.projects.length === 0 ? (
           // First load only — flicker-free render once the cache is warm.
           <div
