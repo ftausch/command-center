@@ -1,7 +1,7 @@
 'use client';
 // Settings — with Slack integration prominent
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge, SlackCard } from '@/components/ui';
@@ -281,25 +281,55 @@ function MembersSection() {
   );
 }
 
+const NOTIF_KEY = 'cc.notif_prefs';
+const NOTIF_DEFAULTS = {
+  mentions: true,
+  assigned_tasks: true,
+  deadline_reminders: true,
+  blocker_owned: true,
+  all_status_changes: false,
+  weekly_report: false,
+  channel_in_app: true,
+  channel_slack: true,
+  channel_email: false,
+};
+
 function NotifsSection() {
+  const [prefs, setPrefs] = useState(NOTIF_DEFAULTS);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(NOTIF_KEY);
+      if (raw) setPrefs({ ...NOTIF_DEFAULTS, ...JSON.parse(raw) });
+    } catch {}
+  }, []);
+
+  const toggle = (key) => {
+    setPrefs((p) => {
+      const next = { ...p, [key]: !p[key] };
+      try { localStorage.setItem(NOTIF_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   return (
     <div className="card card-pad">
       <div className="h3 mb-3">Benachrichtigungen</div>
       <p className="meta mb-4">Wann wirst du gepingt? Diese Settings gelten nur für dich.</p>
       <div className="col gap-3">
-        <ToggleRow on label="Erwähnungen (@me)" />
-        <ToggleRow on label="Mir zugewiesene Tasks" />
-        <ToggleRow on label="Deadline-Erinnerungen (24h vorher)" />
-        <ToggleRow on label="Blocker auf Projekten, die ich besitze" />
-        <ToggleRow label="Alle Status-Wechsel" />
-        <ToggleRow label="Wöchentlicher Auslastungs-Report (Mo 9:00)" />
+        <ToggleRow on={prefs.mentions}            onChange={() => toggle('mentions')}            label="Erwähnungen (@me)" />
+        <ToggleRow on={prefs.assigned_tasks}       onChange={() => toggle('assigned_tasks')}       label="Mir zugewiesene Tasks" />
+        <ToggleRow on={prefs.deadline_reminders}   onChange={() => toggle('deadline_reminders')}   label="Deadline-Erinnerungen (24h vorher)" />
+        <ToggleRow on={prefs.blocker_owned}        onChange={() => toggle('blocker_owned')}        label="Blocker auf Projekten, die ich besitze" />
+        <ToggleRow on={prefs.all_status_changes}   onChange={() => toggle('all_status_changes')}   label="Alle Status-Wechsel" />
+        <ToggleRow on={prefs.weekly_report}        onChange={() => toggle('weekly_report')}        label="Wöchentlicher Auslastungs-Report (Mo 9:00)" />
       </div>
       <div className="divider" />
       <div className="h3 mb-3">Channels</div>
       <div className="col gap-3">
-        <ToggleRow on label="In-App" />
-        <ToggleRow on label="Slack" />
-        <ToggleRow label="E-Mail" />
+        <ToggleRow on={prefs.channel_in_app}  onChange={() => toggle('channel_in_app')}  label="In-App" />
+        <ToggleRow on={prefs.channel_slack}   onChange={() => toggle('channel_slack')}   label="Slack" />
+        <ToggleRow on={prefs.channel_email}   onChange={() => toggle('channel_email')}   label="E-Mail" />
       </div>
     </div>
   );
