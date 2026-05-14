@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Sidebar, Topbar } from '@/components/shell';
 import { CmdK } from '@/components/CmdK';
+import { TaskDrawer } from '@/components/TaskDrawer';
 import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
 import { DashboardScreen } from '@/components/screens/Dashboard';
 import { MyTasksScreen } from '@/components/screens/MyTasks';
@@ -31,6 +32,7 @@ export function App() {
   } = useWorkspace();
   const [route, setRoute] = useState('dashboard');
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
 
   // Cmd+K shortcut
   useEffect(() => {
@@ -165,6 +167,15 @@ export function App() {
           setCmdkOpen(false);
           setRoute(r);
         }}
+        onOpenTask={(taskId, projectId) => {
+          setCmdkOpen(false);
+          setDrawerTask({ taskId, projectId });
+        }}
+      />
+      <TaskDrawer
+        taskId={drawerTask?.taskId ?? null}
+        projectId={drawerTask?.projectId ?? null}
+        onClose={() => setDrawerTask(null)}
       />
     </div>
   );
