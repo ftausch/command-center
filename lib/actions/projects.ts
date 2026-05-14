@@ -159,6 +159,30 @@ export async function createProject(input: {
   };
 }
 
+export async function deleteProject(input: {
+  projectId: string;
+  workspaceId: string;
+}): Promise<ActionResult<{ id: string }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: { id: input.projectId } };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Only managers+ can delete projects' };
+  }
+
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', input.projectId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+
+  console.log(`[deleteProject] ✓ ${input.projectId} deleted`);
+  return { ok: true, data: { id: input.projectId } };
+}
+
 export async function updateProject(input: {
   projectId: string;
   workspaceId: string;
