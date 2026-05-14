@@ -67,6 +67,7 @@ const WorkspaceContext = createContext({
   removeTask: noop,
   addProject: noop,
   updateProjectInCache: noop,
+  removeProject: noop,
   addTaskComment: noop,
   addChecklistItem: noop,
   updateChecklistItemInCache: noop,
@@ -222,6 +223,13 @@ export function WorkspaceProvider({ children }) {
       ),
     }));
   }, []);
+  const removeProject = useCallback((projectId) => {
+    setData((d) => ({
+      ...d,
+      projects: d.projects.filter((p) => p.id !== projectId),
+      tasks: d.tasks.filter((t) => t.projectId !== projectId),
+    }));
+  }, []);
   const addTaskComment = useCallback((comment) => {
     if (!comment) return;
     setData((d) => {
@@ -287,6 +295,7 @@ export function WorkspaceProvider({ children }) {
       removeTask,
       addProject,
       updateProjectInCache,
+      removeProject,
       addTaskComment,
       addChecklistItem,
       updateChecklistItemInCache,
@@ -308,6 +317,7 @@ export function WorkspaceProvider({ children }) {
       removeTask,
       addProject,
       updateProjectInCache,
+      removeProject,
       addTaskComment,
       addChecklistItem,
       updateChecklistItemInCache,

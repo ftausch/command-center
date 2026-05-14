@@ -1,7 +1,7 @@
 'use client';
 // Project Detail page
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
@@ -9,17 +9,87 @@ import {
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
+import { updateProject, deleteProject } from '@/lib/actions/projects';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
 
+const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
+const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
+
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, data, updateProjectInCache, removeProject } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState(null);
 
+  // ── Inline name editing ───────────────────────────────────────────────────
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [namePending, setNamePending] = useState(false);
+  const nameInputRef = useRef(null);
+
+  // ── Inline description editing ────────────────────────────────────────────
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+  const [descPending, setDescPending] = useState(false);
+  const descInputRef = useRef(null);
+
+  // ── Field edits (status / priority / due / owner / type) ─────────────────
+  const [fieldPending, setFieldPending] = useState(null);
+  const [fieldError, setFieldError] = useState(null);
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+
+  useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
+  useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
+
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
+
+  const workspaceId = brand?.id ?? '';
+
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name || name === project.name) { setEditingName(false); return; }
+    setNamePending(true);
+    const r = await updateProject({ projectId, workspaceId, patch: { name } });
+    setNamePending(false);
+    if (!r.ok) { setFieldError(r.error ?? 'Name konnte nicht gespeichert werden'); return; }
+    updateProjectInCache(projectId, { name });
+    setEditingName(false);
+  };
+
+  const saveDesc = async () => {
+    const desc = descDraft.trim();
+    if (desc === project.desc) { setEditingDesc(false); return; }
+    setDescPending(true);
+    const r = await updateProject({ projectId, workspaceId, patch: { desc } });
+    setDescPending(false);
+    if (!r.ok) { setFieldError(r.error ?? 'Beschreibung konnte nicht gespeichert werden'); return; }
+    updateProjectInCache(projectId, { desc });
+    setEditingDesc(false);
+  };
+
+  const saveField = async (key, value) => {
+    setFieldPending(key);
+    setFieldError(null);
+    const r = await updateProject({ projectId, workspaceId, patch: { [key]: value } });
+    setFieldPending(null);
+    if (!r.ok) { setFieldError(r.error ?? 'Feld konnte nicht gespeichert werden'); return; }
+    updateProjectInCache(projectId, { [key]: value });
+  };
+
+  const onDelete = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeletePending(true);
+    const r = await deleteProject({ projectId, workspaceId });
+    setDeletePending(false);
+    if (!r.ok) { setFieldError(r.error ?? 'Projekt konnte nicht gelöscht werden'); setConfirmDelete(false); return; }
+    removeProject(projectId);
+    setRoute('projects');
+  };
 
   const phases = data.phases;
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
@@ -49,14 +119,66 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
       </div>
 
       <div className="page-head">
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div className="row gap-3 mb-2">
             <StatusBadge status={project.status} />
             <PriorityBadge priority={project.priority} />
             <span className={`badge ${due.danger ? 'danger' : 'ghost'}`}><I.calendar size={11} /> Deadline {due.text}</span>
           </div>
-          <h1 className="h1" style={{ fontSize: 26 }}>{project.name}</h1>
-          <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0', maxWidth: 720 }}>{project.desc}</p>
+          {editingName ? (
+            <div className="row gap-2 items-center mb-1">
+              <input
+                ref={nameInputRef}
+                className="input"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+                disabled={namePending}
+                style={{ fontSize: 20, fontWeight: 700, flex: 1 }}
+              />
+              <button className="btn btn-brand btn-sm" onClick={saveName} disabled={namePending}>{namePending ? '…' : 'OK'}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditingName(false)} disabled={namePending}><I.x size={12} /></button>
+            </div>
+          ) : (
+            <h1
+              className="h1"
+              style={{ fontSize: 26, cursor: 'text', padding: '2px 4px', marginLeft: -4, borderRadius: 4, transition: 'background 0.1s' }}
+              onClick={() => { setNameDraft(project.name); setEditingName(true); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-sunk)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              title="Klicken zum Bearbeiten"
+            >
+              {project.name}
+            </h1>
+          )}
+          {editingDesc ? (
+            <div className="col gap-2 mt-2" style={{ maxWidth: 720 }}>
+              <textarea
+                ref={descInputRef}
+                className="input"
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
+                disabled={descPending}
+                rows={3}
+                style={{ fontSize: 14, resize: 'vertical' }}
+              />
+              <div className="row gap-2">
+                <button className="btn btn-brand btn-sm" onClick={saveDesc} disabled={descPending}>{descPending ? 'Wird gespeichert…' : 'Speichern'}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditingDesc(false)} disabled={descPending}>Abbrechen</button>
+              </div>
+            </div>
+          ) : (
+            <p
+              style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0', maxWidth: 720, cursor: 'text', padding: '2px 4px', marginLeft: -4, borderRadius: 4, transition: 'background 0.1s', minHeight: 24 }}
+              onClick={() => { setDescDraft(project.desc); setEditingDesc(true); }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-sunk)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              title="Klicken zum Bearbeiten"
+            >
+              {project.desc || <span style={{ color: 'var(--text-4)', fontStyle: 'italic' }}>Beschreibung hinzufügen…</span>}
+            </p>
+          )}
         </div>
         <div className="row gap-2">
           {project.slackConnected && project.slackChannel ? (
@@ -73,7 +195,6 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               <I.slack size={13} /> Open in Slack
             </button>
           )}
-          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.more size={14} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
@@ -210,22 +331,90 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className="col gap-4">
           <div className="card card-pad">
             <div className="label mb-3">Project Details</div>
+            <Field label="Status">
+              <select
+                className="input"
+                value={project.status}
+                onChange={(e) => saveField('status', e.target.value)}
+                disabled={fieldPending === 'status'}
+                style={{ height: 28, fontSize: 12.5 }}
+              >
+                {PROJECT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select
+                className="input"
+                value={project.priority}
+                onChange={(e) => saveField('priority', e.target.value)}
+                disabled={fieldPending === 'priority'}
+                style={{ height: 28, fontSize: 12.5 }}
+              >
+                {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Deadline">
+              <div className="row gap-2 items-center">
+                <input
+                  type="date"
+                  className="input"
+                  value={project.due || ''}
+                  onChange={(e) => saveField('due', e.target.value)}
+                  disabled={fieldPending === 'due'}
+                  style={{ height: 28, fontSize: 12.5, width: 160 }}
+                />
+                {project.due && (
+                  <button className="btn btn-quiet btn-sm" onClick={() => saveField('due', '')} disabled={fieldPending === 'due'} title="Datum entfernen"><I.x size={11} /></button>
+                )}
+              </div>
+            </Field>
             <Field label="Owner">
-              {owner ? (
-                <div className="row gap-2"><Avatar user={owner} /><span style={{ fontWeight: 500 }}>{owner.name}</span></div>
-              ) : (
-                <span style={{ color: 'var(--text-4)' }}>—</span>
-              )}
+              <select
+                className="input"
+                value={project.owner || ''}
+                onChange={(e) => saveField('owner', e.target.value)}
+                disabled={fieldPending === 'owner'}
+                style={{ height: 28, fontSize: 12.5 }}
+              >
+                <option value="">— Niemand —</option>
+                {data.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Type">
+              <input
+                className="input"
+                defaultValue={project.type}
+                onBlur={(e) => { if (e.target.value !== project.type) saveField('type', e.target.value); }}
+                disabled={fieldPending === 'type'}
+                style={{ height: 28, fontSize: 12.5 }}
+              />
             </Field>
             <Field label="Team">
               <AvatarStack users={team} max={6} />
             </Field>
-            <Field label="Deadline">
-              <span style={{ fontWeight: 500 }}>{formatDateLong(project.due)}</span>
-              <div className={due.danger ? 'badge danger' : 'badge ghost'} style={{ marginTop: 4, fontSize: 11 }}>{due.text}</div>
-            </Field>
-            <Field label="Type">{project.type}</Field>
             <Field label="Workspace"><BrandBadge brand={brand} /></Field>
+            {fieldError && (
+              <div style={{ fontSize: 12, color: 'var(--danger)', padding: '6px 8px', background: 'var(--danger-bg)', borderRadius: 6, border: '1px solid var(--danger-border)', marginTop: 8 }}>
+                {fieldError}
+              </div>
+            )}
+            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12, marginTop: 8 }}>
+              {confirmDelete ? (
+                <div className="col gap-2">
+                  <p style={{ fontSize: 12.5, color: 'var(--danger)' }}>Alle Tasks werden ebenfalls gelöscht. Wirklich löschen?</p>
+                  <div className="row gap-2">
+                    <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={onDelete} disabled={deletePending}>
+                      {deletePending ? 'Wird gelöscht…' : 'Ja, löschen'}
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)} disabled={deletePending}>Abbrechen</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }} onClick={onDelete}>
+                  <I.x size={11} /> Projekt löschen
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="card card-pad">
