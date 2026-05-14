@@ -1,23 +1,23 @@
 // POST /api/slack/commands
 //
-// Handles Slack slash commands, initially /task.
+// Handles Slack slash commands (/task).
 // Trust boundary: Slack HMAC-SHA256 signature replaces user session auth.
 // All DB access uses the admin client (service-role, server-only).
-// Never called from the browser; no cookie session involved.
 //
-// Flow:
-//   1. Verify Slack request signature + timestamp (reject if >5 min old).
-//   2. Parse application/x-www-form-urlencoded body.
-//   3. Map Slack team_id → workspace via slack_integrations.
-//   4. Parse command text → title, optional @mention, optional "bis <date>".
-//   5. Resolve @mention to a workspace_member profile (fuzzy name match).
-//   6. Insert task + activity_log using admin client.
-//   7. Return immediate JSON confirmation to Slack.
+// Timing budget: Slack drops commands that don't respond within ~3 seconds.
+// To stay within that window:
+//   - Independent DB queries run in parallel (Promise.all).
+//   - activity_log insert is fire-and-forget (never blocks the response).
+//   - maxDuration gives Vercel's function a 10-second ceiling as buffer.
 
 import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 10; // seconds — Slack side timeout is ~3s, this is server ceiling
 
 // ── Signature verification ────────────────────────────────────────────────
 
@@ -49,15 +49,11 @@ const GERMAN_DAYS: Record<string, number> = {
 
 function parseGermanDate(raw: string): string | null {
   const s = raw.toLowerCase().trim();
-
-  // DD.MM.YYYY or DD.MM.
   const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/);
   if (m) {
     const year = m[3] ?? String(new Date().getFullYear());
     return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   }
-
-  // German weekday — always returns the *next* occurrence
   if (s in GERMAN_DAYS) {
     const target = GERMAN_DAYS[s];
     const now = new Date();
@@ -67,18 +63,10 @@ function parseGermanDate(raw: string): string | null {
     d.setDate(now.getDate() + diff);
     return d.toISOString().slice(0, 10);
   }
-
   return null;
 }
 
 // ── Command text parser ───────────────────────────────────────────────────
-// Supports:
-//   /task <title>
-//   /task @name <title>               plain-text mention
-//   /task <@UID|name> <title>         Slack autocomplete mention
-//   /task <@UID> <title>              Slack mention without display name
-//   /task <title> bis <date>
-//   any of the above + bis <date>
 
 function parseCommandText(text: string): {
   title: string;
@@ -106,7 +94,6 @@ function parseCommandText(text: string): {
     }
   }
 
-  // Strip "bis <word>" from end (case-insensitive)
   const bisMatch = remaining.match(/^([\s\S]+?)\s+bis\s+(\S+)\s*$/i);
   if (bisMatch) {
     const parsed = parseGermanDate(bisMatch[2]);
@@ -119,28 +106,35 @@ function parseCommandText(text: string): {
   return { title: remaining, mentionedName, slackUserId, dueDate };
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 function slackText(text: string, status = 200) {
   return NextResponse.json({ text }, { status });
 }
 
+// ── Route handler ─────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+  const t0 = Date.now();
+
+  // 0. Env check — fail fast before any I/O
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
-    console.error('[slack/commands] SLACK_SIGNING_SECRET not configured');
+    console.error('[slack/commands] SLACK_SIGNING_SECRET not set');
     return slackText('⚠️ Server misconfiguration. Contact your admin.', 500);
   }
 
-  // Must read the raw body before any other parsing — HMAC requires exact bytes.
+  // 1. Read raw body (needed for HMAC — must be before any other parsing)
   const rawBody = await req.text();
   const timestamp = req.headers.get('x-slack-request-timestamp') ?? '';
   const signature = req.headers.get('x-slack-signature') ?? '';
 
   if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
+    console.warn('[slack/commands] signature rejected');
     return slackText('Unauthorized.', 401);
   }
 
+  // 2. Parse form body
   const params = new URLSearchParams(rawBody);
   const teamId    = params.get('team_id')   ?? '';
   const text      = params.get('text')      ?? '';
@@ -149,17 +143,18 @@ export async function POST(req: NextRequest) {
 
   if (!text.trim()) {
     return slackText(
-      `Bitte einen Task-Titel angeben.\nBeispiel: \`${command} @tim Thumbnail-Auswahl für Ep. 048 bis Freitag\``,
+      `Bitte einen Task-Titel angeben.\nBeispiel: \`${command} @tim Thumbnail für Ep. 048 bis Freitag\``,
     );
   }
 
+  // 3. Admin client
   const admin = createAdminClient();
   if (!admin) {
     console.error('[slack/commands] admin client not configured');
     return slackText('⚠️ Datenbankverbindung nicht konfiguriert.', 500);
   }
 
-  // 1. Map Slack team → workspace
+  // 4. Look up workspace — must be first since workspaceUuid gates everything else
   const { data: integration, error: intErr } = await admin
     .from('slack_integrations')
     .select('workspace_id')
@@ -168,17 +163,17 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (intErr) {
-    console.error('[slack/commands] integration lookup failed', intErr.message);
+    console.error('[slack/commands] integration lookup failed:', intErr.message);
     return slackText('⚠️ Datenbankfehler beim Workspace-Lookup.', 500);
   }
   if (!integration?.workspace_id) {
     return slackText(
-      `⚠️ Dieses Slack-Workspace ist nicht mit Command Center verbunden.\nSlack team ID: \`${teamId}\``,
+      `⚠️ Slack-Workspace nicht verbunden. Team ID: \`${teamId}\``,
     );
   }
   const workspaceUuid = integration.workspace_id as string;
 
-  // 2. Parse command text
+  // 5. Parse command text (synchronous — no I/O)
   const { title, mentionedName, slackUserId, dueDate } = parseCommandText(text);
   if (!title) {
     return slackText(
@@ -186,56 +181,51 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3. Resolve @mention → assignee_id
-  //    Priority: Slack user ID match (profiles.slack_user_id) → name fuzzy match
+  // 6. PARALLEL: members (only if needed) + projects
+  //    Running these concurrently halves the I/O wait vs sequential calls.
+  const needsMembers = !!(mentionedName || slackUserId);
+  const [membersResult, projectsResult] = await Promise.all([
+    needsMembers
+      ? admin
+          .from('workspace_members')
+          .select('user_id, profiles!inner(id, full_name, email)')
+          .eq('workspace_id', workspaceUuid)
+      : Promise.resolve({ data: [] as any[], error: null }),
+    admin
+      .from('projects')
+      .select('id, name')
+      .eq('workspace_id', workspaceUuid)
+      .neq('status', 'Done')
+      .order('created_at', { ascending: true })
+      .limit(1),
+  ]);
+
+  if (projectsResult.error) {
+    console.error('[slack/commands] project lookup failed:', projectsResult.error.message);
+    return slackText('⚠️ Datenbankfehler beim Projekt-Lookup.', 500);
+  }
+  if (!projectsResult.data?.length) {
+    return slackText('⚠️ Kein aktives Projekt gefunden. Bitte erst ein Projekt anlegen.');
+  }
+  const projectId   = projectsResult.data[0].id   as string;
+  const projectName = projectsResult.data[0].name as string;
+
+  // 7. Resolve @mention → assignee_id
   let assigneeId: string | null = null;
   let assigneeName: string | null = null;
-  if (mentionedName || slackUserId) {
-    const { data: members } = await admin
-      .from('workspace_members')
-      .select('user_id, profiles!inner(id, full_name, email)')
-      .eq('workspace_id', workspaceUuid);
-
-    let match: any = null;
-
-    // Try name fuzzy match (works without storing Slack user IDs)
-    if (mentionedName) {
-      const needle = mentionedName.toLowerCase();
-      match = (members ?? []).find((m: any) => {
-        const name = ((m.profiles?.full_name ?? m.profiles?.email) as string | null)?.toLowerCase() ?? '';
-        // Match on first name, last name, or full string
-        return name.includes(needle) || name.split(/\s+/).some((part: string) => part.startsWith(needle));
-      });
-    }
-
+  if (needsMembers && mentionedName) {
+    const needle = mentionedName.toLowerCase();
+    const match = (membersResult.data ?? []).find((m: any) => {
+      const name = ((m.profiles?.full_name ?? m.profiles?.email) as string | null)?.toLowerCase() ?? '';
+      return name.includes(needle) || name.split(/\s+/).some((part: string) => part.startsWith(needle));
+    });
     if (match) {
       assigneeId = match.user_id as string;
       assigneeName = ((match.profiles as any)?.full_name ?? (match.profiles as any)?.email) as string;
     }
   }
 
-  // 4. Find first non-Done project in workspace (default attachment point)
-  const { data: projects, error: projErr } = await admin
-    .from('projects')
-    .select('id, name')
-    .eq('workspace_id', workspaceUuid)
-    .neq('status', 'Done')
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  if (projErr) {
-    console.error('[slack/commands] project lookup failed', projErr.message);
-    return slackText('⚠️ Datenbankfehler beim Projekt-Lookup.', 500);
-  }
-  if (!projects?.length) {
-    return slackText(
-      '⚠️ Kein aktives Projekt im Workspace gefunden. Bitte erst ein Projekt in Command Center anlegen.',
-    );
-  }
-  const projectId   = projects[0].id   as string;
-  const projectName = projects[0].name as string;
-
-  // 5. Insert task
+  // 8. Insert task
   const { data: task, error: taskErr } = await admin
     .from('tasks')
     .insert({
@@ -252,12 +242,12 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (taskErr || !task) {
-    console.error('[slack/commands] task insert failed', taskErr?.message);
+    console.error('[slack/commands] task insert failed:', taskErr?.message);
     return slackText('⚠️ Task konnte nicht erstellt werden. Bitte erneut versuchen.', 500);
   }
 
-  // 6. Log activity (actor_id null — action originated from Slack, not a session user)
-  await admin
+  // 9. Activity log — fire-and-forget, never blocks the Slack response
+  admin
     .from('activity_logs')
     .insert({
       workspace_id: workspaceUuid,
@@ -268,10 +258,13 @@ export async function POST(req: NextRequest) {
       meta:         { title, source: 'slack_slash_command', slack_user: slackUser },
     })
     .then(({ error }) => {
-      if (error) console.error('[slack/commands] activity_log insert failed', error.message);
+      if (error) console.error('[slack/commands] activity_log insert failed:', error.message);
     });
 
-  // 7. Confirmation reply to Slack
+  const elapsed = Date.now() - t0;
+  console.log(`[slack/commands] task created in ${elapsed}ms — title="${title}" user=${slackUser}`);
+
+  // 10. Respond to Slack
   const lines: string[] = [`✅ Task erstellt: *${title}*`];
   if (assigneeName) {
     lines.push(`👤 Zugewiesen an: ${assigneeName}`);
