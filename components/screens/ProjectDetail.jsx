@@ -43,6 +43,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
 
+  // ── Slack channel mapping ─────────────────────────────────────────────────
+  const [editingSlack, setEditingSlack] = useState(false);
+  const [slackChannelDraft, setSlackChannelDraft] = useState('');
+  const [slackConnectedDraft, setSlackConnectedDraft] = useState(false);
+  const [slackPending, setSlackPending] = useState(false);
+
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
   useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
 
@@ -79,6 +85,24 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     setFieldPending(null);
     if (!r.ok) { setFieldError(r.error ?? 'Feld konnte nicht gespeichert werden'); return; }
     updateProjectInCache(projectId, { [key]: value });
+  };
+
+  const startSlackEdit = () => {
+    setSlackChannelDraft(project.slackChannel || '');
+    setSlackConnectedDraft(project.slackConnected);
+    setEditingSlack(true);
+  };
+
+  const saveSlack = async () => {
+    const channel = slackChannelDraft.trim();
+    const connected = slackConnectedDraft && !!channel;
+    setSlackPending(true);
+    setFieldError(null);
+    const r = await updateProject({ projectId, workspaceId, patch: { slackChannel: channel, slackConnected: connected } });
+    setSlackPending(false);
+    if (!r.ok) { setFieldError(r.error ?? 'Slack konnte nicht gespeichert werden'); return; }
+    updateProjectInCache(projectId, { slackChannel: channel, slackConnected: connected });
+    setEditingSlack(false);
   };
 
   const onDelete = async () => {
@@ -420,21 +444,52 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className="card card-pad">
             <div className="row between mb-3">
               <div className="row gap-2"><I.slack size={16} /><span className="h3">Slack Channel</span></div>
-              {project.slackConnected ? <Badge kind="success" dot>Connected</Badge> : <Badge kind="warning" dot>Not connected</Badge>}
+              {project.slackConnected
+                ? <Badge kind="success" dot>Connected</Badge>
+                : <Badge kind="warning" dot>Not connected</Badge>}
             </div>
-            {project.slackConnected ? (
+            {editingSlack ? (
+              <div className="col gap-2">
+                <input
+                  className="input mono"
+                  value={slackChannelDraft}
+                  onChange={(e) => setSlackChannelDraft(e.target.value)}
+                  placeholder="#channel-name"
+                  disabled={slackPending}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Escape') setEditingSlack(false); if (e.key === 'Enter') saveSlack(); }}
+                  style={{ fontSize: 13 }}
+                />
+                <label className="row gap-2" style={{ cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={slackConnectedDraft}
+                    onChange={(e) => setSlackConnectedDraft(e.target.checked)}
+                    disabled={slackPending || !slackChannelDraft.trim()}
+                  />
+                  Verbinden (Auto-Updates aktivieren)
+                </label>
+                <div className="row gap-2 mt-1">
+                  <button className="btn btn-brand btn-sm" onClick={saveSlack} disabled={slackPending}>
+                    {slackPending ? 'Wird gespeichert…' : 'Speichern'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingSlack(false)} disabled={slackPending}>Abbrechen</button>
+                </div>
+              </div>
+            ) : project.slackConnected ? (
               <>
                 <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{project.slackChannel}</div>
                 <div className="meta mt-1">Automatische Updates: Status-Wechsel, neue Tasks, Deadlines</div>
                 <div className="row gap-2 mt-3">
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled title="Direkt-Link kommt mit der nächsten Slack-Slice">Open Channel</button>
-                  <button className="btn btn-quiet btn-sm" disabled title="Noch nicht verfügbar"><I.settings size={13} /></button>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={startSlackEdit}><I.settings size={13} /> Bearbeiten</button>
                 </div>
               </>
             ) : (
               <>
                 <p className="meta" style={{ margin: '4px 0 12px' }}>Kein Slack-Channel verknüpft. Aufgaben werden nicht automatisch in Slack gespiegelt.</p>
-                <button className="btn btn-ghost btn-sm" style={{ width: '100%' }}><I.slack size={13} /> Slack verbinden</button>
+                <button className="btn btn-ghost btn-sm" style={{ width: '100%' }} onClick={startSlackEdit}>
+                  <I.slack size={13} /> Slack verbinden
+                </button>
               </>
             )}
           </div>
