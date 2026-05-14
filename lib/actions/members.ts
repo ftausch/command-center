@@ -52,7 +52,7 @@ export async function inviteWorkspaceMember(input: {
   workspaceId: string;
   email: string;
   role: InvitableRole;
-}): Promise<ActionResult<{ userId: string; mode: InviteMode; email: string }>> {
+}): Promise<ActionResult<{ userId: string; mode: InviteMode; email: string; inviteLink?: string }>> {
   // 1. Auth.
   const user = await currentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
@@ -83,7 +83,7 @@ export async function inviteWorkspaceMember(input: {
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
-    'https://command-center-git-main-unicorn-bakery.vercel.app';
+    'https://team.unicornbakery.de';
   const redirectTo = `${siteUrl}/auth/callback`;
 
   // 5. Is the email already an auth user? listUsers paginates; perPage=1000
@@ -211,14 +211,28 @@ export async function inviteWorkspaceMember(input: {
     return { ok: false, error: memErr.message };
   }
 
+  // 9. Generate a direct invite link so the admin can share it via
+  //    Slack/WhatsApp when email delivery is unreliable (no SMTP configured).
+  //    Best-effort: never blocks the happy path if it fails.
+  let inviteLink: string | undefined;
+  try {
+    const linkType = mode === 'invite' ? 'invite' : 'recovery';
+    const { data: linkData } = await admin.auth.admin.generateLink({
+      type: linkType,
+      email,
+      options: { redirectTo },
+    } as Parameters<typeof admin.auth.admin.generateLink>[0]);
+    inviteLink = (linkData as any)?.properties?.action_link ?? undefined;
+  } catch (e) {
+    console.warn('[invite] generateLink failed (non-fatal)', (e as Error)?.message);
+  }
+
   if (emailRateLimited) {
     console.warn(`[invite] ⚠ rate-limited — ${email} added to workspace_members as ${input.role} but email not sent`);
-    return { ok: true, data: { userId, mode, email }, warning: RATE_LIMIT_WARNING };
+    return { ok: true, data: { userId, mode, email, inviteLink }, warning: RATE_LIMIT_WARNING };
   }
-  console.log(
-    `[invite] ✓ ${mode} sent to ${email}; workspace_members upserted as ${input.role}`,
-  );
-  return { ok: true, data: { userId, mode, email } };
+  console.log(`[invite] ✓ ${mode} sent to ${email}; workspace_members upserted as ${input.role}`);
+  return { ok: true, data: { userId, mode, email, inviteLink } };
 }
 
 // ── Member management ─────────────────────────────────────────────────────

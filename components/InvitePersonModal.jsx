@@ -28,7 +28,9 @@ export function InvitePersonModal({ open, onClose }) {
   const [status, setStatus] = useState('idle'); // idle | submitting | success | warning | error
   const [errorMsg, setErrorMsg] = useState(null);
   const [warningMsg, setWarningMsg] = useState(null);
-  const [success, setSuccess] = useState(null); // { email, mode }
+  const [success, setSuccess] = useState(null); // { email, mode, inviteLink? }
+  const [inviteLink, setInviteLink] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Fresh state every time the modal opens.
   useEffect(() => {
@@ -39,6 +41,8 @@ export function InvitePersonModal({ open, onClose }) {
     setErrorMsg(null);
     setWarningMsg(null);
     setSuccess(null);
+    setInviteLink(null);
+    setLinkCopied(false);
   }, [open]);
 
   // ESC closes — but only when we're not mid-submit; we don't want to
@@ -75,21 +79,24 @@ export function InvitePersonModal({ open, onClose }) {
     }
     // Partial success: member was added to workspace_members but the email
     // could not be sent (rate limit). Show a warning instead of a success.
+    if (result.data?.inviteLink) setInviteLink(result.data.inviteLink);
     if (result.warning) {
       setWarningMsg(result.warning);
       setStatus('warning');
       refresh();
-      // Don't auto-close so the admin can read the warning.
       return;
     }
     setSuccess({ email: result.data.email, mode: result.data.mode });
     setStatus('success');
-    // Reload the workspace so the new workspace_members row is visible in
-    // the Team / Settings → Members list immediately. The membership is
-    // already effective in the DB; this just brings the UI in sync.
     refresh();
-    // Auto-close shortly after the confirmation so admins can move on.
-    setTimeout(() => onClose(), 2200);
+  };
+
+  const copyLink = () => {
+    if (!inviteLink) return;
+    navigator.clipboard?.writeText(inviteLink).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
   };
 
   return (
@@ -112,7 +119,7 @@ export function InvitePersonModal({ open, onClose }) {
         <div className="row between mb-3">
           <div>
             <div className="h3">Person einladen</div>
-            <div className="meta mt-1">Per E-Mail. Empfänger setzt eigenes Passwort.</div>
+            <div className="meta mt-1">Invite-Link wird generiert — per Slack oder E-Mail teilen.</div>
           </div>
           <button
             type="button"
@@ -125,41 +132,43 @@ export function InvitePersonModal({ open, onClose }) {
           </button>
         </div>
 
-        {status === 'success' && success ? (
-          <div
-            style={{
-              fontSize: 13,
-              color: 'var(--success)',
-              padding: '10px 12px',
-              background: 'var(--success-bg)',
-              borderRadius: 6,
-              border: '1px solid var(--success-border)',
-            }}
-          >
-            {success.mode === 'invite' ? 'Einladungs-Mail' : 'Recovery-Mail'} gesendet an{' '}
-            <span className="mono">{success.email}</span>.
-          </div>
-        ) : status === 'warning' && warningMsg ? (
+        {(status === 'success' && success) || (status === 'warning' && warningMsg) ? (
           <div className="col gap-3">
-            <div
-              style={{
-                fontSize: 13,
-                color: 'var(--warning)',
-                padding: '10px 12px',
-                background: 'var(--warning-bg)',
-                borderRadius: 6,
-                border: '1px solid var(--warning-border)',
-                lineHeight: 1.55,
-              }}
-            >
-              ⚠️ {warningMsg}
-            </div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={onClose}
-              style={{ alignSelf: 'flex-end' }}
-            >
+            {status === 'success' ? (
+              <div style={{ fontSize: 13, color: 'var(--success)', padding: '10px 12px', background: 'var(--success-bg)', borderRadius: 6, border: '1px solid var(--success-border)' }}>
+                ✅ {success.mode === 'invite' ? 'Einladungs-Mail' : 'Recovery-Mail'} gesendet an <span className="mono">{success.email}</span>.
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--warning)', padding: '10px 12px', background: 'var(--warning-bg)', borderRadius: 6, border: '1px solid var(--warning-border)', lineHeight: 1.55 }}>
+                ⚠️ {warningMsg}
+              </div>
+            )}
+
+            {inviteLink && (
+              <div className="col gap-2">
+                <div className="label">Invite-Link (per Slack / WhatsApp teilen)</div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                  <input
+                    readOnly
+                    className="input mono"
+                    value={inviteLink}
+                    style={{ flex: 1, fontSize: 11, color: 'var(--text-2)' }}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-brand btn-sm"
+                    onClick={copyLink}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {linkCopied ? '✓ Kopiert' : 'Kopieren'}
+                  </button>
+                </div>
+                <div className="meta">Link ist einmalig verwendbar. Der Empfänger setzt danach sein Passwort.</div>
+              </div>
+            )}
+
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} style={{ alignSelf: 'flex-end' }}>
               Schließen
             </button>
           </div>
