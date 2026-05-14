@@ -70,6 +70,7 @@ const WorkspaceContext = createContext({
   addTaskComment: noop,
   addChecklistItem: noop,
   updateChecklistItemInCache: noop,
+  updateWorkspaceInCache: noop,
   pushActivity: noop,
 });
 
@@ -260,6 +261,9 @@ export function WorkspaceProvider({ children }) {
     if (!entry) return;
     setData((d) => ({ ...d, activity: [entry, ...d.activity] }));
   }, []);
+  const updateWorkspaceInCache = useCallback((workspaceId, patch) => {
+    setWorkspaces((ws) => ws.map((w) => (w.id === workspaceId ? { ...w, ...patch } : w)));
+  }, []);
 
   const currentWorkspace = useMemo(
     () => workspaces.find((w) => w.id === currentWorkspaceId) ?? null,
@@ -286,6 +290,7 @@ export function WorkspaceProvider({ children }) {
       addTaskComment,
       addChecklistItem,
       updateChecklistItemInCache,
+      updateWorkspaceInCache,
       pushActivity,
     }),
     [
@@ -306,6 +311,7 @@ export function WorkspaceProvider({ children }) {
       addTaskComment,
       addChecklistItem,
       updateChecklistItemInCache,
+      updateWorkspaceInCache,
       pushActivity,
     ],
   );
