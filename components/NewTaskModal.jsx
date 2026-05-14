@@ -24,6 +24,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
   const {
     currentWorkspaceId: workspaceId,
     data,
+    me,
     addTask,
     pushActivity,
   } = useWorkspace();
@@ -39,6 +40,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [due, setDue] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const [status, setStatus] = useState('idle'); // idle | submitting | error
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -50,9 +52,10 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
     setTitle('');
     setPriority('Medium');
     setDue('');
+    setAssigneeId(me?.id ?? '');
     setStatus('idle');
     setErrorMsg(null);
-  }, [open, defaultProjectId]);
+  }, [open, defaultProjectId, me?.id]);
 
   // ESC closes when idle.
   useEffect(() => {
@@ -88,6 +91,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
       title: title.trim(),
       due: due || undefined,
       priority,
+      assigneeId: assigneeId || undefined,
     });
     if (!result.ok || !result.data) {
       setErrorMsg(result.error ?? 'Task konnte nicht angelegt werden');
@@ -207,6 +211,23 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
                 title="Deadline (optional)"
               />
             </div>
+
+            {data.members.length > 1 && (
+              <select
+                className="input"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                disabled={status === 'submitting'}
+                title="Assignee"
+              >
+                <option value="">— Kein Assignee —</option>
+                {data.members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id === me?.id ? `${m.name} (ich)` : m.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <button
               type="submit"
