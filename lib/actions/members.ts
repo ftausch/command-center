@@ -83,7 +83,8 @@ export async function inviteWorkspaceMember(input: {
     console.error('[invite] listUsers failed', listErr.message);
     return { ok: false, error: 'Bestehende Nutzer konnten nicht geprüft werden.' };
   }
-  const existing = list.users.find(
+  const users = (list as { users: { id: string; email?: string }[] }).users;
+  const existing = users.find(
     (u) => u.email?.toLowerCase() === email,
   );
 
