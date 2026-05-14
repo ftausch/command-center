@@ -1,27 +1,96 @@
 'use client';
-// Kanban Board
+// Kanban Board — mit Drag & Drop via @dnd-kit/core.
+//
+// Drag-Mechanik:
+//   - PointerSensor mit 8px activation distance: kurze Berührungen = Click
+//     (Drawer öffnen), längere Bewegung = Drag (Status wechseln).
+//   - DragOverlay rendert eine schwebende Karte; die Quell-Karte wird halbtransparent.
+//   - Drop auf eine andere Spalte → changeTaskStatus / markTaskDone.
+//   - Blocked-Tasks können per Drag in jede andere Spalte verschoben werden.
 
 import { useState, useMemo } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+} from '@dnd-kit/core';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge, PriorityBadge } from '@/components/ui';
 import { dueLabel, kColColor } from '@/lib/utils';
+import { changeTaskStatus, markTaskDone } from '@/lib/actions/tasks';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
 
 const KANBAN_COLS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Done'];
 
 export function KanbanScreen({ setRoute }) {
-  const { currentWorkspace: brand, data, me } = useWorkspace();
+  const {
+    currentWorkspace: brand,
+    currentWorkspaceId: workspaceId,
+    data,
+    me,
+    updateTaskInCache,
+    pushActivity,
+  } = useWorkspace();
+
   const [projectFilter, setProjectFilter] = useState('all');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null);
   const [activeFilters, setActiveFilters] = useState(new Set());
 
+  // ── DnD state ─────────────────────────────────────────────────────────────
+  const [activeTask, setActiveTask] = useState(null);  // task being dragged
+  const [overColId, setOverColId] = useState(null);    // column being hovered
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const handleDragStart = ({ active }) => {
+    const task = data.tasks.find((t) => t.id === active.id);
+    setActiveTask(task ?? null);
+  };
+
+  const handleDragOver = ({ over }) => {
+    setOverColId(over?.id ?? null);
+  };
+
+  const handleDragEnd = async ({ active, over }) => {
+    setActiveTask(null);
+    setOverColId(null);
+    if (!over) return;
+
+    const task = data.tasks.find((t) => t.id === active.id);
+    if (!task) return;
+
+    const fromStatus = task.status;
+    const toStatus = over.id;
+    if (fromStatus === toStatus) return;
+
+    // Optimistic update so the UI feels instant.
+    updateTaskInCache(task.id, { status: toStatus, blocker: toStatus !== 'Blocked' ? null : task.blocker });
+
+    if (toStatus === 'Done') {
+      const r = await markTaskDone({ taskId: task.id, workspaceId, from: fromStatus });
+      if (!r.ok) { updateTaskInCache(task.id, { status: fromStatus }); return; }
+      if (r.activity) pushActivity(r.activity);
+    } else {
+      const r = await changeTaskStatus({ taskId: task.id, workspaceId, from: fromStatus, to: toStatus });
+      if (!r.ok) { updateTaskInCache(task.id, { status: fromStatus }); return; }
+      if (r.activity) pushActivity(r.activity);
+    }
+  };
+
+  // ── Filters ───────────────────────────────────────────────────────────────
   const toggleFilter = (id) => {
     setActiveFilters((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
@@ -49,6 +118,10 @@ export function KanbanScreen({ setRoute }) {
     return g;
   }, [tasks]);
 
+  const allFilteredCount = data.tasks.filter(
+    (t) => projectFilter === 'all' || t.projectId === projectFilter,
+  ).length;
+
   return (
     <div className="page fade-in" style={{ paddingBottom: 24 }}>
       <div className="page-head">
@@ -56,7 +129,7 @@ export function KanbanScreen({ setRoute }) {
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
           <h1 className="h1">Board</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Status-Spalten über alle Projekte.
+            Status-Spalten über alle Projekte. Karte ziehen um Status zu wechseln.
           </p>
         </div>
         <div className="row gap-2">
@@ -64,7 +137,6 @@ export function KanbanScreen({ setRoute }) {
             <option value="all">Alle Projekte ({data.projects.length})</option>
             {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar">Group: Status <I.chevronDown size={12} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
@@ -75,54 +147,64 @@ export function KanbanScreen({ setRoute }) {
         initialProjectId={projectFilter !== 'all' ? projectFilter : undefined}
         onNeedProject={() => setRoute('projects')}
       />
-
       <TaskDrawer
         taskId={drawerTask?.taskId ?? null}
         projectId={drawerTask?.projectId ?? null}
         onClose={() => setDrawerTask(null)}
       />
 
+      {/* Filter chips */}
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
-        <button
-          className={`chip ${activeFilters.size === 0 ? 'active' : ''}`}
-          onClick={() => setActiveFilters(new Set())}
-        >
-          Alle <span className="count">{data.tasks.filter((t) => projectFilter === 'all' || t.projectId === projectFilter).length}</span>
+        <button className={`chip ${activeFilters.size === 0 ? 'active' : ''}`} onClick={() => setActiveFilters(new Set())}>
+          Alle <span className="count">{allFilteredCount}</span>
         </button>
-        <button
-          className={`chip ${activeFilters.has('high') ? 'active' : ''}`}
-          onClick={() => toggleFilter('high')}
-        >
+        <button className={`chip ${activeFilters.has('high') ? 'active' : ''}`} onClick={() => toggleFilter('high')}>
           <span className="dot-indicator danger" /> High <span className="count">{data.tasks.filter((t) => (projectFilter === 'all' || t.projectId === projectFilter) && t.priority === 'High').length}</span>
         </button>
-        <button
-          className={`chip ${activeFilters.has('me') ? 'active' : ''}`}
-          onClick={() => toggleFilter('me')}
-          title={me ? `Tasks von ${me.name}` : 'Kein Nutzer geladen'}
-        >
+        <button className={`chip ${activeFilters.has('me') ? 'active' : ''}`} onClick={() => toggleFilter('me')}>
           Assignee: Me
         </button>
-        <button
-          className={`chip ${activeFilters.has('slack') ? 'active' : ''}`}
-          onClick={() => toggleFilter('slack')}
-        >
+        <button className={`chip ${activeFilters.has('slack') ? 'active' : ''}`} onClick={() => toggleFilter('slack')}>
           Has Slack
         </button>
         <button className="chip" disabled title="Noch nicht verfügbar"><I.filter size={11} /> Mehr</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
-        {KANBAN_COLS.map((col) => (
-          <KColumn key={col} title={col} tasks={grouped[col] || []} blocked={col === 'In Progress' ? grouped['Blocked'] : null} onOpenTask={(t) => setDrawerTask({ taskId: t.id, projectId: t.projectId })} />
-        ))}
-      </div>
+      {/* Board */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+          {KANBAN_COLS.map((col) => (
+            <KColumn
+              key={col}
+              title={col}
+              tasks={grouped[col] || []}
+              blocked={col === 'In Progress' ? grouped['Blocked'] : null}
+              isOver={overColId === col}
+              onOpenTask={(t) => setDrawerTask({ taskId: t.id, projectId: t.projectId })}
+            />
+          ))}
+        </div>
+
+        {/* Floating card while dragging */}
+        <DragOverlay dropAnimation={{ duration: 180, easing: 'ease' }}>
+          {activeTask && <KCard task={activeTask} onOpen={() => {}} isOverlay />}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
 
-function KColumn({ title, tasks, blocked, onOpenTask }) {
+// ── Droppable column ──────────────────────────────────────────────────────
+function KColumn({ title, tasks, blocked, onOpenTask, isOver }) {
+  const { setNodeRef } = useDroppable({ id: title });
   const allTasks = blocked ? [...tasks, ...(blocked || [])] : tasks;
+
   return (
     <div style={{ background: 'transparent', minHeight: 400 }}>
       <div className="row between" style={{ padding: '8px 4px 10px' }}>
@@ -131,20 +213,26 @@ function KColumn({ title, tasks, blocked, onOpenTask }) {
           <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.005em' }}>{title}</span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{allTasks.length}</span>
         </div>
-        <button
-          className="btn btn-icon btn-sm btn-quiet"
-          disabled
-          title="Per-Spalten-Anlage kommt bald — bis dahin oben '+ New Task' nutzen"
-        ><I.plus size={13} /></button>
+        <button className="btn btn-icon btn-sm btn-quiet" disabled title="Oben '+ New Task' nutzen">
+          <I.plus size={13} />
+        </button>
       </div>
 
-      <div className="col gap-2">
+      <div
+        ref={setNodeRef}
+        className="col gap-2"
+        style={{
+          minHeight: 80,
+          borderRadius: 8,
+          padding: 4,
+          background: isOver ? 'var(--brand-soft)' : 'transparent',
+          border: isOver ? '2px dashed var(--brand)' : '2px dashed transparent',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}
+      >
         {allTasks.map((t) => <KCard key={t.id} task={t} onOpen={() => onOpenTask(t)} />)}
-        {allTasks.length === 0 && (
-          <div style={{
-            padding: 14, borderRadius: 8, border: '1.5px dashed var(--border)',
-            color: 'var(--text-4)', fontSize: 12, textAlign: 'center',
-          }}>
+        {allTasks.length === 0 && !isOver && (
+          <div style={{ padding: 14, borderRadius: 8, border: '1.5px dashed var(--border)', color: 'var(--text-4)', fontSize: 12, textAlign: 'center' }}>
             Leer.
           </div>
         )}
@@ -153,21 +241,36 @@ function KColumn({ title, tasks, blocked, onOpenTask }) {
   );
 }
 
-function KCard({ task, onOpen }) {
+// ── Draggable card ────────────────────────────────────────────────────────
+function KCard({ task, onOpen, isOverlay }) {
   const { data } = useWorkspace();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    disabled: !!isOverlay,
+  });
+
   const a = data.members.find((u) => u.id === task.assignee);
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const waiting = data.members.find((u) => u.id === task.waitingOn);
   const td = dueLabel(task.due);
+
   return (
     <div
-      onClick={onOpen}
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={isOverlay ? undefined : onOpen}
       style={{
         background: 'var(--bg-elev)',
         border: `1px solid ${task.status === 'Blocked' ? 'var(--danger-border)' : 'var(--border)'}`,
-        borderRadius: 8, padding: '10px 12px', cursor: 'pointer',
-        boxShadow: 'var(--shadow-sm)',
-        transition: 'border-color 0.12s, transform 0.12s',
+        borderRadius: 8,
+        padding: '10px 12px',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        boxShadow: isOverlay ? '0 8px 24px rgba(20,22,28,0.18)' : 'var(--shadow-sm)',
+        opacity: isDragging ? 0.35 : 1,
+        transform: isOverlay ? 'rotate(1.5deg)' : undefined,
+        transition: isDragging ? 'none' : 'border-color 0.12s, box-shadow 0.12s',
+        userSelect: 'none',
       }}
     >
       {task.status === 'Blocked' && (
