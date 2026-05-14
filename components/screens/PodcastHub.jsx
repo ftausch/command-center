@@ -393,13 +393,20 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
               <th>Datum</th>
               <th>Dauer</th>
               <th>Downloads</th>
+              <th style={{ width: 100 }}>Tasks</th>
               <th>Video</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((ep) => (
+            {filtered.map((ep) => {
+              const epTasks = (data.tasks ?? []).filter(t => t.episodeId === ep.id);
+              const total = epTasks.length;
+              const done  = epTasks.filter(t => t.status === 'Done').length;
+              const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+              const allDone = total > 0 && done === total;
+              return (
               <Fragment key={ep.id}>
                 <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedEp(expandedEp === ep.id ? null : ep.id)}>
                   <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</span></td>
@@ -408,6 +415,23 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
                   <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.date}</span></td>
                   <td><span className="mono" style={{ fontSize: 12 }}>{ep.duration}</span></td>
                   <td><span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{ep.downloads > 0 ? fmt(ep.downloads) : '—'}</span></td>
+                  <td>
+                    {total === 0 ? (
+                      <span style={{ fontSize: 11, color: 'var(--text-4)' }}>—</span>
+                    ) : (
+                      <div className="col gap-1" style={{ minWidth: 72 }}>
+                        <div className="row between" style={{ fontSize: 11 }}>
+                          <span style={{ color: allDone ? 'var(--success)' : 'var(--text-2)', fontWeight: allDone ? 600 : 400 }}>
+                            {allDone ? '✓ Fertig' : `${done}/${total}`}
+                          </span>
+                          {!allDone && <span className="mono" style={{ color: 'var(--text-3)', fontSize: 10 }}>{pct}%</span>}
+                        </div>
+                        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: pct + '%', background: allDone ? 'var(--success)' : 'var(--brand)', borderRadius: 2, transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {ep.hasVideo
                       ? <Badge kind="ghost" style={{ fontSize: 10 }}>🎬 Video</Badge>
@@ -418,7 +442,7 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
                 </tr>
                 {expandedEp === ep.id && (
                   <tr>
-                    <td colSpan={9} style={{ padding: 0 }}>
+                    <td colSpan={10} style={{ padding: 0 }}>
                       <div style={{ padding: '16px 20px', background: 'var(--bg)', borderBottom: '1px solid var(--border-soft)' }}>
                         {editingEp === ep.id ? (
                           /* ── Inline edit form ── */
@@ -518,7 +542,8 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
                   </tr>
                 )}
               </Fragment>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>
