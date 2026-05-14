@@ -81,6 +81,7 @@ export function rowToTask(row: any, workspaceSlug: string): TaskView {
     status: row.status,
     priority: row.priority,
     due: row.due_date ?? '',
+    description: row.description ?? undefined,
     tags: row.tags ?? [],
     waitingOn: row.waiting_on_id ?? undefined,
     blocker: row.blocker ?? undefined,

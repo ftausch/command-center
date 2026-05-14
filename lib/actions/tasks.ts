@@ -165,7 +165,7 @@ export async function updateTask(input: {
   taskId: string;
   workspaceId: string;
   patch: Partial<
-    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'tags' | 'blocker' | 'waitingOn'>
+    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'description' | 'tags' | 'blocker' | 'waitingOn'>
   >;
 }): Promise<ActionResult<Partial<TaskView> & { id: string }>> {
   const supabase = createClient();
@@ -184,6 +184,7 @@ export async function updateTask(input: {
   if (input.patch.assignee !== undefined) row.assignee_id = input.patch.assignee || null;
   if (input.patch.due !== undefined) row.due_date = input.patch.due || null;
   if (input.patch.priority !== undefined) row.priority = input.patch.priority;
+  if (input.patch.description !== undefined) row.description = input.patch.description || null;
   if (input.patch.tags !== undefined) row.tags = input.patch.tags;
   if (input.patch.blocker !== undefined) row.blocker = input.patch.blocker || null;
   if (input.patch.waitingOn !== undefined) row.waiting_on_id = input.patch.waitingOn || null;

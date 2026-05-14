@@ -79,6 +79,12 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
   const [titlePending, setTitlePending] = useState(false);
   const titleInputRef = useRef(null);
 
+  // ── Description inline edit ───────────────────────────────────────────────
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+  const [descPending, setDescPending] = useState(false);
+  const descRef = useRef(null);
+
   // ── Field edits (priority / due / assignee) ───────────────────────────────
   const [fieldPending, setFieldPending] = useState(null);
 
@@ -115,6 +121,7 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
   // Reset per-task UI state when task switches.
   useEffect(() => {
     setEditingTitle(false);
+    setEditingDesc(false);
     setConfirmDelete(false);
     setActionError(null);
   }, [taskId]);
@@ -124,7 +131,12 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     if (editingTitle) titleInputRef.current?.focus();
   }, [editingTitle]);
 
-  const busy = commentPending || statusPending || blockerPending || newItemPending || titlePending || deletePending;
+  // Focus description textarea when editing starts.
+  useEffect(() => {
+    if (editingDesc) descRef.current?.focus();
+  }, [editingDesc]);
+
+  const busy = commentPending || statusPending || blockerPending || newItemPending || titlePending || descPending || deletePending;
 
   useEffect(() => {
     if (!taskId) return;
@@ -141,6 +153,18 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
   if (!taskId || !task) return null;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const saveDesc = async () => {
+    const description = descDraft.trim();
+    if (description === (task.description ?? '')) { setEditingDesc(false); return; }
+    setDescPending(true);
+    setActionError(null);
+    const r = await updateTask({ taskId, workspaceId, patch: { description } });
+    setDescPending(false);
+    if (!r.ok) { setActionError(r.error ?? 'Beschreibung konnte nicht gespeichert werden'); return; }
+    updateTaskInCache(taskId, { description });
+    setEditingDesc(false);
+  };
 
   const saveTitle = async () => {
     const title = titleDraft.trim();
@@ -373,6 +397,48 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
             </select>
             {assignee && <Avatar user={assignee} />}
           </DetailRow>
+        </div>
+
+        {/* ── Description ── */}
+        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12 }}>
+          {editingDesc ? (
+            <div className="col gap-2">
+              <textarea
+                ref={descRef}
+                className="input"
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
+                disabled={descPending}
+                rows={4}
+                placeholder="Beschreibung…"
+                style={{ fontSize: 13.5, resize: 'vertical', lineHeight: 1.55 }}
+              />
+              <div className="row gap-2">
+                <button type="button" className="btn btn-brand btn-sm" onClick={saveDesc} disabled={descPending}>
+                  {descPending ? 'Wird gespeichert…' : 'Speichern'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingDesc(false)} disabled={descPending}>Abbrechen</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => { setDescDraft(task.description ?? ''); setEditingDesc(true); }}
+              title="Klicken zum Bearbeiten"
+              style={{
+                fontSize: 13.5, color: task.description ? 'var(--text-1)' : 'var(--text-4)',
+                fontStyle: task.description ? 'normal' : 'italic',
+                lineHeight: 1.6, cursor: 'text',
+                padding: '6px 8px', marginLeft: -8, borderRadius: 6,
+                minHeight: 36, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-sunk)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              {task.description || 'Beschreibung hinzufügen…'}
+            </div>
+          )}
         </div>
 
         {/* ── Blocker banner ── */}
