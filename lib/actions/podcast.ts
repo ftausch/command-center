@@ -101,13 +101,9 @@ export async function generateMarketingPackage(input: {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    // No key → return mock with episode title injected
     return {
-      ok: true,
-      data: {
-        ...MOCK_PACKAGE,
-        shownotes: MOCK_PACKAGE.shownotes.replace('[Name aus Transkript]', input.guest ?? 'Gast'),
-      },
+      ok: false,
+      error: 'ANTHROPIC_API_KEY nicht konfiguriert. KI-Marketing-Generierung ist deaktiviert.',
     };
   }
 
