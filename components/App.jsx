@@ -5,11 +5,12 @@
 // via the useWorkspace() hook. Screen data lives there too — every screen
 // reads via useWorkspace().data instead of importing the mock D object.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Sidebar, Topbar } from '@/components/shell';
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
+import { NewTaskModal } from '@/components/NewTaskModal';
 import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
 import { DashboardScreen } from '@/components/screens/Dashboard';
 import { MyTasksScreen } from '@/components/screens/MyTasks';
@@ -33,19 +34,60 @@ export function App() {
   const [route, setRoute] = useState('dashboard');
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  // 'g' prefix state for two-key nav shortcuts (g→d, g→p, g→t, g→b, g→c)
+  const gPending = useRef(false);
+  const gTimer = useRef(null);
 
-  // Cmd+K shortcut
+  // Keyboard shortcuts. Skip when focus is in an input/textarea/select so
+  // typing doesn't accidentally trigger navigation.
   useEffect(() => {
     const onKey = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const inInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
+
+      // ⌘K / Ctrl+K — toggle palette
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCmdkOpen((o) => !o);
+        return;
       }
-      if (e.key === 'Escape') setCmdkOpen(false);
+      if (e.key === 'Escape') { setCmdkOpen(false); return; }
+
+      // Single-key shortcuts — skip when typing
+      if (inInput || cmdkOpen) return;
+
+      // '/' — focus palette
+      if (e.key === '/') { e.preventDefault(); setCmdkOpen(true); return; }
+
+      // 'n' — new task
+      if (e.key === 'n') { e.preventDefault(); setNewTaskOpen(true); return; }
+
+      // 'b' — board
+      if (e.key === 'b') { e.preventDefault(); setRoute('kanban'); return; }
+
+      // 'g' prefix navigation
+      if (e.key === 'g') {
+        e.preventDefault();
+        gPending.current = true;
+        clearTimeout(gTimer.current);
+        gTimer.current = setTimeout(() => { gPending.current = false; }, 1500);
+        return;
+      }
+      if (gPending.current) {
+        gPending.current = false;
+        clearTimeout(gTimer.current);
+        e.preventDefault();
+        if (e.key === 'd') setRoute('dashboard');
+        else if (e.key === 'p') setRoute('projects');
+        else if (e.key === 't') setRoute('mytasks');
+        else if (e.key === 'c') setRoute('calendar');
+        else if (e.key === 'a') setRoute('activity');
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [setCmdkOpen]);
+    return () => { window.removeEventListener('keydown', onKey); clearTimeout(gTimer.current); };
+  }, [setCmdkOpen, cmdkOpen, setRoute]);
 
   // Reflect workspace as a data-brand on <body> so the brand CSS variables
   // in styles.css (which key off [data-brand]) light up the right palette.
@@ -160,6 +202,11 @@ export function App() {
           </div>
         )}
       </main>
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        onNeedProject={() => { setNewTaskOpen(false); setRoute('projects'); }}
+      />
       <CmdK
         open={cmdkOpen}
         onClose={() => setCmdkOpen(false)}
