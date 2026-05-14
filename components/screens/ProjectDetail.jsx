@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
 import { updateProject, deleteProject } from '@/lib/actions/projects';
+import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
 
@@ -17,7 +18,7 @@ const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data, updateProjectInCache, removeProject } = useWorkspace();
+  const { currentWorkspace: brand, data, updateProjectInCache, updateTaskInCache, removeProject, removeTask, currentWorkspaceId } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -42,6 +43,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   // ── Delete ────────────────────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // ── Bulk task selection ───────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkError, setBulkError] = useState(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   // ── Slack channel mapping ─────────────────────────────────────────────────
   const [editingSlack, setEditingSlack] = useState(false);
@@ -118,6 +125,30 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const phases = data.phases;
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
   const progress = projectProgress(tasks);
+
+  const toggleSelect = (id) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelectAll = () => {
+    const allSelected = tasks.every((t) => selectedIds.has(t.id));
+    setSelectedIds(allSelected ? new Set() : new Set(tasks.map((t) => t.id)));
+  };
+  const applyBulk = async (patch) => {
+    setBulkPending(true); setBulkError(null);
+    const r = await bulkUpdateTasks({ workspaceId: currentWorkspaceId, taskIds: [...selectedIds], patch });
+    setBulkPending(false);
+    if (!r.ok) { setBulkError(r.error); return; }
+    [...selectedIds].forEach((id) => updateTaskInCache(id, patch));
+    setSelectedIds(new Set());
+  };
+  const applyBulkDelete = async () => {
+    if (!confirmBulkDelete) { setConfirmBulkDelete(true); return; }
+    setBulkPending(true); setBulkError(null);
+    const ids = [...selectedIds];
+    const r = await bulkDeleteTasks({ workspaceId: currentWorkspaceId, taskIds: ids });
+    setBulkPending(false);
+    if (!r.ok) { setBulkError(r.error); setConfirmBulkDelete(false); return; }
+    ids.forEach((id) => removeTask(id));
+    setSelectedIds(new Set()); setConfirmBulkDelete(false);
+  };
   // Project-wide read-only roll-up of comments already in cache. The
   // per-task write surface lives in the TaskDrawer (open a task to add a
   // comment) — anchoring the write to a specific task is the whole
@@ -269,36 +300,73 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
         <div className="col gap-4">
           {tab === 'tasks' && (
-            <div className="card" style={{ overflow: 'hidden' }}>
-              <table className="table">
-                <thead><tr><th>Task</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Due</th></tr></thead>
-                <tbody>
-                  {tasks.map((t) => {
-                    const a = data.members.find((u) => u.id === t.assignee);
-                    const waiting = data.members.find((u) => u.id === t.waitingOn);
-                    const td = dueLabel(t.due);
-                    return (
-                      <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer' }}>
-                        <td>
-                          <div style={{ fontWeight: 500 }}>{t.title}</div>
-                          {t.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {t.blocker}</div>}
-                          {waiting && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {waiting.name}</div>}
-                        </td>
-                        <td><StatusBadge status={t.status} /></td>
-                        <td>
-                          {a ? (
-                            <div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div>
-                          ) : (
-                            <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>
-                          )}
-                        </td>
-                        <td><PriorityBadge priority={t.priority} /></td>
-                        <td><span className={`badge ${td.danger ? 'danger' : td.today ? 'warning' : 'ghost'}`}>{td.text}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="col gap-2">
+              {/* Bulk action bar */}
+              {selectedIds.size > 0 && (
+                <div className="card row gap-2" style={{ padding: '8px 14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>{selectedIds.size} ausgewählt</span>
+                  <select className="input" style={{ height: 28, fontSize: 12.5, width: 140 }} disabled={bulkPending} onChange={(e) => e.target.value && applyBulk({ status: e.target.value }) && (e.target.value = '')}>
+                    <option value="">Status setzen…</option>
+                    {['Backlog','To Do','In Progress','Review','Blocked','Done'].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select className="input" style={{ height: 28, fontSize: 12.5, width: 130 }} disabled={bulkPending} onChange={(e) => e.target.value && applyBulk({ priority: e.target.value }) && (e.target.value = '')}>
+                    <option value="">Priority setzen…</option>
+                    {['High','Medium','Low'].map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  {confirmBulkDelete ? (
+                    <div className="row gap-2">
+                      <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={applyBulkDelete} disabled={bulkPending}>{bulkPending ? '…' : 'Ja, löschen'}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setConfirmBulkDelete(false)} disabled={bulkPending}>Abbrechen</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={applyBulkDelete} disabled={bulkPending}><I.x size={12} /> Löschen</button>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setConfirmBulkDelete(false); setBulkError(null); }} disabled={bulkPending}><I.x size={12} /></button>
+                  {bulkError && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{bulkError}</span>}
+                </div>
+              )}
+              <div className="card" style={{ overflow: 'hidden' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 24 }}>
+                        <input type="checkbox"
+                          checked={tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))}
+                          ref={(el) => { if (el) el.indeterminate = tasks.some((t) => selectedIds.has(t.id)) && !tasks.every((t) => selectedIds.has(t.id)); }}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
+                      <th>Task</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map((t) => {
+                      const a = data.members.find((u) => u.id === t.assignee);
+                      const waiting = data.members.find((u) => u.id === t.waitingOn);
+                      const td = dueLabel(t.due);
+                      return (
+                        <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer', background: selectedIds.has(t.id) ? 'var(--bg-sunk)' : undefined }}>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} />
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{t.title}</div>
+                            {t.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {t.blocker}</div>}
+                            {waiting && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {waiting.name}</div>}
+                          </td>
+                          <td><StatusBadge status={t.status} /></td>
+                          <td>
+                            {a ? <div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div>
+                              : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>}
+                          </td>
+                          <td><PriorityBadge priority={t.priority} /></td>
+                          <td><span className={`badge ${td.danger ? 'danger' : td.today ? 'warning' : 'ghost'}`}>{td.text}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

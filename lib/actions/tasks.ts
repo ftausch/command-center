@@ -384,6 +384,59 @@ export async function markTaskBlocked(input: {
   };
 }
 
+export async function bulkUpdateTasks(input: {
+  workspaceId: string;
+  taskIds: string[];
+  patch: Partial<Pick<TaskView, 'status' | 'priority' | 'assignee'>>;
+}): Promise<ActionResult<{ updated: number }>> {
+  if (!input.taskIds.length) return { ok: true, data: { updated: 0 } };
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: { updated: input.taskIds.length } };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...ASSIGNEE_ROLES])) {
+    return { ok: false, error: 'You do not have permission to edit tasks' };
+  }
+
+  const row: Record<string, unknown> = {};
+  if (input.patch.status !== undefined) row.status = input.patch.status;
+  if (input.patch.priority !== undefined) row.priority = input.patch.priority;
+  if (input.patch.assignee !== undefined) row.assignee_id = input.patch.assignee || null;
+
+  const { error, count } = await supabase
+    .from('tasks')
+    .update(row)
+    .in('id', input.taskIds)
+    .eq('workspace_id', ctx.uuid)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: { updated: input.taskIds.length } };
+}
+
+export async function bulkDeleteTasks(input: {
+  workspaceId: string;
+  taskIds: string[];
+}): Promise<ActionResult<{ deleted: number }>> {
+  if (!input.taskIds.length) return { ok: true, data: { deleted: 0 } };
+  const supabase = createClient();
+  if (!supabase) return { ok: true, data: { deleted: input.taskIds.length } };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace not found or you are not a member' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Only managers+ can delete tasks' };
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .in('id', input.taskIds)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: { deleted: input.taskIds.length } };
+}
+
 export async function deleteTask(input: {
   taskId: string;
   workspaceId: string;

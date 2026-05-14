@@ -10,6 +10,8 @@ import {
   createTask,
   markTaskDone,
   changeTaskStatus,
+  bulkUpdateTasks,
+  bulkDeleteTasks,
 } from '@/lib/actions/tasks';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
@@ -21,6 +23,8 @@ export function MyTasksScreen({ setRoute }) {
     data,
     me,
     addTask,
+    updateTaskInCache,
+    removeTask,
     pushActivity,
   } = useWorkspace();
   const [tab, setTab] = useState('all');
@@ -31,6 +35,10 @@ export function MyTasksScreen({ setRoute }) {
   const [quickAddError, setQuickAddError] = useState(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkError, setBulkError] = useState(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   // Quick-add defaults the project to the first project of this workspace.
   // No project picker exists in the current UI, so we pick a sensible
@@ -99,6 +107,33 @@ export function MyTasksScreen({ setRoute }) {
     }
     return { Alle: filtered };
   }, [filtered, groupBy, data.projects]);
+
+  const toggleSelect = (id) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelectAll = (tasks) => {
+    const ids = tasks.map((t) => t.id);
+    const allSelected = ids.every((id) => selectedIds.has(id));
+    setSelectedIds((s) => { const n = new Set(s); allSelected ? ids.forEach((id) => n.delete(id)) : ids.forEach((id) => n.add(id)); return n; });
+  };
+
+  const applyBulk = async (patch) => {
+    setBulkPending(true); setBulkError(null);
+    const r = await bulkUpdateTasks({ workspaceId: currentWorkspaceId, taskIds: [...selectedIds], patch });
+    setBulkPending(false);
+    if (!r.ok) { setBulkError(r.error); return; }
+    [...selectedIds].forEach((id) => updateTaskInCache(id, patch));
+    setSelectedIds(new Set());
+  };
+
+  const applyBulkDelete = async () => {
+    if (!confirmBulkDelete) { setConfirmBulkDelete(true); return; }
+    setBulkPending(true); setBulkError(null);
+    const ids = [...selectedIds];
+    const r = await bulkDeleteTasks({ workspaceId: currentWorkspaceId, taskIds: ids });
+    setBulkPending(false);
+    if (!r.ok) { setBulkError(r.error); setConfirmBulkDelete(false); return; }
+    ids.forEach((id) => removeTask(id));
+    setSelectedIds(new Set()); setConfirmBulkDelete(false);
+  };
 
   return (
     <div className="page fade-in">
@@ -191,49 +226,82 @@ export function MyTasksScreen({ setRoute }) {
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="card row gap-2 mb-3" style={{ padding: '8px 14px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>{selectedIds.size} ausgewählt</span>
+          <select className="input" style={{ height: 28, fontSize: 12.5, width: 140 }} disabled={bulkPending} onChange={(e) => e.target.value && applyBulk({ status: e.target.value }) && (e.target.value = '')}>
+            <option value="">Status setzen…</option>
+            {['Backlog','To Do','In Progress','Review','Blocked','Done'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="input" style={{ height: 28, fontSize: 12.5, width: 130 }} disabled={bulkPending} onChange={(e) => e.target.value && applyBulk({ priority: e.target.value }) && (e.target.value = '')}>
+            <option value="">Priority setzen…</option>
+            {['High','Medium','Low'].map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {confirmBulkDelete ? (
+            <div className="row gap-2">
+              <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={applyBulkDelete} disabled={bulkPending}>{bulkPending ? '…' : 'Ja, löschen'}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setConfirmBulkDelete(false)} disabled={bulkPending}>Abbrechen</button>
+            </div>
+          ) : (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={applyBulkDelete} disabled={bulkPending}><I.x size={12} /> Löschen</button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setConfirmBulkDelete(false); setBulkError(null); }} disabled={bulkPending}><I.x size={12} /></button>
+          {bulkError && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{bulkError}</span>}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="card">
           <EmptyState icon={<I.check size={22} />} title="Nichts zu tun." body="Keine Tasks in dieser Ansicht. Wechsle den Tab oder lade die nächste Welle ein." />
         </div>
       ) : (
-        Object.entries(grouped).filter(([_, ts]) => ts.length > 0).map(([group, tasks]) => (
-          <section key={group} className="mb-4">
-            <div className="row gap-2 mb-2" style={{ paddingLeft: 4 }}>
-              <span className="label">{group}</span>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{tasks.length}</span>
-            </div>
-            <div className="card" style={{ overflow: 'hidden' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 30 }}></th>
-                    <th>Task</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Project</th>
-                    <th>Due</th>
-                    <th>Slack</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.map((t) => (
-                    <TaskRow
-                      key={t.id}
-                      task={t}
-                      onOpen={() => setDrawerTask({ taskId: t.id, projectId: t.projectId })}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))
+        Object.entries(grouped).filter(([_, ts]) => ts.length > 0).map(([group, tasks]) => {
+          const allGroupSelected = tasks.every((t) => selectedIds.has(t.id));
+          const someGroupSelected = tasks.some((t) => selectedIds.has(t.id));
+          return (
+            <section key={group} className="mb-4">
+              <div className="row gap-2 mb-2" style={{ paddingLeft: 4 }}>
+                <span className="label">{group}</span>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{tasks.length}</span>
+              </div>
+              <div className="card" style={{ overflow: 'hidden' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 24 }}>
+                        <input type="checkbox" checked={allGroupSelected} ref={(el) => { if (el) el.indeterminate = someGroupSelected && !allGroupSelected; }} onChange={() => toggleSelectAll(tasks)} />
+                      </th>
+                      <th style={{ width: 30 }}></th>
+                      <th>Task</th>
+                      <th>Status</th>
+                      <th>Priority</th>
+                      <th>Project</th>
+                      <th>Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map((t) => (
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        selected={selectedIds.has(t.id)}
+                        onSelect={() => toggleSelect(t.id)}
+                        onOpen={() => setDrawerTask({ taskId: t.id, projectId: t.projectId })}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })
       )}
     </div>
   );
 }
 
-function TaskRow({ task, onOpen }) {
+function TaskRow({ task, onOpen, selected, onSelect }) {
   const { data, currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const waiting = data.members.find((u) => u.id === task.waitingOn);
@@ -272,16 +340,17 @@ function TaskRow({ task, onOpen }) {
   };
 
   return (
-    <tr style={{ cursor: 'pointer' }} onClick={onOpen}>
-      <td>
+    <tr style={{ cursor: 'pointer', background: selected ? 'var(--bg-sunk)' : undefined }} onClick={onOpen}>
+      <td onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={!!selected} onChange={onSelect} />
+      </td>
+      <td onClick={(e) => e.stopPropagation()}>
         <span
           role="button"
           tabIndex={0}
           aria-pressed={task.status === 'Done'}
           onClick={toggleDone}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') toggleDone(e);
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleDone(e); }}
           style={{ display: 'inline-block', width: 16, height: 16, borderRadius: 999, border: '1.5px solid var(--border-strong)', background: task.status === 'Done' ? 'var(--brand)' : 'transparent', verticalAlign: 'middle', cursor: 'pointer' }}
         />
       </td>
@@ -294,15 +363,6 @@ function TaskRow({ task, onOpen }) {
       <td><PriorityBadge priority={task.priority} /></td>
       <td><span style={{ color: 'var(--text-2)' }}>{p?.name}</span></td>
       <td><span className={`badge ${due.danger ? 'danger' : due.today ? 'warning' : 'ghost'}`}>{due.text}</span></td>
-      <td>
-        {p?.slackConnected ? (
-          <span className="row gap-1" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-            <I.slack size={12} /> <span className="mono">{p.slackChannel}</span>
-          </span>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--text-4)' }}>—</span>
-        )}
-      </td>
     </tr>
   );
 }
