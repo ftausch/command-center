@@ -10,6 +10,7 @@ import { Stat2, ToggleRow } from '@/components/screens/Templates';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
 import { MemberManageModal } from '@/components/MemberManageModal';
 import { timeAgo } from '@/lib/utils';
+import { updateWorkspace } from '@/lib/actions/workspaces';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
@@ -51,7 +52,7 @@ export function SettingsScreen() {
           {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} />}
           {section === 'members' && <MembersSection />}
           {section === 'notifs' && <NotifsSection />}
-          {section === 'brand' && <BrandSection brand={brand} />}
+          {section === 'brand' && <BrandSection brand={brand} workspace={workspace} />}
         </div>
       </div>
     </div>
@@ -149,17 +150,82 @@ function SlackSection() {
 }
 
 function WorkspaceSection({ brand, workspace }) {
+  const { updateWorkspaceInCache } = useWorkspace();
+  const [name, setName] = useState(brand.name);
+  const [tagline, setTagline] = useState(brand.tagline);
+  const [status, setStatus] = useState('idle'); // idle | saving | saved | error
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  const dirty = name !== brand.name || tagline !== brand.tagline;
+
+  const save = async () => {
+    if (!dirty) return;
+    setStatus('saving');
+    setErrorMsg(null);
+    const result = await updateWorkspace({ workspaceId: workspace, name, tagline });
+    if (!result.ok) {
+      setStatus('error');
+      setErrorMsg(result.error);
+      return;
+    }
+    updateWorkspaceInCache(workspace, {
+      name: result.data.name,
+      tagline: result.data.tagline,
+      sub: result.data.tagline,
+    });
+    setStatus('saved');
+    setTimeout(() => setStatus('idle'), 2000);
+  };
+
+  const discard = () => {
+    setName(brand.name);
+    setTagline(brand.tagline);
+    setStatus('idle');
+    setErrorMsg(null);
+  };
+
   return (
     <div className="card card-pad">
-      <Field label="Workspace Name"><input className="input" defaultValue={brand.name} /></Field>
+      <Field label="Workspace Name">
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setStatus('idle'); }}
+          disabled={status === 'saving'}
+        />
+      </Field>
       <Field label="Slug"><span className="mono">{workspace}</span></Field>
-      <Field label="Beschreibung"><input className="input" defaultValue={brand.tagline} /></Field>
-      <Field label="Default Reviewer">Fabian Tausch (Owner)</Field>
-      <Field label="Zeitzone">Europe/Berlin</Field>
-      <Field label="Arbeitswoche">Mo – Fr</Field>
+      <Field label="Beschreibung">
+        <input
+          className="input"
+          value={tagline}
+          onChange={(e) => { setTagline(e.target.value); setStatus('idle'); }}
+          disabled={status === 'saving'}
+        />
+      </Field>
+      {errorMsg && (
+        <div style={{ fontSize: 12.5, color: 'var(--danger)', padding: '6px 8px', background: 'var(--danger-bg)', borderRadius: 6, border: '1px solid var(--danger-border)', marginBottom: 8 }}>
+          {errorMsg}
+        </div>
+      )}
+      {status === 'saved' && (
+        <div style={{ fontSize: 12.5, color: 'var(--success)', marginBottom: 8 }}>Gespeichert.</div>
+      )}
       <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
-        <button className="btn btn-brand btn-sm" disabled title="Workspace-Einstellungen speichern kommt im nächsten Slice">Änderungen speichern</button>
-        <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar">Verwerfen</button>
+        <button
+          className="btn btn-brand btn-sm"
+          onClick={save}
+          disabled={!dirty || status === 'saving'}
+        >
+          {status === 'saving' ? 'Wird gespeichert…' : 'Änderungen speichern'}
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={discard}
+          disabled={!dirty || status === 'saving'}
+        >
+          Verwerfen
+        </button>
       </div>
     </div>
   );
@@ -239,25 +305,85 @@ function NotifsSection() {
   );
 }
 
-function BrandSection({ brand }) {
+function BrandSection({ brand, workspace }) {
+  const { updateWorkspaceInCache } = useWorkspace();
+  const [color, setColor] = useState(brand.color);
+  const [status, setStatus] = useState('idle');
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  const dirty = color !== brand.color;
+
+  const save = async () => {
+    if (!dirty) return;
+    setStatus('saving');
+    setErrorMsg(null);
+    const result = await updateWorkspace({ workspaceId: workspace, color });
+    if (!result.ok) {
+      setStatus('error');
+      setErrorMsg(result.error);
+      return;
+    }
+    updateWorkspaceInCache(workspace, { color: result.data.color });
+    setStatus('saved');
+    setTimeout(() => setStatus('idle'), 2000);
+  };
+
   return (
     <div className="card card-pad">
       <div className="row gap-3 mb-4">
-        <div style={{ width: 56, height: 56, borderRadius: 12, background: brand.color, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>{brand.initials}</div>
+        <div style={{ width: 56, height: 56, borderRadius: 12, background: color, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>{brand.initials}</div>
         <div>
           <div className="h2">{brand.name}</div>
           <div className="meta mt-1">Akzentfarbe & Brand Marker. Wirkt sich nur auf diesen Workspace aus.</div>
         </div>
       </div>
       <Field label="Akzentfarbe">
-        <div className="row gap-2">
-          <div style={{ width: 32, height: 32, borderRadius: 6, background: brand.color, border: '1px solid var(--border)' }} />
-          <input className="input mono" defaultValue={brand.color} style={{ width: 140 }} />
+        <div className="row gap-2" style={{ alignItems: 'center' }}>
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => { setColor(e.target.value); setStatus('idle'); }}
+            disabled={status === 'saving'}
+            style={{ width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border)', padding: 2, cursor: 'pointer', background: 'none' }}
+          />
+          <input
+            className="input mono"
+            value={color}
+            onChange={(e) => { setColor(e.target.value); setStatus('idle'); }}
+            disabled={status === 'saving'}
+            style={{ width: 120 }}
+          />
           <span className="meta">Wird nur sparsam als Akzent eingesetzt — nie als Fläche.</span>
         </div>
       </Field>
-      <Field label="Brand Initials"><input className="input mono" defaultValue={brand.initials} style={{ width: 100 }} /></Field>
-      <Field label="Tagline"><input className="input" defaultValue={brand.tagline} /></Field>
+      <Field label="Brand Initials">
+        <span className="mono" style={{ color: 'var(--text-2)' }}>{brand.initials}</span>
+        <span className="meta" style={{ marginLeft: 8 }}>(aus Workspace-Name abgeleitet)</span>
+      </Field>
+      {errorMsg && (
+        <div style={{ fontSize: 12.5, color: 'var(--danger)', padding: '6px 8px', background: 'var(--danger-bg)', borderRadius: 6, border: '1px solid var(--danger-border)', marginBottom: 8 }}>
+          {errorMsg}
+        </div>
+      )}
+      {status === 'saved' && (
+        <div style={{ fontSize: 12.5, color: 'var(--success)', marginBottom: 8 }}>Gespeichert.</div>
+      )}
+      <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
+        <button
+          className="btn btn-brand btn-sm"
+          onClick={save}
+          disabled={!dirty || status === 'saving'}
+        >
+          {status === 'saving' ? 'Wird gespeichert…' : 'Farbe speichern'}
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => { setColor(brand.color); setStatus('idle'); setErrorMsg(null); }}
+          disabled={!dirty || status === 'saving'}
+        >
+          Verwerfen
+        </button>
+      </div>
       <div className="meta" style={{ background: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, marginTop: 16 }}>
         💡 <strong style={{ color: 'var(--text-2)' }}>Designregel:</strong> Brand-Farben sind absichtlich gedeckt. Status (rot/gelb/grün) muss immer stärker stechen als die Brand-Farbe — sonst sieht der Nutzer Brand-Akzente an, wo er Warnungen sehen sollte.
       </div>
