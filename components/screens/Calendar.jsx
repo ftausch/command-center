@@ -43,7 +43,7 @@ export function CalendarScreen({ setRoute }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  // ── Derive events from tasks + projects ───────────────────────────────────
+  // ── Derive events from tasks + projects + episodes ───────────────────────
   const allEvents = useMemo(() => {
     const evs = [];
     data.tasks.forEach((t) => {
@@ -54,6 +54,7 @@ export function CalendarScreen({ setRoute }) {
         title: t.title,
         projectId: t.projectId,
         taskId: t.id,
+        episodeId: null,
       });
     });
     data.projects.forEach((p) => {
@@ -64,10 +65,22 @@ export function CalendarScreen({ setRoute }) {
         title: p.name,
         projectId: p.id,
         taskId: null,
+        episodeId: null,
+      });
+    });
+    (data.episodes ?? []).forEach((ep) => {
+      if (!ep.date) return;
+      evs.push({
+        date: ep.date,
+        type: 'publish',
+        title: ep.num ? `Ep. ${ep.num} · ${ep.title}` : ep.title,
+        projectId: null,
+        taskId: null,
+        episodeId: ep.id,
       });
     });
     return evs.sort((a, b) => a.date.localeCompare(b.date));
-  }, [data.tasks, data.projects]);
+  }, [data.tasks, data.projects, data.episodes]);
 
   // ── Events bucketed by day-of-month for current month ────────────────────
   const evByDay = useMemo(() => {
@@ -96,6 +109,8 @@ export function CalendarScreen({ setRoute }) {
     e.stopPropagation();
     if (ev.taskId) {
       setDrawerTask({ taskId: ev.taskId, projectId: ev.projectId });
+    } else if (ev.episodeId) {
+      setRoute('podcast');
     } else {
       setRoute('project:' + ev.projectId);
     }
@@ -129,6 +144,7 @@ export function CalendarScreen({ setRoute }) {
         {[
           { t: 'deadline', label: 'Deadline / Task' },
           { t: 'review',   label: 'Review' },
+          { t: 'publish',  label: 'Episode' },
         ].map((l) => (
           <div key={l.t} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
             <span className="dot-indicator" style={{ background: eventColor(l.t) }} />
@@ -217,11 +233,15 @@ export function CalendarScreen({ setRoute }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 500 }}>{ev.title}</div>
                 <div className="meta mt-1">
-                  {data.projects.find((p) => p.id === ev.projectId)?.name}
+                  {ev.episodeId
+                    ? 'Podcast Hub'
+                    : data.projects.find((p) => p.id === ev.projectId)?.name}
                   {ev.taskId && <span style={{ marginLeft: 6 }}>· Task</span>}
                 </div>
               </div>
-              <Badge kind="ghost">{ev.type}</Badge>
+              <Badge kind={ev.type === 'publish' ? 'success' : ev.type === 'review' ? 'warning' : 'ghost'}>
+                {ev.type === 'publish' ? 'Episode' : ev.type === 'review' ? 'Review' : 'Deadline'}
+              </Badge>
             </div>
           ))}
         </div>
