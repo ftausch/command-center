@@ -11,6 +11,7 @@ import { InvitePersonModal } from '@/components/InvitePersonModal';
 import { MemberManageModal } from '@/components/MemberManageModal';
 import { timeAgo } from '@/lib/utils';
 import { updateWorkspace } from '@/lib/actions/workspaces';
+import { updateProject } from '@/lib/actions/projects';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
@@ -60,23 +61,46 @@ export function SettingsScreen() {
 }
 
 function SlackSection() {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId: workspaceId, data, updateProjectInCache } = useWorkspace();
   const projects = data.projects;
   const notifs = data.slackNotifications;
-  // "Posts heute" + "Letzter Sync" — derived from the slack_notifications
-  // mirror table. Both are best-effort: an admin who hasn't opened the
-  // settings screen sees a slightly stale count, which is fine.
-  const startOfDay = (() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  })();
-  const postsToday = notifs.filter((n) => {
-    const t = new Date(n.time).getTime();
-    return Number.isFinite(t) && t >= startOfDay;
-  }).length;
-  const mostRecentNotif = notifs[0];
-  const lastSyncText = mostRecentNotif ? timeAgo(mostRecentNotif.time) : '—';
+  const [editingId, setEditingId] = useState(null);
+  const [channelDraft, setChannelDraft] = useState('');
+  const [connectedDraft, setConnectedDraft] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setChannelDraft(p.slackChannel || '');
+    setConnectedDraft(p.slackConnected);
+    setSaveError(null);
+  };
+
+  const cancelEdit = () => { setEditingId(null); setSaveError(null); };
+
+  const saveMapping = async (projectId) => {
+    setSaving(true);
+    setSaveError(null);
+    const channel = channelDraft.trim();
+    const r = await updateProject({
+      projectId,
+      workspaceId,
+      patch: { slackChannel: channel, slackConnected: connectedDraft && !!channel },
+    });
+    setSaving(false);
+    if (!r.ok) { setSaveError(r.error ?? 'Speichern fehlgeschlagen'); return; }
+    updateProjectInCache(projectId, {
+      slackChannel: channel,
+      slackConnected: connectedDraft && !!channel,
+    });
+    setEditingId(null);
+  };
+
+  const startOfDay = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const postsToday = notifs.filter((n) => { const t = new Date(n.time).getTime(); return Number.isFinite(t) && t >= startOfDay; }).length;
+  const lastSyncText = notifs[0] ? timeAgo(notifs[0].time) : '—';
+
   return (
     <>
       <div className="card card-pad mb-4">
@@ -100,15 +124,61 @@ function SlackSection() {
       <div className="card mb-4">
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
           <div className="h3">Channel-Mapping</div>
-          <div className="meta mt-1">Pro Projekt ein Slack-Channel. Updates werden automatisch synchronisiert.</div>
+          <div className="meta mt-1">Pro Projekt ein Slack-Channel. Channel-Name eintragen, dann verbinden.</div>
         </div>
         <table className="table">
           <thead><tr><th>Projekt</th><th>Slack Channel</th><th>Auto-Updates</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {projects.map((p) => (
+            {projects.map((p) => editingId === p.id ? (
+              <tr key={p.id} style={{ background: 'var(--bg-sunk)' }}>
+                <td style={{ fontWeight: 500 }}>{p.name}</td>
+                <td>
+                  <input
+                    className="input mono"
+                    value={channelDraft}
+                    onChange={(e) => setChannelDraft(e.target.value)}
+                    placeholder="#channel-name"
+                    disabled={saving}
+                    style={{ height: 28, fontSize: 12.5, width: 180 }}
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit(); if (e.key === 'Enter') saveMapping(p.id); }}
+                  />
+                </td>
+                <td>
+                  <div className="row gap-1">
+                    <Badge kind="ghost">Status</Badge>
+                    <Badge kind="ghost">Blocked</Badge>
+                    <Badge kind="ghost">Review</Badge>
+                  </div>
+                </td>
+                <td>
+                  <label className="row gap-2" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={connectedDraft} onChange={(e) => setConnectedDraft(e.target.checked)} disabled={saving || !channelDraft.trim()} />
+                    {connectedDraft && channelDraft.trim()
+                      ? <Badge kind="success" dot>Connected</Badge>
+                      : <Badge kind="warning" dot>Not connected</Badge>}
+                  </label>
+                </td>
+                <td>
+                  <div className="col gap-1">
+                    <div className="row gap-2">
+                      <button className="btn btn-brand btn-sm" onClick={() => saveMapping(p.id)} disabled={saving}>
+                        {saving ? '…' : 'Speichern'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={cancelEdit} disabled={saving}>Abbrechen</button>
+                    </div>
+                    {saveError && <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{saveError}</div>}
+                  </div>
+                </td>
+              </tr>
+            ) : (
               <tr key={p.id}>
                 <td><div style={{ fontWeight: 500 }}>{p.name}</div></td>
-                <td><span className="mono" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{p.slackChannel}</span></td>
+                <td>
+                  {p.slackChannel
+                    ? <span className="mono" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{p.slackChannel}</span>
+                    : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>}
+                </td>
                 <td>
                   <div className="row gap-1">
                     <Badge kind="ghost">Status</Badge>
@@ -117,7 +187,7 @@ function SlackSection() {
                   </div>
                 </td>
                 <td>{p.slackConnected ? <Badge kind="success" dot>Connected</Badge> : <Badge kind="warning" dot>Not connected</Badge>}</td>
-                <td><button className="btn btn-quiet btn-sm" disabled title="Per-Projekt Channel-Mapping kommt mit der nächsten Slack-Slice">Edit</button></td>
+                <td><button className="btn btn-quiet btn-sm" onClick={() => startEdit(p)}>Edit</button></td>
               </tr>
             ))}
           </tbody>
