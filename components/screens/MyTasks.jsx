@@ -149,7 +149,7 @@ export function MyTasksScreen({ setRoute }) {
           </p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm">Group: {groupBy === 'project' ? 'Project' : groupBy === 'priority' ? 'Priority' : 'Flat'} <I.chevronDown size={12} /></button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setGroupBy(groupBy === 'project' ? 'priority' : groupBy === 'priority' ? 'flat' : 'project')}>Group: {groupBy === 'project' ? 'Project' : groupBy === 'priority' ? 'Priority' : 'Flat'} <I.chevronDown size={12} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> Quick Add</button>
         </div>
       </div>
