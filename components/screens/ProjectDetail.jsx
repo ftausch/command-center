@@ -628,34 +628,114 @@ function CommentItem({ authorId, time, text }) {
   );
 }
 
-export function ActivityTimeline({ items }) {
+const ACTIVITY_ICON_MAP = {
+  check:       (s) => <I.check size={s} />,
+  message:     (s) => <I.message size={s} />,
+  paperclip:   (s) => <I.paperclip size={s} />,
+  block:       (s) => <I.block size={s} />,
+  plus:        (s) => <I.plus size={s} />,
+  slack:       (s) => <I.slack size={s} />,
+  user:        (s) => <I.user size={s} />,
+  'arrow-right':(s) => <I.arrowRight size={s} />,
+  calendar:    (s) => <I.calendar size={s} />,
+};
+
+function parseActivityMeta(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function formatMeta(meta, icon) {
+  if (!meta) return null;
+  if (typeof meta === 'string') return meta;
+  // Status change: { from, to }
+  if (meta.from && meta.to) return `${meta.from} → ${meta.to}`;
+  // Slack source
+  if (meta.source === 'slack_slash_command')
+    return `via Slack${meta.slack_user ? ` (@${meta.slack_user})` : ''}`;
+  // Blocker reason
+  if (meta.reason) return meta.reason;
+  return null;
+}
+
+export function ActivityTimeline({ items, onOpenTask }) {
   const { data } = useWorkspace();
+
   return (
-    <div className="col gap-3">
-      {items.map((a) => {
-        const u = data.members.find((m) => m.id === a.user);
-        const iconMap = {
-          check: <I.check size={12} />,
-          message: <I.message size={12} />,
-          paperclip: <I.paperclip size={12} />,
-          block: <I.block size={12} />,
-          plus: <I.plus size={12} />,
-          slack: <I.slack size={12} />,
-          user: <I.user size={12} />,
-          'arrow-right': <I.arrowRight size={12} />,
-          calendar: <I.calendar size={12} />,
-        };
+    <div className="col gap-0">
+      {items.map((a, idx) => {
+        const member  = a.user ? data.members.find((m) => m.id === a.user) : null;
+        const isSlack = !a.user;
+        const meta    = parseActivityMeta(a.meta);
+
+        // Resolve actor display name
+        const actorName = isSlack
+          ? `Slack${meta?.slack_user ? ` (@${meta.slack_user})` : ''}`
+          : (member?.name ?? a.user.slice(0, 8) + '…');
+
+        // Resolve target name (task title or project name)
+        const task    = data.tasks.find((t) => t.id === a.target);
+        const project = data.projects.find((p) => p.id === a.target);
+        const targetName = task?.title ?? project?.name ?? meta?.title ?? meta?.name ?? null;
+        const isTask  = !!task;
+        const canClick = isTask && !!onOpenTask;
+
+        const metaLine = formatMeta(meta, a.icon);
+
+        const iconEl = ACTIVITY_ICON_MAP[a.icon]?.(11) ?? <I.activity size={11} />;
+        const iconColor =
+          a.icon === 'check'       ? 'var(--success)' :
+          a.icon === 'block'       ? 'var(--danger)'  :
+          a.icon === 'arrow-right' ? 'var(--info)'    :
+          a.icon === 'message'     ? 'var(--brand)'   :
+          'var(--text-3)';
+
         return (
-          <div key={a.id} className="row gap-3 items-start">
-            <div style={{ width: 22, height: 22, borderRadius: 999, background: 'var(--bg-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', flexShrink: 0 }}>
-              {iconMap[a.icon]}
+          <div
+            key={a.id}
+            className="row gap-3 items-start"
+            style={{
+              padding: '10px 0',
+              borderBottom: idx < items.length - 1 ? '1px solid var(--border-soft)' : 'none',
+            }}
+          >
+            {/* Icon dot */}
+            <div style={{
+              width: 24, height: 24, borderRadius: 999,
+              background: 'var(--bg-sunk)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: iconColor, flexShrink: 0, marginTop: 1,
+            }}>
+              {iconEl}
             </div>
-            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 600 }}>{u?.name || a.user}</span>{' '}
-              <span style={{ color: 'var(--text-2)' }}>{a.verb}</span>{' '}
-              <span style={{ fontWeight: 500 }}>{a.target}</span>
-              {a.meta && <span style={{ color: 'var(--text-3)' }}> — {a.meta}</span>}
-              <div className="meta mt-1">{timeAgo(a.time)}</div>
+
+            {/* Text */}
+            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5, minWidth: 0 }}>
+              <span>
+                <span style={{ fontWeight: 600 }}>{actorName}</span>
+                {' '}
+                <span style={{ color: 'var(--text-2)' }}>{a.verb}</span>
+                {targetName && (
+                  <>
+                    {' '}
+                    <span
+                      style={{
+                        fontWeight: 500,
+                        cursor: canClick ? 'pointer' : 'default',
+                        color: canClick ? 'var(--brand)' : 'inherit',
+                        textDecoration: canClick ? 'underline' : 'none',
+                      }}
+                      onClick={canClick ? () => onOpenTask(task.id, task.projectId) : undefined}
+                    >
+                      „{targetName}"
+                    </span>
+                  </>
+                )}
+              </span>
+              {metaLine && (
+                <span style={{ color: 'var(--text-3)', fontSize: 12 }}> — {metaLine}</span>
+              )}
+              <div className="meta" style={{ marginTop: 2 }}>{timeAgo(a.time)}</div>
             </div>
           </div>
         );
