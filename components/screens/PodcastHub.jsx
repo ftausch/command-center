@@ -16,7 +16,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { generateMarketingPackage } from '@/lib/actions/podcast';
-import { createEpisode } from '@/lib/actions/episodes';
+import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
 
 // EPISODES is now loaded from Supabase via WorkspaceProvider.
 
@@ -147,7 +147,7 @@ export function PodcastHubScreen() {
       </div>
 
       {tab === 'overview'     && <OverviewTab episodes={episodes} />}
-      {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} />}
+      {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} setTab={setTab} />}
       {tab === 'analytics'    && <AnalyticsTab />}
       {tab === 'transcripts'  && <TranskriptKITab episodes={episodes} />}
       {tab === 'distribution' && <DistributionTab />}
@@ -244,10 +244,51 @@ function OverviewTab({ episodes }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
-function EpisodenTab({ episodes, workspaceId, addEpisode }) {
+function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
+  const { updateEpisodeInCache } = useWorkspace();
   const [search, setSearch] = useState('');
   const [expandedEp, setExpandedEp] = useState(null);
+  const [editingEp, setEditingEp] = useState(null); // episode id being edited
+  const [editFields, setEditFields] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
   const [showNew, setShowNew] = useState(false);
+
+  const startEdit = (ep) => {
+    setEditingEp(ep.id);
+    setEditFields({ title: ep.title, guest: ep.guest ?? '', date: ep.date ?? '', duration: ep.duration === '—' ? '' : (ep.duration ?? ''), status: ep.status, num: ep.num ?? '' });
+    setEditError(null);
+  };
+
+  const cancelEdit = () => { setEditingEp(null); setEditFields({}); setEditError(null); };
+
+  const saveEdit = async (ep) => {
+    if (!editFields.title?.trim()) return;
+    setEditSaving(true); setEditError(null);
+    const r = await updateEpisode({
+      episodeId: ep.id,
+      workspaceId,
+      patch: {
+        title: editFields.title.trim(),
+        guest: editFields.guest.trim() || undefined,
+        date: editFields.date || undefined,
+        duration: editFields.duration.trim() || undefined,
+        status: editFields.status,
+        num: editFields.num ? parseInt(editFields.num, 10) : null,
+      },
+    });
+    setEditSaving(false);
+    if (!r.ok) { setEditError(r.error); return; }
+    updateEpisodeInCache(ep.id, {
+      title: editFields.title.trim(),
+      guest: editFields.guest.trim(),
+      date: editFields.date,
+      duration: editFields.duration.trim() || '—',
+      status: editFields.status,
+      num: editFields.num ? parseInt(editFields.num, 10) : null,
+    });
+    cancelEdit();
+  };
   const [newTitle, setNewTitle] = useState('');
   const [newGuest, setNewGuest] = useState('');
   const [newNum, setNewNum] = useState('');
@@ -379,26 +420,69 @@ function EpisodenTab({ episodes, workspaceId, addEpisode }) {
                   <tr>
                     <td colSpan={9} style={{ padding: 0 }}>
                       <div style={{ padding: '16px 20px', background: 'var(--bg)', borderBottom: '1px solid var(--border-soft)' }}>
-                        <div className="grid gap-4" style={{ gridTemplateColumns: ep.hasVideo ? '1fr 1.4fr' : '1fr' }}>
+                        {editingEp === ep.id ? (
+                          /* ── Inline edit form ── */
                           <div className="col gap-3">
-                            <div className="label">Episode-Details</div>
-                            <div className="grid grid-2 gap-2" style={{ fontSize: 12.5 }}>
-                              <div><span style={{ color: 'var(--text-3)' }}>MCP ID: </span><code style={{ fontSize: 11 }}>{ep.id}</code></div>
-                              <div><span style={{ color: 'var(--text-3)' }}>Downloads: </span><strong>{ep.downloads.toLocaleString('de')}</strong></div>
+                            <div className="label">Episode bearbeiten</div>
+                            <div className="grid grid-2 gap-3">
+                              <div className="col gap-1">
+                                <label className="label">Titel *</label>
+                                <input className="input" value={editFields.title ?? ''} onChange={(e) => setEditFields((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                              </div>
+                              <div className="col gap-1">
+                                <label className="label">Gast</label>
+                                <input className="input" value={editFields.guest ?? ''} onChange={(e) => setEditFields((f) => ({ ...f, guest: e.target.value }))} />
+                              </div>
+                              <div className="col gap-1">
+                                <label className="label">Episoden-Nr.</label>
+                                <input className="input" type="number" value={editFields.num ?? ''} onChange={(e) => setEditFields((f) => ({ ...f, num: e.target.value }))} min="1" />
+                              </div>
+                              <div className="col gap-1">
+                                <label className="label">Datum</label>
+                                <input className="input" type="date" value={editFields.date ?? ''} onChange={(e) => setEditFields((f) => ({ ...f, date: e.target.value }))} />
+                              </div>
+                              <div className="col gap-1">
+                                <label className="label">Dauer</label>
+                                <input className="input" placeholder="z.B. 58:24" value={editFields.duration ?? ''} onChange={(e) => setEditFields((f) => ({ ...f, duration: e.target.value }))} />
+                              </div>
+                              <div className="col gap-1">
+                                <label className="label">Status</label>
+                                <select className="input" value={editFields.status ?? 'draft'} onChange={(e) => setEditFields((f) => ({ ...f, status: e.target.value }))}>
+                                  <option value="draft">Entwurf</option>
+                                  <option value="scheduled">Geplant</option>
+                                  <option value="published">Veröffentlicht</option>
+                                </select>
+                              </div>
                             </div>
+                            {editError && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{editError}</div>}
                             <div className="row gap-2">
-                              <button className="btn btn-quiet btn-sm" disabled><I.doc size={12} /> Transkript</button>
-                              <button className="btn btn-quiet btn-sm" disabled><I.trend size={12} /> Analytics</button>
-                              <button className="btn btn-quiet btn-sm" disabled><I.more size={12} /> Bearbeiten</button>
+                              <button className="btn btn-brand btn-sm" onClick={() => saveEdit(ep)} disabled={editSaving || !editFields.title?.trim()}>{editSaving ? 'Speichern…' : 'Speichern'}</button>
+                              <button className="btn btn-ghost btn-sm" onClick={cancelEdit} disabled={editSaving}>Abbrechen</button>
                             </div>
                           </div>
-                          {ep.hasVideo && (
-                            <div>
-                              <div className="label mb-2">Video-Container <Badge kind="ghost" style={{ fontSize: 10 }}>Juli 2026</Badge></div>
-                              <VideoPlayerContainer ep={ep} />
+                        ) : (
+                          /* ── Detail view ── */
+                          <div className="grid gap-4" style={{ gridTemplateColumns: ep.hasVideo ? '1fr 1.4fr' : '1fr' }}>
+                            <div className="col gap-3">
+                              <div className="label">Episode-Details</div>
+                              <div className="grid grid-2 gap-2" style={{ fontSize: 12.5 }}>
+                                <div><span style={{ color: 'var(--text-3)' }}>MCP ID: </span><code style={{ fontSize: 11 }}>{ep.id}</code></div>
+                                <div><span style={{ color: 'var(--text-3)' }}>Downloads: </span><strong>{ep.downloads.toLocaleString('de')}</strong></div>
+                              </div>
+                              <div className="row gap-2">
+                                <button className="btn btn-quiet btn-sm" onClick={() => setTab('transcripts')}><I.doc size={12} /> Transkript</button>
+                                <button className="btn btn-quiet btn-sm" onClick={() => setTab('analytics')}><I.trend size={12} /> Analytics</button>
+                                <button className="btn btn-quiet btn-sm" onClick={(e) => { e.stopPropagation(); startEdit(ep); }}><I.more size={12} /> Bearbeiten</button>
+                              </div>
                             </div>
-                          )}
-                        </div>
+                            {ep.hasVideo && (
+                              <div>
+                                <div className="label mb-2">Video-Container <Badge kind="ghost" style={{ fontSize: 10 }}>Juli 2026</Badge></div>
+                                <VideoPlayerContainer ep={ep} />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
