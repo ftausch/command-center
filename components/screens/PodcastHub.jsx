@@ -17,6 +17,7 @@ import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { generateMarketingPackage } from '@/lib/actions/podcast';
 import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
+import { createTask } from '@/lib/actions/tasks';
 
 // EPISODES is now loaded from Supabase via WorkspaceProvider.
 
@@ -241,11 +242,21 @@ function OverviewTab({ episodes }) {
   );
 }
 
+// Standard production tasks created for every new episode when
+// "Workflow-Tasks anlegen" is checked.
+const EPISODE_WORKFLOW = [
+  { title: 'Aufnahme',               priority: 'High'   },
+  { title: 'Schnitt',                priority: 'High'   },
+  { title: 'Thumbnail erstellen',    priority: 'Medium' },
+  { title: 'Show Notes schreiben',   priority: 'Medium' },
+  { title: 'Distribution',           priority: 'Low'    },
+];
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
 function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
-  const { updateEpisodeInCache, data } = useWorkspace();
+  const { updateEpisodeInCache, data, addTask } = useWorkspace();
   const [search, setSearch] = useState('');
   const [expandedEp, setExpandedEp] = useState(null);
   const [editingEp, setEditingEp] = useState(null); // episode id being edited
@@ -294,8 +305,10 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
   const [newNum, setNewNum] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newStatus, setNewStatus] = useState('draft');
+  const [withWorkflow, setWithWorkflow] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [workflowCreated, setWorkflowCreated] = useState(null); // count of created tasks
 
   const filtered = episodes.filter((e) =>
     e.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -305,8 +318,9 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
   const submitNew = async (evt) => {
     evt.preventDefault();
     if (!newTitle.trim()) return;
-    setSaving(true); setSaveError(null);
-    const r = await createEpisode({
+    setSaving(true); setSaveError(null); setWorkflowCreated(null);
+
+    const epR = await createEpisode({
       workspaceId,
       title: newTitle.trim(),
       episodeNumber: newNum ? parseInt(newNum, 10) : null,
@@ -314,11 +328,36 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
       publishDate: newDate || undefined,
       status: newStatus,
     });
+    if (!epR.ok) { setSaving(false); setSaveError(epR.error); return; }
+    const newEpisode = epR.data;
+    if (newEpisode) addEpisode(newEpisode);
+
+    // Create standard workflow tasks linked to this episode
+    if (withWorkflow && newEpisode) {
+      const projectId = data.projects.find((p) => p.status !== 'Done')?.id;
+      if (projectId) {
+        const epLabel = newNum ? `Ep. ${newNum} — ` : '';
+        const results = await Promise.all(
+          EPISODE_WORKFLOW.map((t) =>
+            createTask({
+              workspaceId,
+              projectId,
+              title: `${epLabel}${t.title}`,
+              priority: t.priority,
+              episodeId: newEpisode.id,
+            }),
+          ),
+        );
+        const created = results.filter((r) => r.ok && r.data);
+        created.forEach((r) => addTask(r.data));
+        setWorkflowCreated(created.length);
+      }
+    }
+
     setSaving(false);
-    if (!r.ok) { setSaveError(r.error); return; }
-    if (r.data) addEpisode(r.data);
     setShowNew(false);
-    setNewTitle(''); setNewGuest(''); setNewNum(''); setNewDate(''); setNewStatus('draft');
+    setNewTitle(''); setNewGuest(''); setNewNum(''); setNewDate('');
+    setNewStatus('draft'); setWithWorkflow(true);
   };
 
   return (
@@ -360,12 +399,37 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
               </select>
             </div>
           </div>
+          {/* Workflow toggle */}
+          <label className="row gap-2 items-center" style={{ cursor: 'pointer', padding: '8px 10px', background: withWorkflow ? 'var(--brand-soft)' : 'var(--bg-sunk)', borderRadius: 6, border: `1px solid ${withWorkflow ? 'var(--brand)' : 'var(--border)'}`, transition: 'all 0.15s' }}>
+            <input type="checkbox" checked={withWorkflow} onChange={(e) => setWithWorkflow(e.target.checked)} disabled={saving} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Workflow-Tasks anlegen</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                {EPISODE_WORKFLOW.map((t) => t.title).join(' · ')}
+              </div>
+            </div>
+          </label>
+
+          {!data.projects.find(p => p.status !== 'Done') && withWorkflow && (
+            <div style={{ fontSize: 12, color: 'var(--warning)' }}>
+              ⚠️ Kein aktives Projekt gefunden — Tasks können nicht angelegt werden.
+            </div>
+          )}
+
           {saveError && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{saveError}</div>}
           <div className="row gap-2">
-            <button type="submit" className="btn btn-brand btn-sm" disabled={saving || !newTitle.trim()}>{saving ? 'Speichern…' : 'Episode anlegen'}</button>
+            <button type="submit" className="btn btn-brand btn-sm" disabled={saving || !newTitle.trim()}>
+              {saving ? 'Wird angelegt…' : 'Episode anlegen'}
+            </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNew(false)} disabled={saving}>Abbrechen</button>
           </div>
         </form>
+      )}
+
+      {workflowCreated !== null && (
+        <div style={{ padding: '10px 14px', background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, fontSize: 13, color: 'var(--success)' }}>
+          ✅ Episode angelegt + {workflowCreated} Workflow-Tasks erstellt und mit der Episode verknüpft.
+        </div>
       )}
 
       {episodes.length === 0 && !showNew && (
