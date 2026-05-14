@@ -107,12 +107,22 @@ export function rowToProject(row: any, workspaceSlug: string): ProjectView {
   };
 }
 
+const ACTIVITY_VERB: Record<string, string> = {
+  task_created:       'hat Task angelegt',
+  task_completed:     'hat Task abgeschlossen',
+  task_blocked:       'hat Task blockiert',
+  task_assigned:      'hat Task zugewiesen',
+  task_status_changed:'hat Status geändert',
+  comment_added:      'hat kommentiert',
+  project_created:    'hat Projekt angelegt',
+};
+
 export function rowToActivity(row: any, workspaceSlug: string): ActivityView {
   return {
     id: row.id,
     workspace: workspaceSlug,
     user: row.actor_id ?? '',
-    verb: (row.kind as string).replaceAll('_', ' '),
+    verb: ACTIVITY_VERB[row.kind as string] ?? (row.kind as string).replaceAll('_', ' '),
     target: row.target_id,
     meta: row.meta ? JSON.stringify(row.meta) : '',
     time: row.created_at,

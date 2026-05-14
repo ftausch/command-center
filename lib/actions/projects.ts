@@ -83,7 +83,7 @@ export async function createProject(input: {
       activity: synthActivity({
         workspaceId: input.workspaceId,
         user: userId,
-        verb: 'created Project',
+        verb: 'hat Projekt angelegt',
         target: project.id,
         meta: name,
         icon: 'plus',
@@ -151,7 +151,7 @@ export async function createProject(input: {
     activity: synthActivity({
       workspaceId: input.workspaceId,
       user: userId,
-      verb: 'created Project',
+      verb: 'hat Projekt angelegt',
       target: project.id,
       meta: name,
       icon: 'plus',

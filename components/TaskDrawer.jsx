@@ -397,6 +397,20 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
             </select>
             {assignee && <Avatar user={assignee} />}
           </DetailRow>
+          <DetailRow label="Wartet auf">
+            <select
+              className="input"
+              value={task.waitingOn || ''}
+              onChange={(e) => saveField('waitingOn', e.target.value)}
+              disabled={fieldPending === 'waitingOn'}
+              style={{ height: 28, fontSize: 12.5, flex: 1 }}
+            >
+              <option value="">— Niemand —</option>
+              {data.members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </DetailRow>
         </div>
 
         {/* ── Description ── */}
