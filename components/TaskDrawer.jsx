@@ -18,6 +18,7 @@ import {
   markTaskDone,
   updateTask,
 } from '@/lib/actions/tasks';
+import { CAN } from '@/lib/roles';
 import { addTaskComment, listTaskComments } from '@/lib/actions/comments';
 import {
   addChecklistItem,
@@ -33,6 +34,7 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     currentWorkspaceId: workspaceId,
     data,
     me,
+    myRole,
     updateTaskInCache,
     removeTask,
     addTaskComment: addTaskCommentToCache,
@@ -613,23 +615,25 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
           </div>
         </div>
 
-        {/* ── Delete ── */}
-        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
-          {confirmDelete ? (
-            <div className="row gap-2">
-              <button type="button" className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={onDelete} disabled={deletePending}>
-                {deletePending ? 'Wird gelöscht…' : 'Ja, löschen'}
+        {/* ── Delete (manager+) ── */}
+        {CAN.deleteTask(myRole) && (
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
+            {confirmDelete ? (
+              <div className="row gap-2">
+                <button type="button" className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={onDelete} disabled={deletePending}>
+                  {deletePending ? 'Wird gelöscht…' : 'Ja, löschen'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)} disabled={deletePending}>
+                  Abbrechen
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }} onClick={onDelete}>
+                <I.x size={11} /> Task löschen
               </button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)} disabled={deletePending}>
-                Abbrechen
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }} onClick={onDelete}>
-              <I.x size={11} /> Task löschen
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
 import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
 import { updateProject, deleteProject } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
+import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
 
@@ -18,7 +19,7 @@ const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data, updateProjectInCache, updateTaskInCache, removeProject, removeTask, currentWorkspaceId } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, currentWorkspaceId } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -335,14 +336,14 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                     <option value="">Priority setzen…</option>
                     {['High','Medium','Low'].map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
-                  {confirmBulkDelete ? (
+                  {CAN.bulkDeleteTasks(myRole) && (confirmBulkDelete ? (
                     <div className="row gap-2">
                       <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={applyBulkDelete} disabled={bulkPending}>{bulkPending ? '…' : 'Ja, löschen'}</button>
                       <button className="btn btn-ghost btn-sm" onClick={() => setConfirmBulkDelete(false)} disabled={bulkPending}>Abbrechen</button>
                     </div>
                   ) : (
                     <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={applyBulkDelete} disabled={bulkPending}><I.x size={12} /> Löschen</button>
-                  )}
+                  ))}
                   <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setConfirmBulkDelete(false); setBulkError(null); }} disabled={bulkPending}><I.x size={12} /></button>
                   {bulkError && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{bulkError}</span>}
                 </div>
@@ -513,23 +514,25 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 {fieldError}
               </div>
             )}
-            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12, marginTop: 8 }}>
-              {confirmDelete ? (
-                <div className="col gap-2">
-                  <p style={{ fontSize: 12.5, color: 'var(--danger)' }}>Alle Tasks werden ebenfalls gelöscht. Wirklich löschen?</p>
-                  <div className="row gap-2">
-                    <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={onDelete} disabled={deletePending}>
-                      {deletePending ? 'Wird gelöscht…' : 'Ja, löschen'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)} disabled={deletePending}>Abbrechen</button>
+            {CAN.deleteProject(myRole) && (
+              <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12, marginTop: 8 }}>
+                {confirmDelete ? (
+                  <div className="col gap-2">
+                    <p style={{ fontSize: 12.5, color: 'var(--danger)' }}>Alle Tasks werden ebenfalls gelöscht. Wirklich löschen?</p>
+                    <div className="row gap-2">
+                      <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }} onClick={onDelete} disabled={deletePending}>
+                        {deletePending ? 'Wird gelöscht…' : 'Ja, löschen'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)} disabled={deletePending}>Abbrechen</button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }} onClick={onDelete}>
-                  <I.x size={11} /> Projekt löschen
-                </button>
-              )}
-            </div>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }} onClick={onDelete}>
+                    <I.x size={11} /> Projekt löschen
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card card-pad">

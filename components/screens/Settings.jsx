@@ -12,9 +12,10 @@ import { MemberManageModal } from '@/components/MemberManageModal';
 import { timeAgo } from '@/lib/utils';
 import { updateWorkspace } from '@/lib/actions/workspaces';
 import { updateProject } from '@/lib/actions/projects';
+import { CAN } from '@/lib/roles';
 
 export function SettingsScreen() {
-  const { currentWorkspaceId: workspace, currentWorkspace: brand } = useWorkspace();
+  const { currentWorkspaceId: workspace, currentWorkspace: brand, myRole } = useWorkspace();
   const [section, setSection] = useState('slack');
 
   const sections = [
@@ -50,10 +51,10 @@ export function SettingsScreen() {
 
         <div>
           {section === 'slack' && <SlackSection />}
-          {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} />}
-          {section === 'members' && <MembersSection />}
+          {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
+          {section === 'members' && <MembersSection myRole={myRole} />}
           {section === 'notifs' && <NotifsSection />}
-          {section === 'brand' && <BrandSection brand={brand} workspace={workspace} />}
+          {section === 'brand' && <BrandSection brand={brand} workspace={workspace} myRole={myRole} />}
         </div>
       </div>
     </div>
@@ -219,8 +220,9 @@ function SlackSection() {
   );
 }
 
-function WorkspaceSection({ brand, workspace }) {
+function WorkspaceSection({ brand, workspace, myRole }) {
   const { updateWorkspaceInCache } = useWorkspace();
+  const canEdit = CAN.workspaceSettings(myRole);
   const [name, setName] = useState(brand.name);
   const [tagline, setTagline] = useState(brand.tagline);
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
@@ -281,27 +283,23 @@ function WorkspaceSection({ brand, workspace }) {
       {status === 'saved' && (
         <div style={{ fontSize: 12.5, color: 'var(--success)', marginBottom: 8 }}>Gespeichert.</div>
       )}
-      <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
-        <button
-          className="btn btn-brand btn-sm"
-          onClick={save}
-          disabled={!dirty || status === 'saving'}
-        >
-          {status === 'saving' ? 'Wird gespeichert…' : 'Änderungen speichern'}
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={discard}
-          disabled={!dirty || status === 'saving'}
-        >
-          Verwerfen
-        </button>
-      </div>
+      {canEdit ? (
+        <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
+          <button className="btn btn-brand btn-sm" onClick={save} disabled={!dirty || status === 'saving'}>
+            {status === 'saving' ? 'Wird gespeichert…' : 'Änderungen speichern'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={discard} disabled={!dirty || status === 'saving'}>
+            Verwerfen
+          </button>
+        </div>
+      ) : (
+        <p className="meta" style={{ marginTop: 12 }}>Nur Admins und Owner können Workspace-Einstellungen ändern.</p>
+      )}
     </div>
   );
 }
 
-function MembersSection() {
+function MembersSection({ myRole }) {
   const { data, workspaces } = useWorkspace();
   const users = data.members;
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -319,7 +317,9 @@ function MembersSection() {
           <div className="h3">Mitglieder · {users.length}</div>
           <div className="meta mt-1">Rollen: Owner · Admin · Manager · Member · Viewer</div>
         </div>
-        <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Einladen</button>
+        {CAN.inviteMember(myRole) && (
+          <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Einladen</button>
+        )}
       </div>
       <table className="table">
         <thead><tr><th>Person</th><th>Rolle</th><th>Workspaces</th><th>Status</th><th></th></tr></thead>
@@ -405,8 +405,9 @@ function NotifsSection() {
   );
 }
 
-function BrandSection({ brand, workspace }) {
+function BrandSection({ brand, workspace, myRole }) {
   const { updateWorkspaceInCache } = useWorkspace();
+  const canEdit = CAN.workspaceSettings(myRole);
   const [color, setColor] = useState(brand.color);
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState(null);
@@ -468,22 +469,18 @@ function BrandSection({ brand, workspace }) {
       {status === 'saved' && (
         <div style={{ fontSize: 12.5, color: 'var(--success)', marginBottom: 8 }}>Gespeichert.</div>
       )}
-      <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
-        <button
-          className="btn btn-brand btn-sm"
-          onClick={save}
-          disabled={!dirty || status === 'saving'}
-        >
-          {status === 'saving' ? 'Wird gespeichert…' : 'Farbe speichern'}
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => { setColor(brand.color); setStatus('idle'); setErrorMsg(null); }}
-          disabled={!dirty || status === 'saving'}
-        >
-          Verwerfen
-        </button>
-      </div>
+      {canEdit ? (
+        <div className="row gap-2 mt-3" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
+          <button className="btn btn-brand btn-sm" onClick={save} disabled={!dirty || status === 'saving'}>
+            {status === 'saving' ? 'Wird gespeichert…' : 'Farbe speichern'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setColor(brand.color); setStatus('idle'); setErrorMsg(null); }} disabled={!dirty || status === 'saving'}>
+            Verwerfen
+          </button>
+        </div>
+      ) : (
+        <p className="meta" style={{ marginTop: 12 }}>Nur Admins und Owner können Brand-Einstellungen ändern.</p>
+      )}
       <div className="meta" style={{ background: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, marginTop: 16 }}>
         💡 <strong style={{ color: 'var(--text-2)' }}>Designregel:</strong> Brand-Farben sind absichtlich gedeckt. Status (rot/gelb/grün) muss immer stärker stechen als die Brand-Farbe — sonst sieht der Nutzer Brand-Akzente an, wo er Warnungen sehen sollte.
       </div>

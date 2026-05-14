@@ -33,6 +33,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { db } from '@/lib/db';
 import { rowToTask, rowToProject, rowToActivity } from '@/lib/db/supabase';
 import { D } from '@/lib/data';
+import { isAtLeast } from '@/lib/roles';
 
 const EMPTY_DATA = {
   projects: [],
@@ -62,6 +63,7 @@ const WorkspaceContext = createContext({
   refresh: async () => {},
   me: null,
   mode: 'mock',
+  myRole: 'owner', // default so mock mode has full access
   // Mutation helpers — call from action callers to merge results into the
   // in-memory cache. Each is a no-op in the default context value.
   addTask: noop,
@@ -379,6 +381,16 @@ export function WorkspaceProvider({ children }) {
     [workspaces, currentWorkspaceId],
   );
 
+  // Derive the current user's role in this workspace from the members list.
+  // Falls back to 'owner' in mock mode (no Supabase) so all actions remain
+  // accessible during local development.
+  const myRole = useMemo(() => {
+    if (!isSupabaseConfigured()) return 'owner';
+    if (!me) return 'viewer';
+    const found = data.members.find((m) => m.id === me.id);
+    return found?.role?.toLowerCase() ?? 'viewer';
+  }, [me, data.members]);
+
   const value = useMemo(
     () => ({
       workspaces,
@@ -391,6 +403,7 @@ export function WorkspaceProvider({ children }) {
       refresh,
       me,
       mode,
+      myRole,
       addTask,
       updateTaskInCache,
       removeTask,
@@ -415,6 +428,7 @@ export function WorkspaceProvider({ children }) {
       refresh,
       me,
       mode,
+      myRole,
       addTask,
       updateTaskInCache,
       removeTask,
