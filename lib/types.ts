@@ -183,6 +183,7 @@ export interface TaskView {
   status: TaskStatus;
   priority: TaskPriority;
   due: string;
+  description?: string;
   tags?: string[];
   waitingOn?: string;
   blocker?: string;
