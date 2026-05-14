@@ -11,7 +11,12 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   const { currentWorkspace: brand, data } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
-  if (!brand) return <aside className="sidebar" />;
+  if (!brand) return (
+    <>
+      {mobileOpen && <div className="sidebar-backdrop" onClick={onMobileClose} />}
+      <aside className={`sidebar${mobileOpen ? ' mobile-open' : ''}`} />
+    </>
+  );
 
   const closeAndNav = (id) => { setRoute(id); onMobileClose?.(); };
 
