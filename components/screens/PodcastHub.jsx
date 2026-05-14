@@ -245,7 +245,7 @@ function OverviewTab({ episodes }) {
 // Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
 function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
-  const { updateEpisodeInCache } = useWorkspace();
+  const { updateEpisodeInCache, data } = useWorkspace();
   const [search, setSearch] = useState('');
   const [expandedEp, setExpandedEp] = useState(null);
   const [editingEp, setEditingEp] = useState(null); // episode id being edited
@@ -474,6 +474,36 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
                                 <button className="btn btn-quiet btn-sm" onClick={() => setTab('analytics')}><I.trend size={12} /> Analytics</button>
                                 <button className="btn btn-quiet btn-sm" onClick={(e) => { e.stopPropagation(); startEdit(ep); }}><I.more size={12} /> Bearbeiten</button>
                               </div>
+
+                              {/* Linked tasks */}
+                              {(() => {
+                                const linked = (data.tasks ?? []).filter(t => t.episodeId === ep.id);
+                                return (
+                                  <div>
+                                    <div className="label mb-2" style={{ fontSize: 11 }}>
+                                      Verknüpfte Tasks <span className="mono" style={{ color: 'var(--text-3)' }}>{linked.length}</span>
+                                    </div>
+                                    {linked.length === 0 ? (
+                                      <div style={{ fontSize: 12, color: 'var(--text-4)' }}>
+                                        Keine Tasks verknüpft. Im TaskDrawer Episode zuweisen.
+                                      </div>
+                                    ) : (
+                                      <div className="col gap-1">
+                                        {linked.map(t => (
+                                          <div key={t.id} className="row gap-2" style={{ fontSize: 12.5, padding: '4px 0' }}>
+                                            <span className="dot-indicator" style={{
+                                              background: t.status === 'Done' ? 'var(--success)' : t.status === 'Blocked' ? 'var(--danger)' : t.status === 'Review' ? 'var(--warning)' : 'var(--text-3)',
+                                              flexShrink: 0,
+                                            }} />
+                                            <span style={{ flex: 1, color: t.status === 'Done' ? 'var(--text-3)' : 'var(--text-1)', textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.title}</span>
+                                            <span className="meta" style={{ fontSize: 11 }}>{t.status}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {ep.hasVideo && (
                               <div>

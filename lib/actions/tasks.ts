@@ -67,6 +67,7 @@ export async function createTask(input: {
   due?: string;
   priority?: TaskPriority;
   tags?: string[];
+  episodeId?: string;
 }): Promise<ActionResult<TaskView>> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: 'Title is required' };
@@ -116,6 +117,7 @@ export async function createTask(input: {
       due_date: input.due || null,
       priority: input.priority ?? 'Medium',
       tags: input.tags ?? [],
+      episode_id: input.episodeId || null,
     })
     .select()
     .single();
@@ -165,7 +167,7 @@ export async function updateTask(input: {
   taskId: string;
   workspaceId: string;
   patch: Partial<
-    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'description' | 'tags' | 'blocker' | 'waitingOn'>
+    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'description' | 'tags' | 'blocker' | 'waitingOn' | 'episodeId'>
   >;
 }): Promise<ActionResult<Partial<TaskView> & { id: string }>> {
   const supabase = createClient();
@@ -188,6 +190,7 @@ export async function updateTask(input: {
   if (input.patch.tags !== undefined) row.tags = input.patch.tags;
   if (input.patch.blocker !== undefined) row.blocker = input.patch.blocker || null;
   if (input.patch.waitingOn !== undefined) row.waiting_on_id = input.patch.waitingOn || null;
+  if (input.patch.episodeId !== undefined) row.episode_id = input.patch.episodeId || null;
 
   const { error } = await supabase
     .from('tasks')
