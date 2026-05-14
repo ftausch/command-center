@@ -6,6 +6,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { ActivityTimeline } from '@/components/screens/ProjectDetail';
+import { TaskDrawer } from '@/components/TaskDrawer';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -58,6 +59,7 @@ export function ActivityScreen() {
   const items = data.activity;
   const stats = useRecentStats(items);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [drawerTask, setDrawerTask] = useState(null);
 
   const filtered = useMemo(() => {
     const f = FILTERS.find((f) => f.id === activeFilter);
@@ -66,6 +68,11 @@ export function ActivityScreen() {
 
   return (
     <div className="page fade-in">
+      <TaskDrawer
+        taskId={drawerTask?.taskId ?? null}
+        projectId={drawerTask?.projectId ?? null}
+        onClose={() => setDrawerTask(null)}
+      />
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
@@ -96,7 +103,10 @@ export function ActivityScreen() {
           {filtered.length === 0 ? (
             <p className="meta" style={{ textAlign: 'center', padding: '32px 0' }}>Keine Einträge für diesen Filter.</p>
           ) : (
-            <ActivityTimeline items={filtered} />
+            <ActivityTimeline
+              items={filtered}
+              onOpenTask={(taskId, projectId) => setDrawerTask({ taskId, projectId })}
+            />
           )}
         </div>
 
