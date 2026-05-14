@@ -36,7 +36,8 @@ function useActivityUnread(workspaceId, route) {
 }
 
 export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
+  const canCreateTask = myRole === 'owner' || myRole === 'admin' || myRole === 'manager' || myRole === 'member';
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const unreadActivity = useActivityUnread(currentWorkspaceId, route);
 
@@ -84,13 +85,15 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         <span className="caret"><I.caret size={14} /></span>
       </button>
 
-      {/* Quick add */}
-      <div style={{ padding: '0 12px 8px' }}>
-        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setNewTaskOpen(true)}>
-          <span className="row gap-2"><I.plus size={14} /> New Task</span>
-          <span style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>N</Kbd></span>
-        </button>
-      </div>
+      {/* Quick add — member+ only */}
+      {canCreateTask && (
+        <div style={{ padding: '0 12px 8px' }}>
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setNewTaskOpen(true)}>
+            <span className="row gap-2"><I.plus size={14} /> New Task</span>
+            <span style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>N</Kbd></span>
+          </button>
+        </div>
+      )}
       <NewTaskModal
         open={newTaskOpen}
         onClose={() => setNewTaskOpen(false)}
@@ -184,7 +187,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
 }
 
 export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   // Show a dot on the bell when there are unread activity entries.
@@ -257,9 +260,11 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
           }} />
         )}
       </button>
-      <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
-        <I.plus size={14} /> New
-      </button>
+      {(myRole !== 'viewer') && (
+        <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
+          <I.plus size={14} /> New
+        </button>
+      )}
     </div>
   );
 }

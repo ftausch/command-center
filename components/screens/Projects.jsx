@@ -7,9 +7,10 @@ import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
 import { dueLabel, projectProgress, statusColor } from '@/lib/utils';
 import { NewProjectModal } from '@/components/NewProjectModal';
+import { CAN } from '@/lib/roles';
 
 export function ProjectsScreen({ setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole } = useWorkspace();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -46,7 +47,9 @@ export function ProjectsScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <input className="input" placeholder="Projekt suchen…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220, height: 32 }} />
-          <button className="btn btn-brand btn-sm" onClick={() => setCreateOpen(true)}><I.plus size={13} /> New Project</button>
+          {CAN.createProject(myRole) && (
+            <button className="btn btn-brand btn-sm" onClick={() => setCreateOpen(true)}><I.plus size={13} /> New Project</button>
+          )}
         </div>
       </div>
 
