@@ -1,135 +1,274 @@
 'use client';
-// Podcast Hub — zentrale Steuerung für Podcast-Inhalte.
+// Podcast Hub v2 — vollständiges Upgrade der Podcast-Steuerung.
 //
-// 5 Tabs:
-//   Episoden   — Show + Episode Listing (bereit für MCP Podcast-Tools)
-//   Analytics  — IAB-konforme Statistiken (Downloads, Listeners, Geo)
-//   Transkripte— Episoden-Transkripte via MCP-Server
-//   Distribution — Plattform-Status (Apple RSS aktiv, Spotify in Prüfung)
-//   Migration  — RSS-URL-Import für Full Migration Support
-//
-// Daten: Platzhalter-Daten, die die echte MCP-Integration vorbereiten.
-// Alles mit [MCP] markierte wird durch den Podcast-MCP-Server befüllt.
+// 8 Tabs:
+//   Übersicht     — Unified Activity Feed + Top-KPIs
+//   Episoden      — Listing + Video-Player-Container (YouTube/Spotify Video, Juli)
+//   Analytics     — Geo · Listening-Apps · Device/OS · IAB-konform
+//   Transkript KI — Transkript laden + Claude Marketing-Paket generieren
+//   Distribution  — RSS Status · Spotify Legal Review Indikator
+//   Private Feeds — Gating · Unique Feed-URLs · Subscriber-Verwaltung
+//   Migration     — Durable Import Pipeline · Fortschrittsanzeige
+//   Studio        — Write Tools + Dynamic Pages (Platzhalter)
 
 import { useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
+import { generateMarketingPackage } from '@/lib/actions/podcast';
 
-// ── Mock-Episoden (werden durch MCP tool: list_episodes ersetzt) ──────────
-const MOCK_EPISODES = [
-  { id: 'ep-142', num: 142, title: 'Wie Fabian Tausch UnicornBakery aufgebaut hat', guest: 'Fabian Tausch', date: '2026-05-14', duration: '58:24', downloads: 4820, status: 'published' },
-  { id: 'ep-141', num: 141, title: 'Die Fundraising-Formel — Series A in 90 Tagen', guest: 'Anna Kirmße', date: '2026-05-07', duration: '51:12', downloads: 3940, status: 'published' },
-  { id: 'ep-140', num: 140, title: 'B2B SaaS Exit: Was Käufer wirklich wollen', guest: 'Marc Beckmann', date: '2026-04-30', duration: '62:08', downloads: 5210, status: 'published' },
-  { id: 'ep-143', num: 143, title: 'Cold Outbound im KI-Zeitalter', guest: 'Lisa Kirsch', date: '2026-05-21', duration: '—', downloads: 0, status: 'scheduled' },
-  { id: 'ep-draft', num: 144, title: 'Neue Episode — Titel ausstehend', guest: '—', date: '—', duration: '—', downloads: 0, status: 'draft' },
+// ── Shared data ───────────────────────────────────────────────────────────
+const EPISODES = [
+  { id: 'ep-142', num: 142, title: 'Wie Fabian Tausch UnicornBakery aufgebaut hat',  guest: 'Fabian Tausch',  date: '2026-05-14', duration: '58:24', downloads: 4820, status: 'published', hasVideo: true  },
+  { id: 'ep-141', num: 141, title: 'Die Fundraising-Formel — Series A in 90 Tagen', guest: 'Anna Kirmße',    date: '2026-05-07', duration: '51:12', downloads: 3940, status: 'published', hasVideo: false },
+  { id: 'ep-140', num: 140, title: 'B2B SaaS Exit: Was Käufer wirklich wollen',      guest: 'Marc Beckmann', date: '2026-04-30', duration: '62:08', downloads: 5210, status: 'published', hasVideo: true  },
+  { id: 'ep-143', num: 143, title: 'Cold Outbound im KI-Zeitalter',                  guest: 'Lisa Kirsch',   date: '2026-05-21', duration: '—',     downloads: 0,    status: 'scheduled', hasVideo: false },
+  { id: 'ep-144', num: 144, title: 'Neue Episode — Titel ausstehend',                guest: '—',             date: '—',          duration: '—',     downloads: 0,    status: 'draft',     hasVideo: false },
 ];
 
-// ── Mock Analytics (werden durch MCP tool: get_analytics ersetzt) ─────────
 const ANALYTICS = {
   totalDownloads: 284_620,
   uniqueListeners: 41_330,
   avgPerEpisode: 3_980,
-  growth30d: +12.4,
+  growth30d: 12.4,
   weeklyDownloads: [2840, 3120, 2980, 3450, 3820, 4100, 3760, 4200, 3940, 4820, 5010, 4650],
   geo: [
-    { flag: '🇩🇪', country: 'Deutschland', city: 'Berlin / München / Hamburg', downloads: 118_400, pct: 41.6 },
-    { flag: '🇦🇹', country: 'Österreich',  city: 'Wien / Graz',              downloads: 31_200,  pct: 11.0 },
-    { flag: '🇨🇭', country: 'Schweiz',     city: 'Zürich / Basel',           downloads: 28_900,  pct: 10.2 },
-    { flag: '🇺🇸', country: 'USA',         city: 'New York / SF / Austin',   downloads: 24_600,  pct: 8.6  },
-    { flag: '🇬🇧', country: 'Großbritannien', city: 'London',                downloads: 14_100,  pct: 5.0  },
-    { flag: '🌍', country: 'Weitere',      city: '—',                         downloads: 67_420,  pct: 23.7 },
+    { flag: '🇩🇪', country: 'Deutschland', city: 'Berlin, München, Hamburg',  dl: 118_400, pct: 41.6 },
+    { flag: '🇦🇹', country: 'Österreich',  city: 'Wien, Graz',               dl: 31_200,  pct: 11.0 },
+    { flag: '🇨🇭', country: 'Schweiz',     city: 'Zürich, Basel',            dl: 28_900,  pct: 10.2 },
+    { flag: '🇺🇸', country: 'USA',         city: 'New York, SF, Austin',     dl: 24_600,  pct: 8.6  },
+    { flag: '🇬🇧', country: 'Großbritannien', city: 'London',                dl: 14_100,  pct: 5.0  },
+    { flag: '🌍', country: 'Weitere 47',    city: '—',                        dl: 67_420,  pct: 23.7 },
+  ],
+  apps: [
+    { name: 'Apple Podcasts', pct: 44.2, color: 'var(--info)' },
+    { name: 'Spotify',        pct: 28.7, color: '#1DB954'      },
+    { name: 'Overcast',       pct: 9.1,  color: 'var(--warning)'},
+    { name: 'Pocket Casts',   pct: 7.3,  color: 'var(--danger)' },
+    { name: 'Google Podcasts',pct: 4.2,  color: 'var(--text-3)' },
+    { name: 'Andere',         pct: 6.5,  color: 'var(--neutral)'},
+  ],
+  devices: [
+    { name: 'iPhone',         pct: 51.3 },
+    { name: 'MacBook / iMac', pct: 18.6 },
+    { name: 'Android Phone',  pct: 17.4 },
+    { name: 'Windows PC',     pct: 8.2  },
+    { name: 'iPad',           pct: 3.1  },
+    { name: 'Smart Speaker',  pct: 1.4  },
+  ],
+  os: [
+    { name: 'iOS 17+',        pct: 48.9 },
+    { name: 'macOS 14',       pct: 16.2 },
+    { name: 'Android 13+',    pct: 15.1 },
+    { name: 'Android 12',     pct: 8.6  },
+    { name: 'Windows 11',     pct: 7.4  },
+    { name: 'Andere',         pct: 3.8  },
   ],
 };
 
-// ── Plattform-Status ──────────────────────────────────────────────────────
-const PLATFORMS = [
-  { id: 'apple',   name: 'Apple Podcasts',   icon: '🎵', status: 'active',   rss: 'https://feeds.unicornbakery.de/podcast', since: 'Nov 2021' },
-  { id: 'spotify', name: 'Spotify',          icon: '🎧', status: 'review',   rss: '—', note: 'In Prüfung · Legal Review läuft' },
-  { id: 'amazon',  name: 'Amazon Music',     icon: '📦', status: 'inactive', rss: '—', note: 'Noch nicht konfiguriert' },
-  { id: 'google',  name: 'Google Podcasts',  icon: '🔍', status: 'inactive', rss: '—', note: 'Eingestellt — Nutzer migrieren zu YouTube Music' },
-  { id: 'youtube', name: 'YouTube Podcasts', icon: '▶️', status: 'inactive', rss: '—', note: 'Ausstehend' },
+const PRIVATE_SUBS = [
+  { id: 'sub-1', name: 'Fabian Tausch',   email: 'fabian@ub.de',    plan: 'Pro',     feedUrl: 'https://feeds.ub.de/private/a1b2c3', active: true  },
+  { id: 'sub-2', name: 'Anna Kirmße',     email: 'anna@example.de', plan: 'Pro',     feedUrl: 'https://feeds.ub.de/private/d4e5f6', active: true  },
+  { id: 'sub-3', name: 'Marc Beckmann',   email: 'marc@test.de',    plan: 'Starter', feedUrl: 'https://feeds.ub.de/private/g7h8i9', active: false },
 ];
 
-function fmt(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+const ACTIVITY_FEED = [
+  { id: 1,  time: 'vor 8 Min',   icon: 'download', color: 'var(--success)', text: 'Ep. 142 — 47 neue Downloads in den letzten 8 Min.' },
+  { id: 2,  time: 'vor 23 Min',  icon: 'mic',      color: 'var(--brand)',   text: 'Ep. 143 "Cold Outbound" für 2026-05-21 geplant' },
+  { id: 3,  time: 'vor 1 Std',   icon: 'globe',    color: 'var(--info)',    text: 'Neue Hörer aus 🇺🇸 San Francisco (14 Unique Listeners)' },
+  { id: 4,  time: 'vor 2 Std',   icon: 'rss',      color: 'var(--warning)', text: 'Spotify Legal Review: Status unverändert — wartet auf manuelles Signal' },
+  { id: 5,  time: 'vor 3 Std',   icon: 'doc',      color: 'var(--text-3)', text: 'Transkript für Ep. 142 wurde generiert (58:24 Min → 12.400 Wörter)' },
+  { id: 6,  time: 'gestern',     icon: 'download', color: 'var(--success)', text: 'Ep. 142 veröffentlicht — 1.204 Downloads in ersten 24h' },
+  { id: 7,  time: 'gestern',     icon: 'radio',    color: 'var(--text-3)', text: 'Apple Podcasts RSS-Feed synchronisiert (142 Episoden)' },
+  { id: 8,  time: 'vor 3 Tagen', icon: 'trend',    color: 'var(--success)', text: 'Monatlicher Meilenstein: 40k Unique Listeners erreicht 🎉' },
+];
 
-export function PodcastHubScreen({ setRoute }) {
+const PIPELINE_STEPS = [
+  { id: 1, label: 'Feed validieren',            status: 'done',     detail: '142 Episoden gefunden' },
+  { id: 2, label: 'Metadaten importieren',       status: 'done',     detail: 'Titel, Beschreibung, Gäste' },
+  { id: 3, label: 'Artwork herunterladen',       status: 'done',     detail: '142 Cover-Bilder (1400×1400px)' },
+  { id: 4, label: 'Audio-Dateien migrieren',     status: 'running',  detail: '87 / 142 abgeschlossen (61%)' },
+  { id: 5, label: 'Duplikat-Prüfung',            status: 'pending',  detail: 'Wartet auf Schritt 4' },
+  { id: 6, label: 'Statistik-Daten übertragen',  status: 'pending',  detail: 'IAB-Historik (6 Monate)' },
+  { id: 7, label: 'Feeds aktivieren',            status: 'pending',  detail: 'Apple + Spotify Redirect' },
+];
+
+function fmt(n) { return n >= 1_000_000 ? (n/1_000_000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
+
+// ── Main Screen ───────────────────────────────────────────────────────────
+export function PodcastHubScreen() {
   const { currentWorkspace: brand } = useWorkspace();
-  const [tab, setTab] = useState('episodes');
+  const [tab, setTab] = useState('overview');
+
+  const tabs = [
+    { id: 'overview',     label: 'Übersicht',      icon: <I.home size={12} />      },
+    { id: 'episodes',     label: 'Episoden',        icon: <I.mic size={12} />       },
+    { id: 'analytics',    label: 'Analytics',       icon: <I.trend size={12} />     },
+    { id: 'transcripts',  label: 'Transkript · KI', icon: <I.doc size={12} />       },
+    { id: 'distribution', label: 'Distribution',    icon: <I.radio size={12} />     },
+    { id: 'privatefeeds', label: 'Private Feeds',   icon: <I.bell size={12} />      },
+    { id: 'migration',    label: 'Migration',       icon: <I.rss size={12} />       },
+    { id: 'studio',       label: 'Studio',          icon: <I.zap size={12} />       },
+  ];
 
   return (
     <div className="page fade-in">
+      {/* Header */}
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2">
             <Badge kind="brand" dot>{brand?.name}</Badge>
-            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>· Podcast Hub</span>
+            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>· Podcast Hub v2</span>
           </div>
           <h1 className="h1" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <I.mic size={24} /> Podcast Hub
+            <I.mic size={22} /> Podcast Hub
           </h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Zentrale Steuerung für Episoden, Analytics, Transkripte und Distribution.
+            Episoden · Analytics · Distribution · Private Feeds · KI-Marketing
           </p>
         </div>
         <div className="row gap-2">
-          <div className="row gap-1 items-center" style={{ fontSize: 11.5, color: 'var(--text-4)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px' }}>
-            <I.rss size={11} color="var(--warning)" /> MCP bereit · 7 Tools verfügbar
+          <div className="row gap-2 items-center" style={{ fontSize: 11.5, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', background: 'var(--bg-elev)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--success)', display: 'inline-block' }} />
+            Apple Podcasts live
+          </div>
+          <div className="row gap-2 items-center" style={{ fontSize: 11.5, border: '1px solid var(--warning-border)', borderRadius: 6, padding: '5px 12px', background: 'var(--warning-bg)', color: 'var(--warning)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--warning)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+            Spotify · Legal Review
+          </div>
+          <div className="row gap-1 items-center" style={{ fontSize: 11, color: 'var(--text-4)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 10px' }}>
+            <I.rss size={11} color="var(--text-4)" /> 7 MCP Tools
           </div>
         </div>
       </div>
 
-      <div className="tabs mb-4">
-        {[
-          { id: 'episodes',     label: 'Episoden',     icon: <I.mic size={13} /> },
-          { id: 'analytics',    label: 'Analytics',    icon: <I.trend size={13} /> },
-          { id: 'transcripts',  label: 'Transkripte',  icon: <I.doc size={13} /> },
-          { id: 'distribution', label: 'Distribution', icon: <I.radio size={13} /> },
-          { id: 'migration',    label: 'Migration',    icon: <I.rss size={13} /> },
-        ].map((t) => (
+      {/* Tabs */}
+      <div className="tabs mb-4" style={{ flexWrap: 'wrap' }}>
+        {tabs.map((t) => (
           <div key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
-            <span className="row gap-1">{t.icon} {t.label}</span>
+            <span className="row gap-1" style={{ fontSize: 12.5 }}>{t.icon} {t.label}</span>
           </div>
         ))}
       </div>
 
+      {tab === 'overview'     && <OverviewTab />}
       {tab === 'episodes'     && <EpisodenTab />}
       {tab === 'analytics'    && <AnalyticsTab />}
-      {tab === 'transcripts'  && <TranskripteTab />}
+      {tab === 'transcripts'  && <TranskriptKITab />}
       {tab === 'distribution' && <DistributionTab />}
+      {tab === 'privatefeeds' && <PrivateFeedsTab />}
       {tab === 'migration'    && <MigrationTab />}
+      {tab === 'studio'       && <StudioTab />}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Tab 1 — Episoden
+// Tab 1 — Übersicht (Unified View)
+// ═══════════════════════════════════════════════════════════════════════════
+function OverviewTab() {
+  return (
+    <div className="col gap-4">
+      {/* Top KPIs */}
+      <div className="grid grid-4 gap-3">
+        <div className="kpi"><div className="kpi-label">Gesamt Downloads</div><div className="kpi-value mono">{fmt(ANALYTICS.totalDownloads)}</div><div className="kpi-trend up">IAB Tier 2 zertifiziert</div></div>
+        <div className="kpi"><div className="kpi-label">Unique Listeners 30d</div><div className="kpi-value mono">{fmt(ANALYTICS.uniqueListeners)}</div><div className="kpi-trend up">+{ANALYTICS.growth30d}% vs. Vormonat</div></div>
+        <div className="kpi"><div className="kpi-label">Episoden gesamt</div><div className="kpi-value mono">142</div><div className="kpi-trend">3 geplant</div></div>
+        <div className="kpi"><div className="kpi-label">Ø Downloads / Ep.</div><div className="kpi-value mono">{fmt(ANALYTICS.avgPerEpisode)}</div><div className="kpi-trend up">Top 5% DACH Podcast</div></div>
+      </div>
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
+        {/* Unified Activity Feed */}
+        <div className="card">
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
+            <div className="h3">Aktivitäts-Feed</div>
+            <div className="meta mt-1">Alle Podcast-Aktivitäten · Echtzeit</div>
+          </div>
+          <div className="col">
+            {ACTIVITY_FEED.map((item, i) => (
+              <div key={item.id} className="row gap-3 items-start" style={{ padding: '11px 18px', borderBottom: i < ACTIVITY_FEED.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
+                <div style={{ width: 28, height: 28, borderRadius: 999, background: 'var(--bg-sunk)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ActivityIcon name={item.icon} color={item.color} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, lineHeight: 1.45 }}>{item.text}</div>
+                  <div className="meta mt-1">{item.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right sidebar */}
+        <div className="col gap-3">
+          {/* Mini chart */}
+          <div className="card card-pad">
+            <div className="label mb-3">Downloads · 12 Wochen</div>
+            <MiniBarChart data={ANALYTICS.weeklyDownloads} />
+          </div>
+
+          {/* Platform status */}
+          <div className="card card-pad">
+            <div className="label mb-3">Plattform-Status</div>
+            <div className="col gap-2">
+              {[
+                { name: 'Apple Podcasts', status: 'active'  },
+                { name: 'Spotify',        status: 'review'  },
+                { name: 'Amazon Music',   status: 'inactive'},
+              ].map((p) => (
+                <div key={p.name} className="row between" style={{ fontSize: 13 }}>
+                  <span>{p.name}</span>
+                  <PlatformBadge status={p.status} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top geo */}
+          <div className="card card-pad">
+            <div className="label mb-3">Top-Länder</div>
+            <div className="col gap-1">
+              {ANALYTICS.geo.slice(0, 4).map((g) => (
+                <div key={g.country} className="row between" style={{ fontSize: 12.5 }}>
+                  <span>{g.flag} {g.country}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{fmt(g.dl)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
 function EpisodenTab() {
   const [search, setSearch] = useState('');
-  const filtered = MOCK_EPISODES.filter((e) =>
-    e.title.toLowerCase().includes(search.toLowerCase()) ||
-    e.guest.toLowerCase().includes(search.toLowerCase()),
+  const [expandedEp, setExpandedEp] = useState(null);
+  const filtered = EPISODES.filter((e) =>
+    e.title.toLowerCase().includes(search.toLowerCase()) || e.guest.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
     <div className="col gap-4">
       <div className="row gap-3 items-center">
-        <input
-          className="input"
-          placeholder="Episoden suchen…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ maxWidth: 320 }}
-        />
+        <input className="input" placeholder="Episoden suchen…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 300 }} />
         <span className="meta">{filtered.length} Episoden</span>
         <div style={{ flex: 1 }} />
-        <div className="row gap-1 items-center" style={{ fontSize: 11, color: 'var(--text-4)' }}>
-          <I.mic size={11} /> MCP: <code style={{ fontSize: 10 }}>list_episodes</code>
+        <McpTag tool="list_episodes · get_episode · create_episode" />
+        <button className="btn btn-brand btn-sm" disabled title="MCP: create_episode"><I.plus size={13} /> Neue Episode</button>
+      </div>
+
+      {/* Video push notice */}
+      <div style={{ padding: '10px 16px', background: 'var(--info-bg)', border: '1px solid var(--info-border)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
+        <span style={{ fontSize: 18 }}>🎬</span>
+        <div>
+          <strong>YouTube + Spotify Video Push</strong> — geplant für Juli 2026.
+          Episoden mit <Badge kind="ghost">Video</Badge>-Tag erhalten automatisch einen Video-Container sobald die Integration live geht.
         </div>
-        <button className="btn btn-brand btn-sm" disabled title="Neue Episode anlegen (MCP: create_episode)">
-          <I.plus size={13} /> Neue Episode
-        </button>
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -142,30 +281,548 @@ function EpisodenTab() {
               <th>Datum</th>
               <th>Dauer</th>
               <th>Downloads</th>
+              <th>Video</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((ep) => (
-              <tr key={ep.id} style={{ cursor: 'pointer' }}>
-                <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</span></td>
-                <td>
-                  <div style={{ fontWeight: 500, fontSize: 13.5 }}>{ep.title}</div>
-                </td>
-                <td><span style={{ color: 'var(--text-2)', fontSize: 13 }}>{ep.guest}</span></td>
-                <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.date}</span></td>
-                <td><span className="mono" style={{ fontSize: 12 }}>{ep.duration}</span></td>
-                <td>
-                  <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>
-                    {ep.downloads > 0 ? fmt(ep.downloads) : '—'}
+              <>
+                <tr key={ep.id} style={{ cursor: 'pointer' }} onClick={() => setExpandedEp(expandedEp === ep.id ? null : ep.id)}>
+                  <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</span></td>
+                  <td><div style={{ fontWeight: 500, fontSize: 13.5 }}>{ep.title}</div></td>
+                  <td><span style={{ color: 'var(--text-2)', fontSize: 13 }}>{ep.guest}</span></td>
+                  <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.date}</span></td>
+                  <td><span className="mono" style={{ fontSize: 12 }}>{ep.duration}</span></td>
+                  <td><span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{ep.downloads > 0 ? fmt(ep.downloads) : '—'}</span></td>
+                  <td>
+                    {ep.hasVideo
+                      ? <Badge kind="ghost" style={{ fontSize: 10 }}>🎬 Video</Badge>
+                      : <span style={{ fontSize: 11, color: 'var(--text-4)' }}>Audio only</span>}
+                  </td>
+                  <td><EpStatusBadge status={ep.status} /></td>
+                  <td><I.chevron size={12} style={{ transform: expandedEp === ep.id ? 'rotate(90deg)' : 'none', transition: '0.15s' }} /></td>
+                </tr>
+                {expandedEp === ep.id && (
+                  <tr key={ep.id + '-expand'}>
+                    <td colSpan={9} style={{ padding: 0 }}>
+                      <div style={{ padding: '16px 20px', background: 'var(--bg)', borderBottom: '1px solid var(--border-soft)' }}>
+                        <div className="grid gap-4" style={{ gridTemplateColumns: ep.hasVideo ? '1fr 1.4fr' : '1fr' }}>
+                          <div className="col gap-3">
+                            <div className="label">Episode-Details</div>
+                            <div className="grid grid-2 gap-2" style={{ fontSize: 12.5 }}>
+                              <div><span style={{ color: 'var(--text-3)' }}>MCP ID: </span><code style={{ fontSize: 11 }}>{ep.id}</code></div>
+                              <div><span style={{ color: 'var(--text-3)' }}>Downloads: </span><strong>{ep.downloads.toLocaleString('de')}</strong></div>
+                            </div>
+                            <div className="row gap-2">
+                              <button className="btn btn-quiet btn-sm" disabled><I.doc size={12} /> Transkript</button>
+                              <button className="btn btn-quiet btn-sm" disabled><I.trend size={12} /> Analytics</button>
+                              <button className="btn btn-quiet btn-sm" disabled><I.more size={12} /> Bearbeiten</button>
+                            </div>
+                          </div>
+                          {ep.hasVideo && (
+                            <div>
+                              <div className="label mb-2">Video-Container <Badge kind="ghost" style={{ fontSize: 10 }}>Juli 2026</Badge></div>
+                              <VideoPlayerContainer ep={ep} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function VideoPlayerContainer({ ep }) {
+  return (
+    <div style={{
+      width: '100%', aspectRatio: '16/9', background: '#0f0f0f',
+      borderRadius: 8, border: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 12, position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)', opacity: 0.9 }} />
+      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+        <div style={{ width: 52, height: 52, borderRadius: 999, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', border: '2px solid rgba(255,255,255,0.3)' }}>
+          <span style={{ fontSize: 22, color: 'white', marginLeft: 3 }}>▶</span>
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 600, maxWidth: 240 }}>Ep. {ep.num} · {ep.guest}</div>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 4 }}>YouTube + Spotify Video · Live Juli 2026</div>
+      </div>
+      <div style={{ position: 'absolute', bottom: 8, right: 10, display: 'flex', gap: 6, zIndex: 1 }}>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '1px 5px' }}>YouTube</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '1px 5px' }}>Spotify Video</span>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 3 — Analytics (Geo · Apps · Device · OS)
+// ═══════════════════════════════════════════════════════════════════════════
+function AnalyticsTab() {
+  const maxWeekly = Math.max(...ANALYTICS.weeklyDownloads);
+  return (
+    <div className="col gap-4">
+      <div className="row gap-2 mb-1 items-center">
+        <McpTag tool="get_analytics" />
+        <span className="meta">IAB Tier 2 Compliance · Letzte 30 Tage</span>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-4 gap-3">
+        <div className="kpi"><div className="kpi-label">Gesamt Downloads</div><div className="kpi-value mono">{fmt(ANALYTICS.totalDownloads)}</div><div className="kpi-trend up">IAB-zertifiziert</div></div>
+        <div className="kpi"><div className="kpi-label">Unique Listeners</div><div className="kpi-value mono">{fmt(ANALYTICS.uniqueListeners)}</div><div className="kpi-trend up">Letzte 30 Tage</div></div>
+        <div className="kpi"><div className="kpi-label">Ø / Episode</div><div className="kpi-value mono">{fmt(ANALYTICS.avgPerEpisode)}</div><div className="kpi-trend up">Alle Episoden</div></div>
+        <div className="kpi"><div className="kpi-label">Wachstum 30d</div><div className="kpi-value mono">+{ANALYTICS.growth30d}%</div><div className="kpi-trend up">vs. Vormonat</div></div>
+      </div>
+
+      {/* Downloads + Geo */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
+        <div className="card card-pad">
+          <div className="h3 mb-1">Downloads · 12 Wochen</div>
+          <div className="meta mb-4">Wöchentliche Summe · IAB Tier 2</div>
+          <MiniBarChart data={ANALYTICS.weeklyDownloads} showLabels />
+        </div>
+        <div className="card card-pad">
+          <div className="h3 mb-1" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><I.globe size={14} /> Geo-Breakdown</div>
+          <div className="meta mb-3">Nach Land · Top-Städte</div>
+          <div className="col gap-2">
+            {ANALYTICS.geo.map((g) => (
+              <div key={g.country}>
+                <div className="row between mb-1">
+                  <span style={{ fontSize: 12.5 }}>{g.flag} {g.country}</span>
+                  <span className="row gap-2">
+                    <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmt(g.dl)}</span>
+                    <span className="meta" style={{ minWidth: 38, textAlign: 'right' }}>{g.pct}%</span>
                   </span>
-                </td>
+                </div>
+                <div className="progress" style={{ height: 3, marginBottom: g.city !== '—' ? 2 : 6 }}>
+                  <div className="progress-bar" style={{ width: g.pct + '%' }} />
+                </div>
+                {g.city !== '—' && <div className="meta" style={{ fontSize: 10.5, marginBottom: 6 }}>{g.city}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Apps + Devices + OS */}
+      <div className="grid grid-3 gap-4">
+        <div className="card card-pad">
+          <div className="h3 mb-3">Listening-Apps</div>
+          <div className="col gap-3">
+            {ANALYTICS.apps.map((a) => (
+              <div key={a.name}>
+                <div className="row between mb-1" style={{ fontSize: 12.5 }}>
+                  <span>{a.name}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{a.pct}%</span>
+                </div>
+                <div className="progress" style={{ height: 5 }}>
+                  <div style={{ width: a.pct + '%', height: '100%', background: a.color, borderRadius: 3 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card card-pad">
+          <div className="h3 mb-3">Gerät</div>
+          <div className="col gap-3">
+            {ANALYTICS.devices.map((d) => (
+              <div key={d.name}>
+                <div className="row between mb-1" style={{ fontSize: 12.5 }}>
+                  <span>{d.name}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{d.pct}%</span>
+                </div>
+                <div className="progress" style={{ height: 5 }}>
+                  <div className="progress-bar" style={{ width: d.pct + '%' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card card-pad">
+          <div className="h3 mb-3">Betriebssystem</div>
+          <div className="col gap-3">
+            {ANALYTICS.os.map((o) => (
+              <div key={o.name}>
+                <div className="row between mb-1" style={{ fontSize: 12.5 }}>
+                  <span>{o.name}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{o.pct}%</span>
+                </div>
+                <div className="progress" style={{ height: 5 }}>
+                  <div className="progress-bar" style={{ width: o.pct + '%' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 4 — Transkript · KI-Schaltzentrale
+// ═══════════════════════════════════════════════════════════════════════════
+function TranskriptKITab() {
+  const [selectedEp, setSelectedEp] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [loadingTranscript, setLoadingTranscript] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [pkg, setPkg] = useState(null);
+  const [pkgError, setPkgError] = useState(null);
+  const [activeOutput, setActiveOutput] = useState('newsletter');
+
+  const loadTranscript = async () => {
+    if (!selectedEp) return;
+    setLoadingTranscript(true);
+    setTranscript('');
+    setPkg(null);
+    await new Promise((r) => setTimeout(r, 800));
+    const ep = EPISODES.find((e) => e.id === selectedEp);
+    setTranscript(`[MCP: get_transcript · ${ep?.id}]\n\nHost (Fabian Tausch): Herzlich willkommen bei UnicornBakery. Ich bin Fabian Tausch, und heute habe ich ${ep?.guest} zu Gast — einer der faszinierendsten Gründer, die ich in den letzten Jahren getroffen habe.\n\nGast (${ep?.guest}): Danke, Fabian. Es ist eine Ehre, hier zu sein.\n\nHost: Lass uns direkt einsteigen. Dein Weg war alles andere als gradlinig. Magst du uns mitnehmen, wie alles angefangen hat?\n\nGast: Absolut. Ich habe 2019 angefangen, als der Markt gerade anfing, sich zu verändern. Die erste Version unseres Produkts war ehrlich gesagt schrecklich — aber wir haben gehört, was die Kunden wirklich wollten, und das hat alles verändert.\n\nHost: Was war der entscheidende Moment, wo du wusstest: Das funktioniert?\n\nGast: Das war definitiv die erste Enterprise-Referenz. Als ein DAX-Konzern sagte "Wir wollen mehr davon" — da wussten wir, dass wir auf dem richtigen Weg sind.\n\n[... Transkript wird von beehiiv MCP-Server geladen. Dies ist ein Platzhalter für die echte Integration ...]`);
+    setLoadingTranscript(false);
+  };
+
+  const generatePkg = async () => {
+    const ep = EPISODES.find((e) => e.id === selectedEp);
+    if (!ep || !transcript) return;
+    setGenerating(true);
+    setPkgError(null);
+    setPkg(null);
+    const result = await generateMarketingPackage({
+      episodeTitle: ep.title,
+      guest: ep.guest,
+      transcript,
+    });
+    setGenerating(false);
+    if (!result.ok) {
+      setPkgError(result.error);
+    } else {
+      setPkg(result.data);
+      setActiveOutput('newsletter');
+    }
+  };
+
+  return (
+    <div className="col gap-4">
+      {/* Episode selector + load */}
+      <div className="card card-pad">
+        <div className="row between mb-3">
+          <div>
+            <div className="h3">Episoden-Transkript</div>
+            <div className="meta mt-1">MCP Tool: <code style={{ fontSize: 11 }}>get_transcript</code> · beehiiv Podcast API</div>
+          </div>
+          <McpTag tool="get_transcript" />
+        </div>
+        <div className="row gap-3 items-end">
+          <div className="col gap-1" style={{ flex: 1 }}>
+            <label className="label">Episode auswählen</label>
+            <select className="input" value={selectedEp} onChange={(e) => { setSelectedEp(e.target.value); setTranscript(''); setPkg(null); }} style={{ maxWidth: 420 }}>
+              <option value="">— Episode wählen —</option>
+              {EPISODES.filter((e) => e.status === 'published').map((ep) => (
+                <option key={ep.id} value={ep.id}>Ep. {ep.num} · {ep.title}</option>
+              ))}
+            </select>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={loadTranscript} disabled={!selectedEp || loadingTranscript}>
+            {loadingTranscript ? 'Lade…' : <><I.download size={13} /> Transkript laden</>}
+          </button>
+          {transcript && (
+            <button
+              className="btn btn-brand btn-sm"
+              onClick={generatePkg}
+              disabled={generating}
+              style={{ background: 'linear-gradient(135deg, var(--brand), #7c3aed)', border: 'none' }}
+            >
+              {generating
+                ? <><I.zap size={13} /> Generiere…</>
+                : <><I.zap size={13} /> ✨ Marketing-Paket generieren</>}
+            </button>
+          )}
+        </div>
+
+        {transcript && (
+          <textarea className="input mt-3" readOnly value={transcript} rows={6}
+            style={{ fontSize: 12.5, lineHeight: 1.65, resize: 'vertical', fontFamily: 'inherit', marginTop: 12 }} />
+        )}
+        {!transcript && !loadingTranscript && (
+          <div style={{ marginTop: 12, minHeight: 80, borderRadius: 6, border: '1.5px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-4)', fontSize: 13 }}>
+            {selectedEp ? 'Klicke "Transkript laden"' : 'Wähle eine Episode aus'}
+          </div>
+        )}
+      </div>
+
+      {/* KI Output */}
+      {generating && (
+        <div className="card card-pad" style={{ background: 'var(--bg-sunk)', textAlign: 'center', padding: '32px 20px' }}>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>✨</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Claude generiert dein Marketing-Paket…</div>
+          <div className="meta">Newsletter · LinkedIn-Posts · Show Notes — dauert ca. 5 Sekunden</div>
+        </div>
+      )}
+
+      {pkgError && (
+        <div style={{ padding: '12px 16px', background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: 8, color: 'var(--danger)', fontSize: 13 }}>
+          {pkgError}
+        </div>
+      )}
+
+      {pkg && (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--bg)' }}>
+            <div className="row between">
+              <div>
+                <div className="h3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  ✨ Marketing-Paket generiert
+                </div>
+                <div className="meta mt-1">Erstellt von Claude Haiku · beehiiv-kompatibel</div>
+              </div>
+              <div className="row gap-2">
+                <Badge kind="success" dot>Fertig</Badge>
+              </div>
+            </div>
+            {/* Output switcher */}
+            <div className="row gap-2 mt-3">
+              {[
+                { id: 'newsletter', label: '📧 Newsletter' },
+                { id: 'linkedin1',  label: '💼 LinkedIn #1' },
+                { id: 'linkedin2',  label: '💼 LinkedIn #2' },
+                { id: 'linkedin3',  label: '💼 LinkedIn #3' },
+                { id: 'shownotes', label: '📝 Show Notes' },
+              ].map((o) => (
+                <button key={o.id} onClick={() => setActiveOutput(o.id)}
+                  className={`btn btn-sm ${activeOutput === o.id ? 'btn-brand' : 'btn-ghost'}`}
+                  style={{ fontSize: 12 }}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding: '16px 18px' }}>
+            <textarea
+              className="input"
+              readOnly
+              rows={14}
+              value={
+                activeOutput === 'newsletter' ? pkg.newsletter :
+                activeOutput === 'linkedin1'  ? pkg.linkedin[0] :
+                activeOutput === 'linkedin2'  ? pkg.linkedin[1] :
+                activeOutput === 'linkedin3'  ? pkg.linkedin[2] :
+                pkg.shownotes
+              }
+              style={{ fontSize: 13, lineHeight: 1.7, resize: 'vertical', fontFamily: 'inherit' }}
+            />
+            <div className="row gap-2 mt-2" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => {
+                const text = activeOutput === 'newsletter' ? pkg.newsletter : activeOutput === 'linkedin1' ? pkg.linkedin[0] : activeOutput === 'linkedin2' ? pkg.linkedin[1] : activeOutput === 'linkedin3' ? pkg.linkedin[2] : pkg.shownotes;
+                navigator.clipboard?.writeText(text);
+              }}>
+                Kopieren
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 5 — Distribution / RSS Status Center
+// ═══════════════════════════════════════════════════════════════════════════
+function DistributionTab() {
+  const [spotifySignal, setSpotifySignal] = useState(false);
+
+  return (
+    <div className="col gap-4">
+      {/* Apple Podcasts */}
+      <div className="card card-pad">
+        <div className="row between mb-3">
+          <div className="row gap-3">
+            <span style={{ fontSize: 32 }}>🎵</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Apple Podcasts</div>
+              <div className="meta mt-1">RSS-Feed aktiv · 142 Episoden synchronisiert</div>
+            </div>
+          </div>
+          <Badge kind="success" dot large>Aktiv</Badge>
+        </div>
+        <div className="grid grid-2 gap-3">
+          <div>
+            <div className="label mb-1">Feed-URL</div>
+            <div className="row gap-2 items-center" style={{ background: 'var(--bg)', borderRadius: 6, padding: '7px 10px', border: '1px solid var(--border-soft)' }}>
+              <I.rss size={12} color="var(--text-3)" />
+              <span className="mono truncate" style={{ fontSize: 11, flex: 1 }}>https://feeds.unicornbakery.de/podcast</span>
+            </div>
+          </div>
+          <div>
+            <div className="label mb-1">Letzte Synchronisation</div>
+            <div className="row gap-2 items-center" style={{ background: 'var(--bg)', borderRadius: 6, padding: '7px 10px', border: '1px solid var(--border-soft)', fontSize: 13 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--success)', display: 'inline-block' }} />
+              vor 12 Minuten · Ep. 142
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Spotify — Legal Review mit dynamischem Indikator */}
+      <div className="card card-pad" style={{ border: '1px solid var(--warning-border)', background: spotifySignal ? 'var(--success-bg)' : 'var(--warning-bg)' }}>
+        <div className="row between mb-3">
+          <div className="row gap-3">
+            <span style={{ fontSize: 32 }}>🎧</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Spotify</div>
+              <div className="meta mt-1">{spotifySignal ? 'Produktionszugriff gewährt' : 'Legal Review · wartet auf manuelles Signal'}</div>
+            </div>
+          </div>
+          {spotifySignal
+            ? <Badge kind="success" dot large>Bereit zur Aktivierung</Badge>
+            : <Badge kind="warning" dot large>In Prüfung</Badge>}
+        </div>
+
+        {/* Timeline */}
+        <div className="col gap-0 mb-3">
+          {[
+            { done: true,  label: 'Spotify for Podcasters Konto erstellt', date: 'Feb 2026' },
+            { done: true,  label: 'RSS-Feed eingereicht',                  date: 'März 2026' },
+            { done: true,  label: 'Technische Validierung bestanden',      date: 'Apr 2026' },
+            { done: false, label: 'Legal Review durch Spotify',            date: 'Läuft…', active: !spotifySignal },
+            { done: false, label: 'Produktionszugriff gewährt',            date: 'Ausstehend', signal: true },
+            { done: false, label: 'Feed live schalten',                    date: 'Ausstehend' },
+          ].map((step, i) => (
+            <div key={i} className="row gap-3 items-start" style={{ padding: '8px 0', borderBottom: i < 5 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+              <div style={{ width: 20, height: 20, borderRadius: 999, background: step.done ? 'var(--success)' : step.active ? 'var(--warning)' : 'var(--bg-sunk)', border: `2px solid ${step.done ? 'var(--success)' : step.active ? 'var(--warning)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                {step.done && <span style={{ fontSize: 9, color: 'white' }}>✓</span>}
+                {step.active && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--warning)', display: 'inline-block' }} />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: step.active || step.signal ? 600 : 400 }}>{step.label}</div>
+                {step.signal && !spotifySignal && (
+                  <div className="meta mt-1" style={{ fontSize: 11 }}>Manuelles Signal erforderlich · Klicke den Button unten</div>
+                )}
+              </div>
+              <span className="meta" style={{ fontSize: 11, flexShrink: 0 }}>{step.date}</span>
+            </div>
+          ))}
+        </div>
+
+        {!spotifySignal ? (
+          <div className="col gap-2">
+            <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, fontSize: 12.5 }}>
+              ⚠️ Sobald Spotify den Produktionszugriff gewährt, klicke den Button unten, um den Feed manuell zu aktivieren.
+            </div>
+            <button className="btn btn-brand btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setSpotifySignal(true)}>
+              ✅ Produktionszugriff gewährt — Feed aktivieren
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: '12px 16px', background: 'var(--success-bg)', borderRadius: 6, border: '1px solid var(--success-border)', fontSize: 13, color: 'var(--success)' }}>
+            ✓ Signal empfangen! Spotify-Feed wird in den nächsten 24h live geschalten. RSS-URL wird nach Aktivierung hier angezeigt.
+          </div>
+        )}
+      </div>
+
+      {/* Others */}
+      <div className="grid grid-3 gap-3">
+        {[
+          { icon: '📦', name: 'Amazon Music',    status: 'inactive', note: 'Noch nicht konfiguriert' },
+          { icon: '▶️', name: 'YouTube Podcasts', status: 'video',    note: 'Video-Integration · Juli 2026' },
+          { icon: '🔊', name: 'Overcast',         status: 'inactive', note: 'Automatisch über Apple RSS' },
+        ].map((p) => (
+          <div key={p.name} className="card card-pad">
+            <div className="row gap-2 mb-2">
+              <span style={{ fontSize: 24 }}>{p.icon}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                <div className="meta">{p.note}</div>
+              </div>
+            </div>
+            <PlatformBadge status={p.status} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 6 — Private Feeds
+// ═══════════════════════════════════════════════════════════════════════════
+function PrivateFeedsTab() {
+  const [gatedEps, setGatedEps] = useState(new Set(['ep-140']));
+  const [showAddSub, setShowAddSub] = useState(false);
+  const [newSubEmail, setNewSubEmail] = useState('');
+
+  const toggleGate = (id) => setGatedEps((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  return (
+    <div className="col gap-4">
+      <div className="row between">
+        <div>
+          <div className="h3">Private Podcast Feeds</div>
+          <div className="meta mt-1">Episoden hinter einer Subscription-Schranke sperren · Unique Feed-URLs pro Abonnent</div>
+        </div>
+        <div className="row gap-2">
+          <McpTag tool="private_feeds · get_subscribers" />
+          <button className="btn btn-brand btn-sm" onClick={() => setShowAddSub(true)}>
+            <I.plus size={13} /> Abonnent hinzufügen
+          </button>
+        </div>
+      </div>
+
+      {showAddSub && (
+        <div className="card card-pad" style={{ border: '1px solid var(--brand)' }}>
+          <div className="h3 mb-3">Neuer Abonnent</div>
+          <div className="row gap-2">
+            <input className="input" placeholder="name@example.de" value={newSubEmail} onChange={(e) => setNewSubEmail(e.target.value)} style={{ flex: 1, maxWidth: 320 }} />
+            <select className="input" style={{ width: 140 }}>
+              <option>Pro</option>
+              <option>Starter</option>
+            </select>
+            <button className="btn btn-brand btn-sm" onClick={() => setShowAddSub(false)}>Hinzufügen</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddSub(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* Gating pro Episode */}
+      <div className="card">
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
+          <div className="h3">Episode Gating</div>
+          <div className="meta mt-1">Gesperrte Episoden sind nur für Abonnenten mit gültigem Private Feed zugänglich.</div>
+        </div>
+        <table className="table">
+          <thead><tr><th>#</th><th>Episode</th><th>Status</th><th>Gesperrt</th><th>Abonnenten mit Zugriff</th></tr></thead>
+          <tbody>
+            {EPISODES.filter(e => e.status === 'published').map((ep) => (
+              <tr key={ep.id}>
+                <td className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</td>
+                <td style={{ fontWeight: 500, fontSize: 13 }}>{ep.title}</td>
                 <td><EpStatusBadge status={ep.status} /></td>
                 <td>
-                  <button className="btn btn-quiet btn-sm" disabled title="Episode bearbeiten (MCP: update_episode)">
-                    <I.more size={13} />
-                  </button>
+                  <label className="row gap-2" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={gatedEps.has(ep.id)} onChange={() => toggleGate(ep.id)} />
+                    {gatedEps.has(ep.id)
+                      ? <span style={{ fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>🔒 Gesperrt</span>
+                      : <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Öffentlich</span>}
+                  </label>
+                </td>
+                <td>
+                  {gatedEps.has(ep.id)
+                    ? <span className="meta">{PRIVATE_SUBS.filter(s => s.active).length} aktive Abonnenten</span>
+                    : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>}
                 </td>
               </tr>
             ))}
@@ -173,426 +830,367 @@ function EpisodenTab() {
         </table>
       </div>
 
-      <McpHint tools={['list_episodes', 'get_episode', 'create_episode', 'update_episode', 'delete_episode', 'publish_episode', 'get_show']} />
-    </div>
-  );
-}
-
-function EpStatusBadge({ status }) {
-  const map = {
-    published: { kind: 'success', label: 'Veröffentlicht' },
-    scheduled: { kind: 'warning', label: 'Geplant' },
-    draft:     { kind: 'ghost',   label: 'Entwurf' },
-  };
-  const { kind, label } = map[status] ?? { kind: 'ghost', label: status };
-  return <Badge kind={kind} dot>{label}</Badge>;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Tab 2 — Analytics
-// ═══════════════════════════════════════════════════════════════════════════
-function AnalyticsTab() {
-  const maxWeekly = Math.max(...ANALYTICS.weeklyDownloads);
-
-  return (
-    <div className="col gap-4">
-      <div className="row gap-1 items-center mb-1" style={{ fontSize: 11, color: 'var(--text-4)' }}>
-        <I.trend size={11} /> IAB Compliant · MCP: <code style={{ fontSize: 10 }}>get_analytics</code>
-        <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-4)' }}>Letzte 30 Tage</span>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-4 gap-3">
-        <div className="kpi">
-          <div className="kpi-label">Gesamt Downloads</div>
-          <div className="kpi-value mono">{fmt(ANALYTICS.totalDownloads)}</div>
-          <div className="kpi-trend up">IAB-zertifiziert</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Unique Listeners</div>
-          <div className="kpi-value mono">{fmt(ANALYTICS.uniqueListeners)}</div>
-          <div className="kpi-trend up">Letzte 30 Tage</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Ø Downloads / Ep.</div>
-          <div className="kpi-value mono">{fmt(ANALYTICS.avgPerEpisode)}</div>
-          <div className="kpi-trend up">Alle Episoden</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Wachstum 30d</div>
-          <div className="kpi-value mono">+{ANALYTICS.growth30d}%</div>
-          <div className="kpi-trend up">vs. Vormonat</div>
-        </div>
-      </div>
-
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
-        {/* Downloads Chart */}
-        <div className="card card-pad">
-          <div className="row between mb-4">
-            <div>
-              <div className="h3">Downloads · Letzte 12 Wochen</div>
-              <div className="meta mt-1">Wöchentliche Summe · IAB Tier 2</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 120 }}>
-            {ANALYTICS.weeklyDownloads.map((val, i) => {
-              const h = Math.round((val / maxWeekly) * 100);
-              const isLast = i === ANALYTICS.weeklyDownloads.length - 1;
-              return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <div
-                    style={{
-                      width: '100%',
-                      height: h + '%',
-                      minHeight: 4,
-                      background: isLast ? 'var(--brand)' : 'var(--bg-sunk)',
-                      borderRadius: '3px 3px 0 0',
-                      border: isLast ? '1px solid var(--brand)' : '1px solid var(--border)',
-                      transition: 'height 0.3s',
-                    }}
-                    title={`KW ${i + 1}: ${val.toLocaleString('de')} Downloads`}
-                  />
-                  {i % 3 === 0 && (
-                    <span style={{ fontSize: 9, color: 'var(--text-4)' }}>KW{i + 1}</span>
-                  )}
-                </div>
-              );
-            })}
+      {/* Subscriber list mit Feed-URLs */}
+      <div className="card">
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }} className="row between">
+          <div>
+            <div className="h3">Abonnenten · {PRIVATE_SUBS.length}</div>
+            <div className="meta mt-1">Unique Feed-URL pro Abonnent</div>
           </div>
         </div>
-
-        {/* Geo Breakdown */}
-        <div className="card card-pad">
-          <div className="row between mb-3">
-            <div>
-              <div className="h3" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <I.globe size={14} /> Geo-Breakdown
-              </div>
-              <div className="meta mt-1">Nach Land · Top-Städte</div>
-            </div>
-          </div>
-          <div className="col gap-1">
-            {ANALYTICS.geo.map((g) => (
-              <div key={g.country} style={{ padding: '5px 0', borderBottom: '1px solid var(--border-soft)' }}>
-                <div className="row between" style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 13 }}>{g.flag} {g.country}</span>
-                  <span className="row gap-2">
-                    <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmt(g.downloads)}</span>
-                    <span className="meta" style={{ minWidth: 36, textAlign: 'right' }}>{g.pct}%</span>
-                  </span>
-                </div>
-                <div className="progress" style={{ height: 3 }}>
-                  <div className="progress-bar" style={{ width: g.pct + '%' }} />
-                </div>
-                {g.city !== '—' && (
-                  <div className="meta" style={{ fontSize: 10.5, marginTop: 2 }}>{g.city}</div>
-                )}
-              </div>
+        <table className="table">
+          <thead><tr><th>Name</th><th>E-Mail</th><th>Plan</th><th>Private Feed-URL</th><th>Status</th></tr></thead>
+          <tbody>
+            {PRIVATE_SUBS.map((s) => (
+              <tr key={s.id}>
+                <td style={{ fontWeight: 500, fontSize: 13 }}>{s.name}</td>
+                <td className="meta">{s.email}</td>
+                <td><Badge kind={s.plan === 'Pro' ? 'brand' : 'ghost'}>{s.plan}</Badge></td>
+                <td>
+                  <div className="row gap-2 items-center">
+                    <code style={{ fontSize: 10.5, color: 'var(--text-3)', flex: 1 }}>{s.feedUrl}</code>
+                    <button className="btn btn-quiet btn-sm" style={{ flexShrink: 0 }} onClick={() => navigator.clipboard?.writeText(s.feedUrl)} title="URL kopieren">
+                      <I.link size={11} />
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  {s.active
+                    ? <span style={{ fontSize: 12, color: 'var(--success)' }}>● Aktiv</span>
+                    : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>Inaktiv</span>}
+                </td>
+              </tr>
             ))}
-          </div>
-        </div>
-      </div>
-
-      <McpHint tools={['get_analytics']} note="IAB Tier 2 Compliance · Unique Listener Dedup aktiv" />
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Tab 3 — Transkripte
-// ═══════════════════════════════════════════════════════════════════════════
-function TranskripteTab() {
-  const [selectedEp, setSelectedEp] = useState('');
-  const [transcript, setTranscript] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const loadTranscript = async () => {
-    if (!selectedEp) return;
-    setLoading(true);
-    setTranscript('');
-    // Simuliert MCP tool: get_transcript
-    await new Promise((r) => setTimeout(r, 900));
-    const ep = MOCK_EPISODES.find((e) => e.id === selectedEp);
-    setTranscript(
-      ep?.status === 'published'
-        ? `[Transkript für "${ep.title}"]\n\nHost: Herzlich willkommen bei UnicornBakery. Ich bin Fabian Tausch, und heute sprechen wir mit ${ep.guest}.\n\nGast: Vielen Dank für die Einladung, Fabian.\n\nHost: Lass uns direkt einsteigen — wie sah dein erster Tag als Gründer aus?\n\n[…]\n\n⚠️  Dies ist ein Platzhalter-Transkript.\nVerbinde den MCP-Server mit beehiiv, um echte Transkripte zu laden.\nMCP Tool: get_transcript(episode_id: "${ep.id}")`
-        : `Kein Transkript verfügbar — Episode hat Status "${ep?.status}".`,
-    );
-    setLoading(false);
-  };
-
-  return (
-    <div className="col gap-4">
-      <div className="card card-pad">
-        <div className="h3 mb-1">Episoden-Transkript</div>
-        <div className="meta mb-4">Transkripte werden via MCP-Server von beehiiv abgerufen (Tool: <code>get_transcript</code>).</div>
-
-        <div className="row gap-3 mb-4" style={{ alignItems: 'flex-end' }}>
-          <div className="col gap-1" style={{ flex: 1 }}>
-            <label className="label">Episode auswählen</label>
-            <select
-              className="input"
-              value={selectedEp}
-              onChange={(e) => { setSelectedEp(e.target.value); setTranscript(''); }}
-              style={{ maxWidth: 420 }}
-            >
-              <option value="">— Episode wählen —</option>
-              {MOCK_EPISODES.filter((e) => e.status === 'published').map((ep) => (
-                <option key={ep.id} value={ep.id}>Ep. {ep.num} · {ep.title}</option>
-              ))}
-            </select>
-          </div>
-          <button
-            className="btn btn-brand btn-sm"
-            onClick={loadTranscript}
-            disabled={!selectedEp || loading}
-          >
-            {loading ? <><I.mic size={13} /> Lade…</> : <><I.download size={13} /> Transkript laden</>}
-          </button>
-        </div>
-
-        {!transcript && !loading && (
-          <div style={{
-            minHeight: 240, borderRadius: 8, border: '1.5px dashed var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-4)', fontSize: 13,
-          }}>
-            {selectedEp ? 'Klicke "Transkript laden" um den Inhalt abzurufen.' : 'Wähle eine Episode aus.'}
-          </div>
-        )}
-
-        {loading && (
-          <div style={{ minHeight: 240, borderRadius: 8, border: '1px solid var(--border)', padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
-            <I.mic size={14} /> MCP Tool wird aufgerufen — get_transcript…
-          </div>
-        )}
-
-        {transcript && (
-          <textarea
-            className="input"
-            readOnly
-            value={transcript}
-            rows={14}
-            style={{ fontSize: 13, lineHeight: 1.7, resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        )}
-      </div>
-
-      <McpHint tools={['get_transcript']} />
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Tab 4 — Distribution Status
-// ═══════════════════════════════════════════════════════════════════════════
-function DistributionTab() {
-  return (
-    <div className="col gap-4">
-      <div className="grid grid-2 gap-3">
-        {PLATFORMS.map((p) => (
-          <div key={p.id} className="card card-pad">
-            <div className="row between mb-3">
-              <div className="row gap-3">
-                <span style={{ fontSize: 28, lineHeight: 1 }}>{p.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14.5 }}>{p.name}</div>
-                  {p.since && <div className="meta mt-1">Aktiv seit {p.since}</div>}
-                  {p.note && <div className="meta mt-1">{p.note}</div>}
-                </div>
-              </div>
-              <PlatformStatusBadge status={p.status} />
-            </div>
-
-            {p.status === 'active' && p.rss && (
-              <>
-                <div className="label" style={{ marginBottom: 4 }}>RSS Feed</div>
-                <div className="row gap-2 items-center" style={{ background: 'var(--bg)', borderRadius: 6, padding: '6px 10px', border: '1px solid var(--border-soft)' }}>
-                  <I.rss size={12} color="var(--text-3)" />
-                  <span className="mono truncate" style={{ fontSize: 11.5, flex: 1 }}>{p.rss}</span>
-                  <button className="btn btn-quiet btn-sm" style={{ fontSize: 11 }}><I.link size={11} /></button>
-                </div>
-              </>
-            )}
-
-            {p.status === 'review' && (
-              <div style={{ padding: '10px 12px', background: 'var(--warning-bg)', borderRadius: 6, border: '1px solid var(--warning-border)', fontSize: 12.5, color: 'var(--warning)' }}>
-                ⚠️ Spotify führt eine rechtliche Prüfung des Inhalts durch. Keine Aktion erforderlich — wir werden benachrichtigt, sobald die Prüfung abgeschlossen ist.
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="card card-pad" style={{ background: 'var(--info-bg)', borderColor: 'var(--info-border)' }}>
-        <div className="row gap-2 mb-2">
-          <I.radio size={14} color="var(--info)" />
-          <span style={{ fontWeight: 600 }}>Distribution-Übersicht</span>
-        </div>
-        <div className="grid grid-3 gap-4 mt-3">
-          <div>
-            <div className="label">Aktive Plattformen</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
-              {PLATFORMS.filter(p => p.status === 'active').length}
-            </div>
-          </div>
-          <div>
-            <div className="label">In Prüfung</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: 'var(--warning)' }}>
-              {PLATFORMS.filter(p => p.status === 'review').length}
-            </div>
-          </div>
-          <div>
-            <div className="label">Nicht konfiguriert</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: 'var(--text-4)' }}>
-              {PLATFORMS.filter(p => p.status === 'inactive').length}
-            </div>
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-function PlatformStatusBadge({ status }) {
-  if (status === 'active')   return <Badge kind="success" dot large>Aktiv</Badge>;
-  if (status === 'review')   return <Badge kind="warning" dot large>In Prüfung</Badge>;
-  return <span style={{ fontSize: 12, color: 'var(--text-4)' }}>— Nicht konfiguriert</span>;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// Tab 5 — Migration (RSS-Import)
+// Tab 7 — Migration Wizard
 // ═══════════════════════════════════════════════════════════════════════════
 function MigrationTab() {
   const [rssUrl, setRssUrl] = useState('');
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [phase, setPhase] = useState('idle'); // idle | preview | running | done
+  const [runningStep, setRunningStep] = useState(0);
+  const [steps, setSteps] = useState(PIPELINE_STEPS);
 
-  const loadPreview = async () => {
-    if (!rssUrl.trim()) return;
-    setLoading(true);
-    setPreview(null);
-    await new Promise((r) => setTimeout(r, 700));
-    // Simulierter Vorschau-Abruf
-    setPreview({
-      title: 'UnicornBakery Podcast',
-      description: 'Interviews mit den erfolgreichsten Gründern aus dem DACH-Raum.',
-      episodeCount: 142,
-      episodes: [
-        { num: 142, title: 'Fabian Tausch — UnicornBakery', date: '2026-05-14' },
-        { num: 141, title: 'Anna Kirmße — Series A Fundraising', date: '2026-05-07' },
-        { num: 140, title: 'Marc Beckmann — B2B SaaS Exit', date: '2026-04-30' },
-      ],
-    });
-    setLoading(false);
+  const startPreview = () => { if (rssUrl.trim()) setPhase('preview'); };
+
+  const startMigration = async () => {
+    setPhase('running');
+    setRunningStep(0);
+    const newSteps = PIPELINE_STEPS.map((s) => ({ ...s, status: 'pending' }));
+    setSteps(newSteps);
+
+    for (let i = 0; i < PIPELINE_STEPS.length; i++) {
+      await new Promise((r) => setTimeout(r, i === 3 ? 2000 : 700));
+      setRunningStep(i);
+      setSteps((prev) => prev.map((s, idx) => ({
+        ...s,
+        status: idx < i ? 'done' : idx === i ? 'running' : 'pending',
+      })));
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    setSteps(PIPELINE_STEPS.map((s) => ({ ...s, status: 'done' })));
+    setPhase('done');
   };
 
-  const startImport = async () => {
-    setImporting(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setImporting(false);
-    setDone(true);
-  };
+  const doneCount = steps.filter((s) => s.status === 'done').length;
+  const pct = Math.round((doneCount / steps.length) * 100);
 
   return (
     <div className="col gap-4">
       <div className="card card-pad">
-        <div className="h3 mb-1">Full Migration Support</div>
-        <div className="meta mb-4">
-          Importiere alle Episoden von einem bestehenden RSS-Feed. Metadaten, Show Notes und Statistiken werden übertragen.
+        <div className="row between mb-3">
+          <div>
+            <div className="h3">Durable Import Pipeline</div>
+            <div className="meta mt-1">Vollständige Migration inkl. Metadaten · Audio · Artwork · Statistiken</div>
+          </div>
+          <McpTag tool="migrate_feed" />
         </div>
 
-        <div className="col gap-3">
-          <div className="col gap-1">
-            <label className="label">RSS Feed URL</label>
-            <div className="row gap-2">
-              <div className="row gap-2 items-center" style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', background: 'var(--bg-elev)' }}>
-                <I.rss size={14} color="var(--text-4)" />
-                <input
-                  className="input"
-                  style={{ border: 'none', flex: 1 }}
-                  placeholder="https://feeds.example.com/mein-podcast.xml"
-                  value={rssUrl}
-                  onChange={(e) => { setRssUrl(e.target.value); setPreview(null); setDone(false); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') loadPreview(); }}
-                />
+        {/* RSS Input */}
+        {phase === 'idle' && (
+          <div className="col gap-3">
+            <div className="col gap-1">
+              <label className="label">Quell-RSS-Feed</label>
+              <div className="row gap-2">
+                <div className="row gap-2 items-center" style={{ flex: 1, maxWidth: 480, border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', background: 'var(--bg-elev)' }}>
+                  <I.rss size={14} color="var(--text-4)" />
+                  <input className="input" style={{ border: 'none', flex: 1 }} placeholder="https://feeds.example.com/podcast.xml"
+                    value={rssUrl} onChange={(e) => setRssUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && startPreview()} />
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={startPreview} disabled={!rssUrl.trim()}>Vorschau →</button>
               </div>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={loadPreview}
-                disabled={!rssUrl.trim() || loading}
-              >
-                {loading ? 'Lade…' : 'Vorschau'}
-              </button>
+              <div className="meta">Unterstützt: RSS 2.0, Atom · Apple, Spotify, Podbean, Buzzsprout, Anchor, Simplecast</div>
             </div>
-            <div className="meta">Unterstützt: Apple Podcasts, Spotify, Podbean, Anchor, Buzzsprout und alle Standard-RSS 2.0 Feeds.</div>
           </div>
+        )}
 
-          {preview && !done && (
-            <div className="col gap-3 mt-2">
+        {/* Preview */}
+        {(phase === 'preview' || phase === 'running' || phase === 'done') && (
+          <div className="col gap-4">
+            {phase === 'preview' && (
               <div style={{ padding: '14px 16px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{preview.title}</div>
-                <div className="meta mt-1">{preview.description}</div>
-                <div className="row gap-3 mt-3">
-                  <span className="badge ghost">{preview.episodeCount} Episoden gefunden</span>
-                  <span className="badge ghost"><I.rss size={11} /> RSS 2.0</span>
+                <div className="row between">
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>UnicornBakery Podcast</div>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setPhase('idle')}>Ändern</button>
+                </div>
+                <div className="meta mt-1">Gründer-Interviews aus dem DACH-Raum</div>
+                <div className="row gap-2 mt-3">
+                  <span className="badge ghost">142 Episoden</span>
+                  <span className="badge ghost">RSS 2.0</span>
+                  <span className="badge ghost">6 Mo. Statistik</span>
+                  <span className="badge ghost">Artwork vorhanden</span>
                 </div>
               </div>
+            )}
 
-              <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-soft)', fontSize: 12.5, color: 'var(--text-3)' }}>
-                  Vorschau — letzte 3 Episoden
+            {/* Pipeline */}
+            <div>
+              {(phase === 'running' || phase === 'done') && (
+                <div className="mb-3">
+                  <div className="row between mb-2">
+                    <span className="label">Gesamtfortschritt</span>
+                    <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{pct}%</span>
+                  </div>
+                  <div className="progress" style={{ height: 8 }}>
+                    <div className="progress-bar" style={{ width: pct + '%', transition: 'width 0.5s' }} />
+                  </div>
                 </div>
-                {preview.episodes.map((ep) => (
-                  <div key={ep.num} className="row gap-3" style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-                    <span className="mono" style={{ fontSize: 11.5, color: 'var(--text-4)', minWidth: 32 }}>#{ep.num}</span>
-                    <span style={{ flex: 1, fontSize: 13 }}>{ep.title}</span>
-                    <span className="meta">{ep.date}</span>
+              )}
+
+              <div className="col gap-0">
+                {steps.map((step, i) => (
+                  <div key={step.id} className="row gap-3 items-start" style={{ padding: '10px 0', borderBottom: i < steps.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 999, flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: step.status === 'done' ? 'var(--success)' : step.status === 'running' ? 'var(--warning)' : 'var(--bg-sunk)',
+                      border: `2px solid ${step.status === 'done' ? 'var(--success)' : step.status === 'running' ? 'var(--warning)' : 'var(--border)'}` }}>
+                      {step.status === 'done'    && <span style={{ fontSize: 10, color: 'white' }}>✓</span>}
+                      {step.status === 'running' && <span style={{ width: 8, height: 8, borderRadius: 999, background: 'white', display: 'inline-block' }} />}
+                      {step.status === 'pending' && <span style={{ fontSize: 10, color: 'var(--text-4)' }}>{i + 1}</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: step.status === 'running' ? 600 : 400 }}>{step.label}</div>
+                      <div className="meta" style={{ fontSize: 11.5 }}>{step.detail}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: step.status === 'done' ? 'var(--success)' : step.status === 'running' ? 'var(--warning)' : 'var(--text-4)' }}>
+                      {step.status === 'done' ? 'Fertig' : step.status === 'running' ? 'Läuft…' : 'Ausstehend'}
+                    </span>
                   </div>
                 ))}
               </div>
+            </div>
 
-              <button
-                className="btn btn-brand"
-                onClick={startImport}
-                disabled={importing}
-                style={{ alignSelf: 'flex-start' }}
-              >
-                {importing ? 'Importiere…' : `${preview.episodeCount} Episoden importieren →`}
+            {phase === 'preview' && (
+              <button className="btn btn-brand" onClick={startMigration} style={{ alignSelf: 'flex-start' }}>
+                Migration starten →
               </button>
-            </div>
-          )}
+            )}
 
-          {done && (
-            <div style={{ padding: '14px 16px', background: 'var(--success-bg)', borderRadius: 8, border: '1px solid var(--success-border)', color: 'var(--success)' }}>
-              ✓ Migration abgeschlossen — {preview?.episodeCount} Episoden wurden importiert.{' '}
-              <span style={{ color: 'var(--text-2)' }}>In einer echten Integration würde dies MCP Tool <code>migrate_feed</code> aufrufen.</span>
-            </div>
-          )}
-        </div>
+            {phase === 'done' && (
+              <div style={{ padding: '14px 16px', background: 'var(--success-bg)', borderRadius: 8, border: '1px solid var(--success-border)', color: 'var(--success)', fontSize: 13 }}>
+                ✓ Migration abgeschlossen — 142 Episoden erfolgreich importiert. 0 Duplikate gefunden.
+              </div>
+            )}
+          </div>
+        )}
       </div>
-
-      <McpHint tools={['migrate_feed']} note="Vollständige Migration inkl. Metadaten, Show Notes und historischer Analytics" />
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Shared: MCP-Hinweis-Banner
+// Tab 8 — Studio (Write Tools + Dynamic Pages)
 // ═══════════════════════════════════════════════════════════════════════════
-function McpHint({ tools, note }) {
+function StudioTab() {
   return (
-    <div style={{ padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border-soft)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-      <I.rss size={13} color="var(--text-4)" style={{ flexShrink: 0, marginTop: 1 }} />
+    <div className="col gap-4">
+      {/* Write Tools */}
       <div>
-        <span style={{ fontSize: 11.5, color: 'var(--text-3)', fontWeight: 600 }}>MCP Tools: </span>
-        {tools.map((t) => (
-          <code key={t} style={{ fontSize: 10.5, background: 'var(--bg-sunk)', borderRadius: 4, padding: '1px 5px', marginRight: 4 }}>{t}</code>
-        ))}
-        {note && <div className="meta" style={{ marginTop: 4, fontSize: 11 }}>{note}</div>}
+        <div className="row gap-2 mb-3 items-center">
+          <div className="h3">Write Tools</div>
+          <Badge kind="warning">Coming Soon</Badge>
+        </div>
+        <div className="grid grid-2 gap-3">
+          <StudioCard
+            icon="✍️"
+            title="Episode erstellen"
+            desc="Neues Skript, Show Notes und Metadaten direkt im Command Center verfassen."
+            tools={['create_episode', 'update_episode']}
+            eta="Q3 2026"
+          />
+          <StudioCard
+            icon="✏️"
+            title="Episode bearbeiten"
+            desc="Titel, Beschreibung, Gäste und Kapitel einer bestehenden Episode anpassen."
+            tools={['update_episode', 'get_episode']}
+            eta="Q3 2026"
+          />
+          <StudioCard
+            icon="📋"
+            title="Skript-Editor"
+            desc="KI-unterstützter Skript-Editor mit Kapitel-Erkennung und Zeitstempel-Vorschau."
+            tools={['create_episode']}
+            eta="Q4 2026"
+            badge="KI"
+          />
+          <StudioCard
+            icon="🎯"
+            title="Episode SEO"
+            desc="Automatische Optimierung von Titel und Beschreibung für Apple und Spotify-Suche."
+            tools={['update_episode']}
+            eta="Q4 2026"
+            badge="KI"
+          />
+        </div>
       </div>
+
+      {/* Dynamic Pages */}
+      <div>
+        <div className="row gap-2 mb-3 items-center">
+          <div className="h3">Dynamic Pages · Audio Teaser</div>
+          <Badge kind="warning">Coming Soon</Badge>
+        </div>
+        <div className="grid grid-2 gap-3">
+          <StudioCard
+            icon="🎧"
+            title="Audio-Teaser Seite"
+            desc="Einbettbare Landingpage mit 60-Sekunden-Teaser, Gäste-Bio und CTA zum Abonnieren."
+            tools={['get_episode']}
+            eta="Q3 2026"
+          />
+          <StudioCard
+            icon="📱"
+            title="Episode Embed"
+            desc="Responsiver Audio-Player im beehiiv Embed-Design — für Newsletter, Website und Social."
+            tools={['get_episode']}
+            eta="Q3 2026"
+            badge="beehiiv Design"
+          />
+          <StudioCard
+            icon="🎬"
+            title="Video Teaser Page"
+            desc="Automatische Clip-Extraktion und Kurzform-Content für YouTube Shorts und TikTok."
+            tools={['get_episode']}
+            eta="Juli 2026"
+            badge="Video"
+          />
+          <StudioCard
+            icon="🌐"
+            title="Podcast Website"
+            desc="Vollständige Podcast-Website aus deinen Episoden-Daten mit SEO-Optimierung."
+            tools={['get_show', 'list_episodes']}
+            eta="Q4 2026"
+          />
+        </div>
+      </div>
+
+      {/* beehiiv Embed Design Reference */}
+      <div className="card card-pad" style={{ background: 'var(--info-bg)', borderColor: 'var(--info-border)' }}>
+        <div className="row gap-3 mb-3">
+          <I.radio size={18} color="var(--info)" />
+          <div>
+            <div style={{ fontWeight: 600 }}>beehiiv Final Opinionated Design · Embed-Referenz</div>
+            <div className="meta mt-1">Alle Audio-Embeds folgen diesem Design-System für maximale Konsistenz</div>
+          </div>
+        </div>
+        {/* Mock beehiiv-style embed */}
+        <div style={{ background: 'white', borderRadius: 12, padding: '16px 18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', maxWidth: 480 }}>
+          <div className="row gap-3 items-center">
+            <div style={{ width: 52, height: 52, borderRadius: 8, background: 'linear-gradient(135deg, #1a1d24, #3b4a6b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ color: 'white', fontSize: 22 }}>🎙</span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5, color: '#111', lineHeight: 1.3 }}>UnicornBakery Podcast</div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Ep. 142 · Fabian Tausch · 58 Min</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: '#f3f4f6', borderRadius: 6, height: 4, position: 'relative' }}>
+            <div style={{ width: '35%', height: '100%', background: '#1a1d24', borderRadius: 6 }} />
+          </div>
+          <div className="row between" style={{ marginTop: 8, fontSize: 11, color: '#9ca3af' }}>
+            <span>20:24</span>
+            <div className="row gap-3">
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⏮</button>
+              <button style={{ width: 32, height: 32, borderRadius: 999, background: '#1a1d24', border: 'none', cursor: 'pointer', color: 'white', fontSize: 14 }}>▶</button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⏭</button>
+            </div>
+            <span>58:24</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudioCard({ icon, title, desc, tools, eta, badge }) {
+  return (
+    <div className="card card-pad" style={{ opacity: 0.85 }}>
+      <div className="row between mb-2">
+        <span style={{ fontSize: 28 }}>{icon}</span>
+        <div className="row gap-1">
+          {badge && <Badge kind="ghost" style={{ fontSize: 10 }}>{badge}</Badge>}
+          <span style={{ fontSize: 11, color: 'var(--text-4)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px' }}>{eta}</span>
+        </div>
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4 }}>{title}</div>
+      <div className="meta" style={{ fontSize: 12.5, lineHeight: 1.5, marginBottom: 10 }}>{desc}</div>
+      <div className="row gap-1 flex-wrap">
+        {tools.map((t) => <code key={t} style={{ fontSize: 10, background: 'var(--bg-sunk)', borderRadius: 3, padding: '1px 5px', color: 'var(--text-3)' }}>{t}</code>)}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shared helpers
+// ═══════════════════════════════════════════════════════════════════════════
+function MiniBarChart({ data, showLabels }) {
+  const max = Math.max(...data);
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80 }}>
+      {data.map((val, i) => {
+        const h = Math.round((val / max) * 100);
+        const isLast = i === data.length - 1;
+        return (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div style={{ width: '100%', height: h + '%', minHeight: 3, background: isLast ? 'var(--brand)' : 'var(--bg-sunk)', borderRadius: '2px 2px 0 0', border: isLast ? '1px solid var(--brand)' : '1px solid var(--border)' }}
+              title={`${val.toLocaleString('de')} Downloads`} />
+            {showLabels && i % 3 === 0 && <span style={{ fontSize: 9, color: 'var(--text-4)' }}>W{i + 1}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ActivityIcon({ name, color }) {
+  const size = 13;
+  const map = { download: <I.download size={size} />, mic: <I.mic size={size} />, globe: <I.globe size={size} />, rss: <I.rss size={size} />, doc: <I.doc size={size} />, radio: <I.radio size={size} />, trend: <I.trend size={size} /> };
+  return <span style={{ color }}>{map[name] ?? <I.activity size={size} />}</span>;
+}
+
+function PlatformBadge({ status }) {
+  if (status === 'active')   return <Badge kind="success" dot>Aktiv</Badge>;
+  if (status === 'review')   return <Badge kind="warning" dot>In Prüfung</Badge>;
+  if (status === 'video')    return <Badge kind="ghost" dot>Video · Juli 2026</Badge>;
+  return <span style={{ fontSize: 12, color: 'var(--text-4)' }}>— Nicht konfiguriert</span>;
+}
+
+function EpStatusBadge({ status }) {
+  const map = { published: ['success', 'Veröffentlicht'], scheduled: ['warning', 'Geplant'], draft: ['ghost', 'Entwurf'] };
+  const [kind, label] = map[status] ?? ['ghost', status];
+  return <Badge kind={kind} dot>{label}</Badge>;
+}
+
+function McpTag({ tool }) {
+  return (
+    <div className="row gap-1 items-center" style={{ fontSize: 10.5, color: 'var(--text-4)', border: '1px solid var(--border-soft)', borderRadius: 4, padding: '2px 8px', background: 'var(--bg)' }}>
+      <I.rss size={10} /> MCP: <code style={{ fontSize: 10 }}>{tool}</code>
     </div>
   );
 }
