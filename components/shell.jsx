@@ -81,6 +81,13 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           </div>
         ))}
 
+        <div className="nav-section">Content</div>
+        <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => setRoute('podcast')} style={{ position: 'relative' }}>
+          <I.mic size={16} />
+          <span>Podcast Hub</span>
+          <span className="nav-count" style={{ background: 'var(--brand)', color: 'white', fontSize: 9, padding: '1px 5px' }}>neu</span>
+        </div>
+
         <div className="nav-section">Pinned Projects</div>
         {data.projects.slice(0, 3).map(p => (
           <div key={p.id} className={`nav-item ${route === 'project:'+p.id ? 'active' : ''}`} onClick={() => setRoute('project:'+p.id)} style={{ paddingLeft: 12 }}>
