@@ -31,6 +31,7 @@ import {
 } from 'react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { db } from '@/lib/db';
+import { rowToTask, rowToProject, rowToActivity } from '@/lib/db/supabase';
 import { D } from '@/lib/data';
 
 const EMPTY_DATA = {
@@ -188,6 +189,90 @@ export function WorkspaceProvider({ children }) {
   useEffect(() => {
     loadData(currentWorkspaceId);
   }, [currentWorkspaceId, loadData]);
+
+  // ── Supabase Realtime subscription ────────────────────────────────────────
+  // Subscribes to INSERT/UPDATE/DELETE events on tasks, projects, and
+  // activity_logs so changes made by other tabs or other users are reflected
+  // in the cache without a manual refresh.
+  //
+  // Deduplication for INSERT: our own server actions already add entities to
+  // the cache optimistically, so we skip an INSERT whose id is already present.
+  // UPDATE and DELETE are idempotent, so no dedup needed.
+  //
+  // Requires migration 0005_realtime.sql to be applied (adds the tables to the
+  // supabase_realtime publication).
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !currentWorkspaceId) return;
+    const supabase = createClient();
+    if (!supabase) return;
+
+    let channel = null;
+    let cancelled = false;
+
+    (async () => {
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('slug', currentWorkspaceId)
+        .maybeSingle();
+      if (cancelled || !ws?.id) return;
+      const uuid = ws.id;
+      const slug = currentWorkspaceId;
+
+      channel = supabase
+        .channel(`ws-${slug}-live`)
+        // ── Tasks ──────────────────────────────────────────────────────────
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const task = rowToTask(payload.new, slug);
+          setData((d) => {
+            if (d.tasks.some((t) => t.id === task.id)) return d;
+            return { ...d, tasks: [task, ...d.tasks] };
+          });
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const task = rowToTask(payload.new, slug);
+          setData((d) => ({ ...d, tasks: d.tasks.map((t) => t.id === task.id ? task : t) }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const id = payload.old?.id;
+          if (id) setData((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
+        })
+        // ── Projects ───────────────────────────────────────────────────────
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const project = rowToProject(payload.new, slug);
+          setData((d) => {
+            if (d.projects.some((p) => p.id === project.id)) return d;
+            return { ...d, projects: [project, ...d.projects] };
+          });
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projects', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const project = rowToProject(payload.new, slug);
+          setData((d) => ({ ...d, projects: d.projects.map((p) => p.id === project.id ? project : p) }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'projects', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const id = payload.old?.id;
+          if (id) setData((d) => ({
+            ...d,
+            projects: d.projects.filter((p) => p.id !== id),
+            tasks: d.tasks.filter((t) => t.projectId !== id),
+          }));
+        })
+        // ── Activity logs ──────────────────────────────────────────────────
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const entry = rowToActivity(payload.new, slug);
+          setData((d) => {
+            if (d.activity.some((a) => a.id === entry.id)) return d;
+            return { ...d, activity: [entry, ...d.activity] };
+          });
+        })
+        .subscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [currentWorkspaceId]);
 
   const refresh = useCallback(
     () => loadData(currentWorkspaceId),
