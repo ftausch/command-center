@@ -71,7 +71,23 @@ function mapProfile(row: any): UserView {
   };
 }
 
-function mapProject(row: any, workspaceSlug: string): ProjectView {
+export function rowToTask(row: any, workspaceSlug: string): TaskView {
+  return {
+    id: row.id,
+    workspace: workspaceSlug,
+    projectId: row.project_id,
+    title: row.title,
+    assignee: row.assignee_id ?? '',
+    status: row.status,
+    priority: row.priority,
+    due: row.due_date ?? '',
+    tags: row.tags ?? [],
+    waitingOn: row.waiting_on_id ?? undefined,
+    blocker: row.blocker ?? undefined,
+  };
+}
+
+export function rowToProject(row: any, workspaceSlug: string): ProjectView {
   return {
     id: row.id,
     workspace: workspaceSlug,
@@ -90,20 +106,33 @@ function mapProject(row: any, workspaceSlug: string): ProjectView {
   };
 }
 
-function mapTask(row: any, workspaceSlug: string): TaskView {
+export function rowToActivity(row: any, workspaceSlug: string): ActivityView {
   return {
     id: row.id,
     workspace: workspaceSlug,
-    projectId: row.project_id,
-    title: row.title,
-    assignee: row.assignee_id ?? '',
-    status: row.status,
-    priority: row.priority,
-    due: row.due_date ?? '',
-    tags: row.tags ?? [],
-    waitingOn: row.waiting_on_id ?? undefined,
-    blocker: row.blocker ?? undefined,
+    user: row.actor_id ?? '',
+    verb: (row.kind as string).replaceAll('_', ' '),
+    target: row.target_id,
+    meta: row.meta ? JSON.stringify(row.meta) : '',
+    time: row.created_at,
+    icon:
+      row.kind === 'task_completed'     ? 'check' :
+      row.kind === 'task_blocked'       ? 'block' :
+      row.kind === 'task_created'       ? 'plus' :
+      row.kind === 'project_created'    ? 'plus' :
+      row.kind === 'task_assigned'      ? 'user' :
+      row.kind === 'comment_added'      ? 'message' :
+      row.kind === 'task_status_changed'? 'arrow-right' :
+      'plus',
   };
+}
+
+function mapProject(row: any, workspaceSlug: string): ProjectView {
+  return rowToProject(row, workspaceSlug);
+}
+
+function mapTask(row: any, workspaceSlug: string): TaskView {
+  return rowToTask(row, workspaceSlug);
 }
 
 // Look up a workspace's UUID from its slug. Cached per-request would be
@@ -223,23 +252,7 @@ export async function listActivity(
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []).map((a: any): ActivityView => ({
-    id: a.id,
-    workspace: workspaceSlug,
-    user: a.actor_id ?? '',
-    verb: a.kind.replaceAll('_', ' '),
-    target: a.target_id,
-    meta: a.meta ? JSON.stringify(a.meta) : '',
-    time: a.created_at,
-    icon:
-      a.kind === 'task_completed' ? 'check' :
-      a.kind === 'task_blocked' ? 'block' :
-      a.kind === 'task_created' ? 'plus' :
-      a.kind === 'task_assigned' ? 'user' :
-      a.kind === 'comment_added' ? 'message' :
-      a.kind === 'task_status_changed' ? 'arrow-right' :
-      'plus',
-  }));
+  return (data ?? []).map((a: any) => rowToActivity(a, workspaceSlug));
 }
 
 export async function listSlackNotifications(
