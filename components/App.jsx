@@ -112,7 +112,7 @@ export function App() {
         breadcrumb = 'Team';
         break;
       case 'templates':
-        screen = <TemplatesScreen />;
+        screen = <TemplatesScreen setRoute={setRoute} />;
         breadcrumb = 'Templates';
         break;
       case 'activity':
