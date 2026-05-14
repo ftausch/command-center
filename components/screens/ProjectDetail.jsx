@@ -8,7 +8,7 @@ import {
   Avatar, AvatarStack, Badge, BrandBadge,
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
-import { dueLabel, formatDateLong, timeAgo } from '@/lib/utils';
+import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
 import { updateProject, deleteProject } from '@/lib/actions/projects';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
@@ -117,6 +117,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
   const phases = data.phases;
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
+  const progress = projectProgress(tasks);
   // Project-wide read-only roll-up of comments already in cache. The
   // per-task write surface lives in the TaskDrawer (open a task to add a
   // comment) — anchoring the write to a specific task is the whole
@@ -247,10 +248,10 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className="row gap-3">
             <div className="col items-end">
               <span className="label">Progress</span>
-              <span className="mono mt-1" style={{ fontSize: 16, fontWeight: 600 }}>{project.progress}%</span>
+              <span className="mono mt-1" style={{ fontSize: 16, fontWeight: 600 }}>{progress}%</span>
             </div>
             <div style={{ width: 180 }}>
-              <Progress value={project.progress} brand />
+              <Progress value={progress} brand />
               <div className="meta mt-1" style={{ textAlign: 'right' }}>{tasks.filter((t) => t.status === 'Done').length}/{tasks.length} Tasks done</div>
             </div>
           </div>

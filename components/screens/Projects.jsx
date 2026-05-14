@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
-import { dueLabel, statusColor } from '@/lib/utils';
+import { dueLabel, projectProgress, statusColor } from '@/lib/utils';
 import { NewProjectModal } from '@/components/NewProjectModal';
 
 export function ProjectsScreen({ setRoute }) {
@@ -15,6 +15,7 @@ export function ProjectsScreen({ setRoute }) {
   const [createOpen, setCreateOpen] = useState(false);
 
   const all = data.projects;
+  const allTasks = data.tasks;
   const filtered = useMemo(() => {
     let r = all;
     if (statusFilter !== 'All') r = r.filter((p) => p.status === statusFilter);
@@ -90,6 +91,7 @@ export function ProjectsScreen({ setRoute }) {
               const owner = data.members.find((u) => u.id === p.owner);
               const phases = data.phases;
               const due = dueLabel(p.due);
+              const pProgress = projectProgress(allTasks.filter((t) => t.projectId === p.id));
               return (
                 <tr key={p.id} onClick={() => setRoute('project:' + p.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ minWidth: 240 }}>
@@ -105,8 +107,8 @@ export function ProjectsScreen({ setRoute }) {
                   </td>
                   <td style={{ minWidth: 140 }}>
                     <div className="row gap-2 items-center">
-                      <div style={{ flex: 1 }}><Progress value={p.progress} brand /></div>
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 30, textAlign: 'right' }}>{p.progress}%</span>
+                      <div style={{ flex: 1 }}><Progress value={pProgress} brand /></div>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 30, textAlign: 'right' }}>{pProgress}%</span>
                     </div>
                   </td>
                   <td><PriorityBadge priority={p.priority} /></td>
