@@ -16,15 +16,9 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { generateMarketingPackage } from '@/lib/actions/podcast';
+import { createEpisode } from '@/lib/actions/episodes';
 
-// ── Shared data ───────────────────────────────────────────────────────────
-const EPISODES = [
-  { id: 'ep-142', num: 142, title: 'Wie Fabian Tausch UnicornBakery aufgebaut hat',  guest: 'Fabian Tausch',  date: '2026-05-14', duration: '58:24', downloads: 4820, status: 'published', hasVideo: true  },
-  { id: 'ep-141', num: 141, title: 'Die Fundraising-Formel — Series A in 90 Tagen', guest: 'Anna Kirmße',    date: '2026-05-07', duration: '51:12', downloads: 3940, status: 'published', hasVideo: false },
-  { id: 'ep-140', num: 140, title: 'B2B SaaS Exit: Was Käufer wirklich wollen',      guest: 'Marc Beckmann', date: '2026-04-30', duration: '62:08', downloads: 5210, status: 'published', hasVideo: true  },
-  { id: 'ep-143', num: 143, title: 'Cold Outbound im KI-Zeitalter',                  guest: 'Lisa Kirsch',   date: '2026-05-21', duration: '—',     downloads: 0,    status: 'scheduled', hasVideo: false },
-  { id: 'ep-144', num: 144, title: 'Neue Episode — Titel ausstehend',                guest: '—',             date: '—',          duration: '—',     downloads: 0,    status: 'draft',     hasVideo: false },
-];
+// EPISODES is now loaded from Supabase via WorkspaceProvider.
 
 const ANALYTICS = {
   totalDownloads: 284_620,
@@ -97,7 +91,8 @@ function fmt(n) { if (n == null || isNaN(n)) return '—'; return n >= 1_000_000
 
 // ── Main Screen ───────────────────────────────────────────────────────────
 export function PodcastHubScreen() {
-  const { currentWorkspace: brand } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, addEpisode } = useWorkspace();
+  const episodes = data.episodes ?? [];
   const [tab, setTab] = useState('overview');
 
   const tabs = [
@@ -151,12 +146,12 @@ export function PodcastHubScreen() {
         ))}
       </div>
 
-      {tab === 'overview'     && <OverviewTab />}
-      {tab === 'episodes'     && <EpisodenTab />}
+      {tab === 'overview'     && <OverviewTab episodes={episodes} />}
+      {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} />}
       {tab === 'analytics'    && <AnalyticsTab />}
-      {tab === 'transcripts'  && <TranskriptKITab />}
+      {tab === 'transcripts'  && <TranskriptKITab episodes={episodes} />}
       {tab === 'distribution' && <DistributionTab />}
-      {tab === 'privatefeeds' && <PrivateFeedsTab />}
+      {tab === 'privatefeeds' && <PrivateFeedsTab episodes={episodes} />}
       {tab === 'migration'    && <MigrationTab />}
       {tab === 'studio'       && <StudioTab />}
     </div>
@@ -166,15 +161,19 @@ export function PodcastHubScreen() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 1 — Übersicht (Unified View)
 // ═══════════════════════════════════════════════════════════════════════════
-function OverviewTab() {
+function OverviewTab({ episodes }) {
+  const published = episodes.filter((e) => e.status === 'published');
+  const scheduled = episodes.filter((e) => e.status === 'scheduled');
+  const totalDownloads = episodes.reduce((s, e) => s + (e.downloads ?? 0), 0);
+  const avgPerEp = published.length ? Math.round(totalDownloads / published.length) : 0;
   return (
     <div className="col gap-4">
       {/* Top KPIs */}
       <div className="grid grid-4 gap-3">
-        <div className="kpi"><div className="kpi-label">Gesamt Downloads</div><div className="kpi-value mono">{fmt(ANALYTICS.totalDownloads)}</div><div className="kpi-trend up">IAB Tier 2 zertifiziert</div></div>
+        <div className="kpi"><div className="kpi-label">Gesamt Downloads</div><div className="kpi-value mono">{fmt(totalDownloads || ANALYTICS.totalDownloads)}</div><div className="kpi-trend up">IAB Tier 2 zertifiziert</div></div>
         <div className="kpi"><div className="kpi-label">Unique Listeners 30d</div><div className="kpi-value mono">{fmt(ANALYTICS.uniqueListeners)}</div><div className="kpi-trend up">+{ANALYTICS.growth30d}% vs. Vormonat</div></div>
-        <div className="kpi"><div className="kpi-label">Episoden gesamt</div><div className="kpi-value mono">142</div><div className="kpi-trend">3 geplant</div></div>
-        <div className="kpi"><div className="kpi-label">Ø Downloads / Ep.</div><div className="kpi-value mono">{fmt(ANALYTICS.avgPerEpisode)}</div><div className="kpi-trend up">Top 5% DACH Podcast</div></div>
+        <div className="kpi"><div className="kpi-label">Episoden gesamt</div><div className="kpi-value mono">{episodes.length || '—'}</div><div className="kpi-trend">{scheduled.length > 0 ? `${scheduled.length} geplant` : 'Alle live'}</div></div>
+        <div className="kpi"><div className="kpi-label">Ø Downloads / Ep.</div><div className="kpi-value mono">{fmt(avgPerEp || ANALYTICS.avgPerEpisode)}</div><div className="kpi-trend up">Top 5% DACH Podcast</div></div>
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
@@ -245,12 +244,41 @@ function OverviewTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
-function EpisodenTab() {
+function EpisodenTab({ episodes, workspaceId, addEpisode }) {
   const [search, setSearch] = useState('');
   const [expandedEp, setExpandedEp] = useState(null);
-  const filtered = EPISODES.filter((e) =>
-    e.title.toLowerCase().includes(search.toLowerCase()) || e.guest.toLowerCase().includes(search.toLowerCase()),
+  const [showNew, setShowNew] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newGuest, setNewGuest] = useState('');
+  const [newNum, setNewNum] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newStatus, setNewStatus] = useState('draft');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  const filtered = episodes.filter((e) =>
+    e.title.toLowerCase().includes(search.toLowerCase()) ||
+    (e.guest ?? '').toLowerCase().includes(search.toLowerCase()),
   );
+
+  const submitNew = async (evt) => {
+    evt.preventDefault();
+    if (!newTitle.trim()) return;
+    setSaving(true); setSaveError(null);
+    const r = await createEpisode({
+      workspaceId,
+      title: newTitle.trim(),
+      episodeNumber: newNum ? parseInt(newNum, 10) : null,
+      guest: newGuest.trim() || undefined,
+      publishDate: newDate || undefined,
+      status: newStatus,
+    });
+    setSaving(false);
+    if (!r.ok) { setSaveError(r.error); return; }
+    if (r.data) addEpisode(r.data);
+    setShowNew(false);
+    setNewTitle(''); setNewGuest(''); setNewNum(''); setNewDate(''); setNewStatus('draft');
+  };
 
   return (
     <div className="col gap-4">
@@ -259,8 +287,51 @@ function EpisodenTab() {
         <span className="meta">{filtered.length} Episoden</span>
         <div style={{ flex: 1 }} />
         <McpTag tool="list_episodes · get_episode · create_episode" />
-        <button className="btn btn-brand btn-sm" disabled title="MCP: create_episode"><I.plus size={13} /> Neue Episode</button>
+        <button className="btn btn-brand btn-sm" onClick={() => setShowNew((s) => !s)}><I.plus size={13} /> Neue Episode</button>
       </div>
+
+      {showNew && (
+        <form onSubmit={submitNew} className="card card-pad col gap-3" style={{ border: '1px solid var(--brand)' }}>
+          <div className="h3">Neue Episode</div>
+          <div className="grid grid-2 gap-3">
+            <div className="col gap-1">
+              <label className="label">Titel *</label>
+              <input className="input" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Episodentitel…" required autoFocus />
+            </div>
+            <div className="col gap-1">
+              <label className="label">Gast</label>
+              <input className="input" value={newGuest} onChange={(e) => setNewGuest(e.target.value)} placeholder="Name des Gastes…" />
+            </div>
+            <div className="col gap-1">
+              <label className="label">Episoden-Nr.</label>
+              <input className="input" type="number" value={newNum} onChange={(e) => setNewNum(e.target.value)} placeholder="z.B. 143" min="1" />
+            </div>
+            <div className="col gap-1">
+              <label className="label">Veröffentlichungsdatum</label>
+              <input className="input" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+            </div>
+            <div className="col gap-1">
+              <label className="label">Status</label>
+              <select className="input" value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                <option value="draft">Entwurf</option>
+                <option value="scheduled">Geplant</option>
+                <option value="published">Veröffentlicht</option>
+              </select>
+            </div>
+          </div>
+          {saveError && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{saveError}</div>}
+          <div className="row gap-2">
+            <button type="submit" className="btn btn-brand btn-sm" disabled={saving || !newTitle.trim()}>{saving ? 'Speichern…' : 'Episode anlegen'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNew(false)} disabled={saving}>Abbrechen</button>
+          </div>
+        </form>
+      )}
+
+      {episodes.length === 0 && !showNew && (
+        <div className="card" style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+          Noch keine Episoden. Klicke "Neue Episode" um die erste anzulegen.
+        </div>
+      )}
 
       {/* Video push notice */}
       <div style={{ padding: '10px 16px', background: 'var(--info-bg)', border: '1px solid var(--info-border)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
@@ -475,7 +546,7 @@ function AnalyticsTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 4 — Transkript · KI-Schaltzentrale
 // ═══════════════════════════════════════════════════════════════════════════
-function TranskriptKITab() {
+function TranskriptKITab({ episodes }) {
   const [selectedEp, setSelectedEp] = useState('');
   const [transcript, setTranscript] = useState('');
   const [loadingTranscript, setLoadingTranscript] = useState(false);
@@ -490,13 +561,13 @@ function TranskriptKITab() {
     setTranscript('');
     setPkg(null);
     await new Promise((r) => setTimeout(r, 800));
-    const ep = EPISODES.find((e) => e.id === selectedEp);
+    const ep = episodes.find((e) => e.id === selectedEp);
     setTranscript(`[MCP: get_transcript · ${ep?.id}]\n\nHost (Fabian Tausch): Herzlich willkommen bei UnicornBakery. Ich bin Fabian Tausch, und heute habe ich ${ep?.guest} zu Gast — einer der faszinierendsten Gründer, die ich in den letzten Jahren getroffen habe.\n\nGast (${ep?.guest}): Danke, Fabian. Es ist eine Ehre, hier zu sein.\n\nHost: Lass uns direkt einsteigen. Dein Weg war alles andere als gradlinig. Magst du uns mitnehmen, wie alles angefangen hat?\n\nGast: Absolut. Ich habe 2019 angefangen, als der Markt gerade anfing, sich zu verändern. Die erste Version unseres Produkts war ehrlich gesagt schrecklich — aber wir haben gehört, was die Kunden wirklich wollten, und das hat alles verändert.\n\nHost: Was war der entscheidende Moment, wo du wusstest: Das funktioniert?\n\nGast: Das war definitiv die erste Enterprise-Referenz. Als ein DAX-Konzern sagte "Wir wollen mehr davon" — da wussten wir, dass wir auf dem richtigen Weg sind.\n\n[... Transkript wird von beehiiv MCP-Server geladen. Dies ist ein Platzhalter für die echte Integration ...]`);
     setLoadingTranscript(false);
   };
 
   const generatePkg = async () => {
-    const ep = EPISODES.find((e) => e.id === selectedEp);
+    const ep = episodes.find((e) => e.id === selectedEp);
     if (!ep || !transcript) return;
     setGenerating(true);
     setPkgError(null);
@@ -531,8 +602,8 @@ function TranskriptKITab() {
             <label className="label">Episode auswählen</label>
             <select className="input" value={selectedEp} onChange={(e) => { setSelectedEp(e.target.value); setTranscript(''); setPkg(null); }} style={{ maxWidth: 420 }}>
               <option value="">— Episode wählen —</option>
-              {EPISODES.filter((e) => e.status === 'published').map((ep) => (
-                <option key={ep.id} value={ep.id}>Ep. {ep.num} · {ep.title}</option>
+              {episodes.filter((e) => e.status === 'published').map((ep) => (
+                <option key={ep.id} value={ep.id}>Ep. {ep.num ? `${ep.num} · ` : ''}{ep.title}</option>
               ))}
             </select>
           </div>
@@ -760,7 +831,7 @@ function DistributionTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 6 — Private Feeds
 // ═══════════════════════════════════════════════════════════════════════════
-function PrivateFeedsTab() {
+function PrivateFeedsTab({ episodes }) {
   const [gatedEps, setGatedEps] = useState(new Set(['ep-140']));
   const [showAddSub, setShowAddSub] = useState(false);
   const [newSubEmail, setNewSubEmail] = useState('');
@@ -806,7 +877,7 @@ function PrivateFeedsTab() {
         <table className="table">
           <thead><tr><th>#</th><th>Episode</th><th>Status</th><th>Gesperrt</th><th>Abonnenten mit Zugriff</th></tr></thead>
           <tbody>
-            {EPISODES.filter(e => e.status === 'published').map((ep) => (
+            {episodes.filter(e => e.status === 'published').map((ep) => (
               <tr key={ep.id}>
                 <td className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</td>
                 <td style={{ fontWeight: 500, fontSize: 13 }}>{ep.title}</td>

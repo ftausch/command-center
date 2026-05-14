@@ -43,6 +43,7 @@ const EMPTY_DATA = {
   slackNotifications: [],
   templates: {},
   phases: [],
+  episodes: [],
   // Per-task caches populated lazily by mutation helpers (and, in the
   // future, by per-task fetches when a detail screen opens).
   taskComments: {},        // { [taskId]: TaskCommentView[] }
@@ -73,6 +74,8 @@ const WorkspaceContext = createContext({
   addChecklistItem: noop,
   updateChecklistItemInCache: noop,
   updateWorkspaceInCache: noop,
+  addEpisode: noop,
+  updateEpisodeInCache: noop,
   pushActivity: noop,
 });
 
@@ -158,6 +161,7 @@ export function WorkspaceProvider({ children }) {
         slackNotifications,
         templates,
         phases,
+        episodes,
       ] = await Promise.all([
         db.listProjects(workspaceId),
         db.listTasks(workspaceId),
@@ -167,6 +171,7 @@ export function WorkspaceProvider({ children }) {
         db.listSlackNotifications(workspaceId),
         db.listTemplates(workspaceId),
         db.getWorkspacePhases(workspaceId),
+        db.listEpisodes(workspaceId),
       ]);
       setData({
         projects,
@@ -177,6 +182,7 @@ export function WorkspaceProvider({ children }) {
         slackNotifications,
         templates,
         phases,
+        episodes,
       });
     } catch (e) {
       setError(e);
@@ -354,6 +360,16 @@ export function WorkspaceProvider({ children }) {
     if (!entry) return;
     setData((d) => ({ ...d, activity: [entry, ...d.activity] }));
   }, []);
+  const addEpisode = useCallback((episode) => {
+    if (!episode) return;
+    setData((d) => ({ ...d, episodes: [episode, ...d.episodes] }));
+  }, []);
+  const updateEpisodeInCache = useCallback((episodeId, patch) => {
+    setData((d) => ({
+      ...d,
+      episodes: d.episodes.map((e) => (e.id === episodeId ? { ...e, ...patch } : e)),
+    }));
+  }, []);
   const updateWorkspaceInCache = useCallback((workspaceId, patch) => {
     setWorkspaces((ws) => ws.map((w) => (w.id === workspaceId ? { ...w, ...patch } : w)));
   }, []);
@@ -385,6 +401,8 @@ export function WorkspaceProvider({ children }) {
       addChecklistItem,
       updateChecklistItemInCache,
       updateWorkspaceInCache,
+      addEpisode,
+      updateEpisodeInCache,
       pushActivity,
     }),
     [
@@ -407,6 +425,8 @@ export function WorkspaceProvider({ children }) {
       addChecklistItem,
       updateChecklistItemInCache,
       updateWorkspaceInCache,
+      addEpisode,
+      updateEpisodeInCache,
       pushActivity,
     ],
   );

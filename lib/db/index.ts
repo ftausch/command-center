@@ -12,6 +12,7 @@ import type {
   ActivityView,
   BrandView,
   CalendarEventView,
+  EpisodeView,
   ProjectView,
   SlackNotificationView,
   TaskView,
@@ -56,6 +57,8 @@ export const db = {
     adapter.getWorkspacePhases(workspaceId),
   getWorkspaceStats: (workspaceId: string): Promise<WorkspaceStats> =>
     adapter.getWorkspaceStats(workspaceId),
+  listEpisodes: (workspaceId: string): Promise<EpisodeView[]> =>
+    adapter.listEpisodes(workspaceId),
 };
 
 /** Exposes which backend is wired up — useful for dev banners / debug. */
@@ -67,6 +70,7 @@ export type {
   ActivityView,
   BrandView,
   CalendarEventView,
+  EpisodeView,
   ProjectView,
   SlackNotificationView,
   TaskView,

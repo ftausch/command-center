@@ -8,6 +8,7 @@ import type {
   ActivityView,
   BrandView,
   CalendarEventView,
+  EpisodeView,
   ProjectView,
   SlackNotificationView,
   TaskView,
@@ -99,6 +100,10 @@ export async function listTemplates(
 
 export async function getWorkspacePhases(workspaceId: string): Promise<string[]> {
   return (Dx.phases[workspaceId] ?? []) as string[];
+}
+
+export async function listEpisodes(_workspaceId: string): Promise<EpisodeView[]> {
+  return [];
 }
 
 export async function getWorkspaceStats(

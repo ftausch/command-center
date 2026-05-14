@@ -22,6 +22,7 @@ import type {
   ActivityView,
   BrandView,
   CalendarEventView,
+  EpisodeView,
   ProjectView,
   SlackNotificationView,
   TaskView,
@@ -284,6 +285,36 @@ export async function listSlackNotifications(
     text: n.message,
     time: n.posted_at,
   }));
+}
+
+export function rowToEpisode(row: any, workspaceSlug: string): EpisodeView {
+  return {
+    id: row.id,
+    workspace: workspaceSlug,
+    num: row.episode_number ?? null,
+    title: row.title,
+    guest: row.guest ?? '',
+    date: row.publish_date ?? '',
+    duration: row.duration ?? '—',
+    downloads: row.downloads ?? 0,
+    status: row.status,
+    hasVideo: !!row.has_video,
+    description: row.description ?? undefined,
+  };
+}
+
+export async function listEpisodes(
+  workspaceSlug: string,
+): Promise<EpisodeView[]> {
+  const wsId = await workspaceIdFromSlug(workspaceSlug);
+  if (!wsId) return [];
+  const { data, error } = await client()
+    .from('podcast_episodes')
+    .select('*')
+    .eq('workspace_id', wsId)
+    .order('episode_number', { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => rowToEpisode(r, workspaceSlug));
 }
 
 // ─── fallbacks (no tables yet) ──────────────────────────────────────────
