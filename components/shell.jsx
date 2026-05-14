@@ -7,11 +7,13 @@ import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
 import { NewTaskModal } from '@/components/NewTaskModal';
 
-export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
+export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   if (!brand) return <aside className="sidebar" />;
+
+  const closeAndNav = (id) => { setRoute(id); onMobileClose?.(); };
 
   const navMain = [
     { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
@@ -29,7 +31,9 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
   const me = data.members[0];
 
   return (
-    <aside className="sidebar">
+    <>
+    {mobileOpen && <div className="sidebar-backdrop" onClick={onMobileClose} />}
+    <aside className={`sidebar${mobileOpen ? ' mobile-open' : ''}`}>
       {/* App mark */}
       <div style={{ padding: '14px 18px 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 22, height: 22, borderRadius: 5, background: '#1a1d24', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10.5, letterSpacing: '-0.02em' }}>CC</div>
@@ -129,10 +133,11 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts }) {
         )}
       </div>
     </aside>
+    </>
   );
 }
 
-export function Topbar({ openCmdK, breadcrumb, setRoute }) {
+export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
   const { currentWorkspace: brand } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
@@ -143,6 +148,11 @@ export function Topbar({ openCmdK, breadcrumb, setRoute }) {
         onClose={() => setNewTaskOpen(false)}
         onNeedProject={() => setRoute && setRoute('projects')}
       />
+      {/* Hamburger — mobile only */}
+      <button className="btn btn-icon btn-quiet topbar-hamburger" onClick={onOpenSidebar} title="Navigation öffnen">
+        <I.menu size={18} />
+      </button>
+
       {/* Breadcrumb */}
       <div className="row gap-2" style={{ flex: 1, minWidth: 0 }}>
         <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{brand?.name}</span>
@@ -157,7 +167,7 @@ export function Topbar({ openCmdK, breadcrumb, setRoute }) {
       {/* Search trigger */}
       <button
         onClick={openCmdK}
-        className="row gap-2"
+        className="row gap-2 topbar-search"
         style={{
           height: 32, padding: '0 10px', minWidth: 280,
           border: '1px solid var(--border)', borderRadius: 6,
@@ -166,7 +176,7 @@ export function Topbar({ openCmdK, breadcrumb, setRoute }) {
         }}
       >
         <span className="row gap-2"><I.search size={14} /> Suche Tasks, Projekte, Personen…</span>
-        <span style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+        <span className="topbar-search-hint" style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
       </button>
 
       <button className="btn btn-icon btn-quiet" title="Notifications" disabled>
