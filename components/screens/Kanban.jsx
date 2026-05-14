@@ -12,16 +12,31 @@ import { TaskDrawer } from '@/components/TaskDrawer';
 const KANBAN_COLS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Done'];
 
 export function KanbanScreen({ setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, data, me } = useWorkspace();
   const [projectFilter, setProjectFilter] = useState('all');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null);
+  const [activeFilters, setActiveFilters] = useState(new Set());
+
+  const toggleFilter = (id) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  };
 
   const tasks = useMemo(() => {
     let r = data.tasks;
     if (projectFilter !== 'all') r = r.filter((t) => t.projectId === projectFilter);
+    if (activeFilters.has('high')) r = r.filter((t) => t.priority === 'High');
+    if (activeFilters.has('me'))   r = r.filter((t) => t.assignee === me?.id);
+    if (activeFilters.has('slack')) {
+      const slackProjects = new Set(data.projects.filter((p) => p.slackConnected).map((p) => p.id));
+      r = r.filter((t) => slackProjects.has(t.projectId));
+    }
     return r;
-  }, [data.tasks, projectFilter]);
+  }, [data.tasks, data.projects, projectFilter, activeFilters, me]);
 
   const grouped = useMemo(() => {
     const g = {};
@@ -69,11 +84,32 @@ export function KanbanScreen({ setRoute }) {
 
       <div className="row gap-2 mb-4 wrap">
         <span className="meta">Filter:</span>
-        <button className="chip active" disabled title="Filter kommen bald">Alle <span className="count">{tasks.length}</span></button>
-        <button className="chip" disabled title="Filter kommen bald"><span className="dot-indicator danger" /> High <span className="count">{tasks.filter((t) => t.priority === 'High').length}</span></button>
-        <button className="chip" disabled title="Filter kommen bald">Assignee: Me</button>
-        <button className="chip" disabled title="Filter kommen bald">Has Slack</button>
-        <button className="chip" disabled title="Filter kommen bald"><I.filter size={11} /> Mehr</button>
+        <button
+          className={`chip ${activeFilters.size === 0 ? 'active' : ''}`}
+          onClick={() => setActiveFilters(new Set())}
+        >
+          Alle <span className="count">{data.tasks.filter((t) => projectFilter === 'all' || t.projectId === projectFilter).length}</span>
+        </button>
+        <button
+          className={`chip ${activeFilters.has('high') ? 'active' : ''}`}
+          onClick={() => toggleFilter('high')}
+        >
+          <span className="dot-indicator danger" /> High <span className="count">{data.tasks.filter((t) => (projectFilter === 'all' || t.projectId === projectFilter) && t.priority === 'High').length}</span>
+        </button>
+        <button
+          className={`chip ${activeFilters.has('me') ? 'active' : ''}`}
+          onClick={() => toggleFilter('me')}
+          title={me ? `Tasks von ${me.name}` : 'Kein Nutzer geladen'}
+        >
+          Assignee: Me
+        </button>
+        <button
+          className={`chip ${activeFilters.has('slack') ? 'active' : ''}`}
+          onClick={() => toggleFilter('slack')}
+        >
+          Has Slack
+        </button>
+        <button className="chip" disabled title="Noch nicht verfügbar"><I.filter size={11} /> Mehr</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>

@@ -271,9 +271,27 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className="row between mb-3">
           <div>
             <div className="label">Episode Phase</div>
-            <div className="row gap-2 mt-1">
-              <span style={{ fontSize: 16, fontWeight: 600 }}>{phases[project.phaseIdx]}</span>
-              <span className="meta">· Schritt {project.phaseIdx + 1} von {phases.length}</span>
+            <div className="row gap-2 mt-1 items-center">
+              <button
+                className="btn btn-icon btn-quiet btn-sm"
+                onClick={() => saveField('phaseIdx', project.phaseIdx - 1)}
+                disabled={project.phaseIdx <= 0 || fieldPending === 'phaseIdx'}
+                title="Vorherige Phase"
+              >
+                <I.chevron size={13} style={{ transform: 'rotate(180deg)' }} />
+              </button>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>
+                {fieldPending === 'phaseIdx' ? '…' : (phases[project.phaseIdx] ?? '—')}
+              </span>
+              <button
+                className="btn btn-icon btn-quiet btn-sm"
+                onClick={() => saveField('phaseIdx', project.phaseIdx + 1)}
+                disabled={project.phaseIdx >= phases.length - 1 || fieldPending === 'phaseIdx'}
+                title="Nächste Phase"
+              >
+                <I.chevron size={13} />
+              </button>
+              <span className="meta">Schritt {project.phaseIdx + 1} von {phases.length}</span>
             </div>
           </div>
           <div className="row gap-3">
@@ -287,7 +305,11 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             </div>
           </div>
         </div>
-        <PhaseTracker phases={phases} currentIdx={project.phaseIdx} />
+        <PhaseTracker
+          phases={phases}
+          currentIdx={project.phaseIdx}
+          onSelect={(i) => { if (i !== project.phaseIdx) saveField('phaseIdx', i); }}
+        />
       </div>
 
       <div className="tabs mb-4">

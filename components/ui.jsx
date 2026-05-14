@@ -36,12 +36,18 @@ export const Progress = ({ value, brand }) => (
   </div>
 );
 
-export const PhaseTracker = ({ phases, currentIdx }) => (
+export const PhaseTracker = ({ phases, currentIdx, onSelect }) => (
   <div className="phase-track">
     {phases.map((p, i) => {
       const cls = i < currentIdx ? 'done' : i === currentIdx ? 'current' : '';
       return (
-        <div key={p} className={`phase-step ${cls}`}>
+        <div
+          key={p}
+          className={`phase-step ${cls}`}
+          onClick={onSelect ? () => onSelect(i) : undefined}
+          style={onSelect ? { cursor: 'pointer' } : undefined}
+          title={onSelect ? `Zur Phase "${p}" wechseln` : undefined}
+        >
           <span className="dot" />
           <span className="bar" />
           <span>{p}</span>
