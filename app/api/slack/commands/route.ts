@@ -74,24 +74,36 @@ function parseGermanDate(raw: string): string | null {
 // ── Command text parser ───────────────────────────────────────────────────
 // Supports:
 //   /task <title>
-//   /task @user <title>
+//   /task @name <title>               plain-text mention
+//   /task <@UID|name> <title>         Slack autocomplete mention
+//   /task <@UID> <title>              Slack mention without display name
 //   /task <title> bis <date>
-//   /task @user <title> bis <date>
+//   any of the above + bis <date>
 
 function parseCommandText(text: string): {
   title: string;
   mentionedName: string | null;
+  slackUserId: string | null;
   dueDate: string | null;
 } {
   let remaining = text.trim();
   let mentionedName: string | null = null;
+  let slackUserId: string | null = null;
   let dueDate: string | null = null;
 
-  // Strip leading @mention
-  const mentionMatch = remaining.match(/^@(\S+)\s+([\s\S]+)/);
-  if (mentionMatch) {
-    mentionedName = mentionMatch[1];
-    remaining = mentionMatch[2].trim();
+  // Slack autocomplete mention: <@USERID> or <@USERID|displayname>
+  const slackMention = remaining.match(/^<@([A-Z0-9]+)(?:\|([^>]+))?>\s*([\s\S]*)/);
+  if (slackMention) {
+    slackUserId = slackMention[1];
+    mentionedName = slackMention[2] ?? null;
+    remaining = slackMention[3].trim();
+  } else {
+    // Plain-text @name
+    const plainMention = remaining.match(/^@(\S+)\s+([\s\S]+)/);
+    if (plainMention) {
+      mentionedName = plainMention[1];
+      remaining = plainMention[2].trim();
+    }
   }
 
   // Strip "bis <word>" from end (case-insensitive)
@@ -104,7 +116,7 @@ function parseCommandText(text: string): {
     }
   }
 
-  return { title: remaining, mentionedName, dueDate };
+  return { title: remaining, mentionedName, slackUserId, dueDate };
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────
@@ -167,27 +179,35 @@ export async function POST(req: NextRequest) {
   const workspaceUuid = integration.workspace_id as string;
 
   // 2. Parse command text
-  const { title, mentionedName, dueDate } = parseCommandText(text);
+  const { title, mentionedName, slackUserId, dueDate } = parseCommandText(text);
   if (!title) {
     return slackText(
       `Bitte einen Task-Titel angeben.\nBeispiel: \`${command} @tim Thumbnail für Ep. 048 bis Freitag\``,
     );
   }
 
-  // 3. Resolve @mention → assignee_id (fuzzy full_name/email match within workspace)
+  // 3. Resolve @mention → assignee_id
+  //    Priority: Slack user ID match (profiles.slack_user_id) → name fuzzy match
   let assigneeId: string | null = null;
   let assigneeName: string | null = null;
-  if (mentionedName) {
+  if (mentionedName || slackUserId) {
     const { data: members } = await admin
       .from('workspace_members')
       .select('user_id, profiles!inner(id, full_name, email)')
       .eq('workspace_id', workspaceUuid);
 
-    const needle = mentionedName.toLowerCase();
-    const match = (members ?? []).find((m: any) => {
-      const name = ((m.profiles?.full_name ?? m.profiles?.email) as string | null)?.toLowerCase() ?? '';
-      return name.includes(needle);
-    });
+    let match: any = null;
+
+    // Try name fuzzy match (works without storing Slack user IDs)
+    if (mentionedName) {
+      const needle = mentionedName.toLowerCase();
+      match = (members ?? []).find((m: any) => {
+        const name = ((m.profiles?.full_name ?? m.profiles?.email) as string | null)?.toLowerCase() ?? '';
+        // Match on first name, last name, or full string
+        return name.includes(needle) || name.split(/\s+/).some((part: string) => part.startsWith(needle));
+      });
+    }
+
     if (match) {
       assigneeId = match.user_id as string;
       assigneeName = ((match.profiles as any)?.full_name ?? (match.profiles as any)?.email) as string;
