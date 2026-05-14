@@ -28,7 +28,7 @@ export function MyTasksScreen({ setRoute }) {
     pushActivity,
   } = useWorkspace();
   const [tab, setTab] = useState('all');
-  const [groupBy, setGroupBy] = useState('project');
+  const [groupBy, setGroupBy] = useState('due');
   const [filterPrio, setFilterPrio] = useState(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddPending, setQuickAddPending] = useState(false);
@@ -90,6 +90,9 @@ export function MyTasksScreen({ setRoute }) {
     waiting: myTasks.filter((t) => t.status === 'Review' || t.waitingOn).length,
   };
 
+  const GROUP_OPTIONS = ['due', 'project', 'priority', 'flat'];
+  const GROUP_LABELS  = { due: 'Fälligkeit', project: 'Projekt', priority: 'Priorität', flat: 'Keine' };
+
   const grouped = useMemo(() => {
     if (groupBy === 'project') {
       const groups = {};
@@ -103,6 +106,20 @@ export function MyTasksScreen({ setRoute }) {
     if (groupBy === 'priority') {
       const groups = { High: [], Medium: [], Low: [] };
       filtered.forEach((t) => groups[t.priority]?.push(t));
+      return groups;
+    }
+    if (groupBy === 'due') {
+      const groups = { 'Überfällig': [], 'Heute': [], 'Diese Woche': [], 'Später': [], 'Kein Datum': [] };
+      filtered.forEach((t) => {
+        if (!t.due) { groups['Kein Datum'].push(t); return; }
+        const d = daysUntil(t.due);
+        if (d < 0)      groups['Überfällig'].push(t);
+        else if (d === 0) groups['Heute'].push(t);
+        else if (d <= 7)  groups['Diese Woche'].push(t);
+        else              groups['Später'].push(t);
+      });
+      // Sort overdue tasks most-urgent first
+      groups['Überfällig'].sort((a, b) => (a.due < b.due ? -1 : 1));
       return groups;
     }
     return { Alle: filtered };
@@ -149,7 +166,7 @@ export function MyTasksScreen({ setRoute }) {
           </p>
         </div>
         <div className="row gap-2">
-          <button className="btn btn-ghost btn-sm" onClick={() => setGroupBy(groupBy === 'project' ? 'priority' : groupBy === 'priority' ? 'flat' : 'project')}>Group: {groupBy === 'project' ? 'Project' : groupBy === 'priority' ? 'Priority' : 'Flat'} <I.chevronDown size={12} /></button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setGroupBy((g) => { const i = GROUP_OPTIONS.indexOf(g); return GROUP_OPTIONS[(i + 1) % GROUP_OPTIONS.length]; })}>Gruppe: {GROUP_LABELS[groupBy]} <I.chevronDown size={12} /></button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> Quick Add</button>
         </div>
       </div>
@@ -189,9 +206,6 @@ export function MyTasksScreen({ setRoute }) {
             {p} <span className="count">{myTasks.filter((t) => t.priority === p && t.status !== 'Done').length}</span>
           </button>
         ))}
-        <button className="chip" onClick={() => setGroupBy(groupBy === 'project' ? 'priority' : groupBy === 'priority' ? 'flat' : 'project')}>
-          Group: {groupBy}
-        </button>
         <button className="chip" disabled title="Noch nicht verfügbar">
           <I.filter size={12} /> Mehr Filter
         </button>
@@ -262,7 +276,7 @@ export function MyTasksScreen({ setRoute }) {
           return (
             <section key={group} className="mb-4">
               <div className="row gap-2 mb-2" style={{ paddingLeft: 4 }}>
-                <span className="label">{group}</span>
+                <span className="label" style={{ color: group === 'Überfällig' ? 'var(--danger)' : group === 'Heute' ? 'var(--warning)' : undefined }}>{group}</span>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{tasks.length}</span>
               </div>
               <div className="card" style={{ overflow: 'hidden' }}>
