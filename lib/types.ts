@@ -222,6 +222,22 @@ export interface SlackNotificationView {
   time: string;
 }
 
+export type EpisodeStatus = 'draft' | 'scheduled' | 'published';
+
+export interface EpisodeView {
+  id: string;
+  workspace: string;
+  num: number | null;
+  title: string;
+  guest: string;
+  date: string;      // ISO date or '' when not set
+  duration: string;  // display string e.g. "58:24" or '—'
+  downloads: number;
+  status: EpisodeStatus;
+  hasVideo: boolean;
+  description?: string;
+}
+
 export interface WorkspaceStats {
   projects: number;
   tasks: number; // open tasks
