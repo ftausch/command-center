@@ -8,7 +8,7 @@ import {
   Avatar, AvatarStack, Badge, EmptyState,
   PriorityBadge, Progress, SlackCard, StatusBadge,
 } from '@/components/ui';
-import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong } from '@/lib/utils';
+import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, projectProgress } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
@@ -279,6 +279,7 @@ function ProjectRow({ project, setRoute }) {
   const { data } = useWorkspace();
   const team = project.team.map((id) => data.members.find((u) => u.id === id)).filter(Boolean);
   const due = dueLabel(project.due);
+  const progress = projectProgress(data.tasks.filter((t) => t.projectId === project.id));
   return (
     <div
       className="row gap-3"
@@ -297,9 +298,9 @@ function ProjectRow({ project, setRoute }) {
         </div>
         <div className="row gap-3 mt-2 items-end">
           <div style={{ flex: 1, maxWidth: 220 }}>
-            <Progress value={project.progress} brand />
+            <Progress value={progress} brand />
           </div>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{project.progress}%</span>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{progress}%</span>
         </div>
       </div>
       <div className="col gap-2 items-end">
