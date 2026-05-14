@@ -29,27 +29,30 @@ export function DashboardScreen({ setRoute }) {
 
   const activeProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Planning');
 
-  // Current date
+  // Current date — computed once, stable across SSR/hydration.
+  // suppressHydrationWarning on the display element prevents React from
+  // throwing when the server-render time differs from client hydration time.
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const todayWeekday = WEEKDAY_LABEL[now.getDay()];
   const unassignedToday = dueToday.filter((t) => !t.assignee).length;
 
-  // Tasks completed in the last 7 days — derived from the activity log so it
-  // works without a dedicated completed_at column on tasks.
   const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-  const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
-  const completedThisWeek = data.activity.filter((a) => {
-    const t = new Date(a.time).getTime();
-    return a.icon === 'check' && Number.isFinite(t) && t >= sevenDaysAgo;
-  }).length;
 
-  // Upcoming events for the next 7 days — derived from task + project due
-  // dates so the section works in real mode (data.calendarEvents is empty
-  // in Supabase mode; the Calendar screen uses the same approach).
-  const nowMs = now.getTime();
-  const sevenDaysLaterMs = nowMs + SEVEN_DAYS_MS;
+  // Tasks completed in the last 7 days — derived from the activity log.
+  const completedThisWeek = useMemo(() => {
+    const cutoff = Date.now() - SEVEN_DAYS_MS;
+    return data.activity.filter((a) => {
+      const t = new Date(a.time).getTime();
+      return a.icon === 'check' && Number.isFinite(t) && t >= cutoff;
+    }).length;
+  }, [data.activity]);
+
+  // Upcoming events for the next 7 days — nowMs/sevenDaysLaterMs are inside
+  // the memo so the closure is always fresh.
   const upcomingEvents = useMemo(() => {
+    const nowMs = Date.now();
+    const sevenDaysLaterMs = nowMs + SEVEN_DAYS_MS;
     const evs = [];
     allTasks.forEach((t) => {
       if (!t.due) return;
@@ -66,7 +69,6 @@ export function DashboardScreen({ setRoute }) {
       }
     });
     return evs.sort((a, b) => a.date.localeCompare(b.date));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTasks, projects]);
 
   return (
@@ -76,7 +78,7 @@ export function DashboardScreen({ setRoute }) {
           <div className="row gap-2 mb-2">
             <Badge kind="brand" dot>{brand?.name}</Badge>
             <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>·</span>
-            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{todayWeekday} · {formatDateLong(todayIso)}</span>
+            <span style={{ color: 'var(--text-3)', fontSize: 12.5 }} suppressHydrationWarning>{todayWeekday} · {formatDateLong(todayIso)}</span>
           </div>
           <h1 className="h1">Guten Morgen, {me?.name?.split(' ')[0] ?? 'Fabian'}.</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0' }}>

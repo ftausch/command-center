@@ -11,7 +11,7 @@
 //   Migration     — Durable Import Pipeline · Fortschrittsanzeige
 //   Studio        — Write Tools + Dynamic Pages (Platzhalter)
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
@@ -93,7 +93,7 @@ const PIPELINE_STEPS = [
   { id: 7, label: 'Feeds aktivieren',            status: 'pending',  detail: 'Apple + Spotify Redirect' },
 ];
 
-function fmt(n) { return n >= 1_000_000 ? (n/1_000_000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
+function fmt(n) { if (n == null || isNaN(n)) return '—'; return n >= 1_000_000 ? (n/1_000_000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
 
 // ── Main Screen ───────────────────────────────────────────────────────────
 export function PodcastHubScreen() {
@@ -288,8 +288,8 @@ function EpisodenTab() {
           </thead>
           <tbody>
             {filtered.map((ep) => (
-              <>
-                <tr key={ep.id} style={{ cursor: 'pointer' }} onClick={() => setExpandedEp(expandedEp === ep.id ? null : ep.id)}>
+              <Fragment key={ep.id}>
+                <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedEp(expandedEp === ep.id ? null : ep.id)}>
                   <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</span></td>
                   <td><div style={{ fontWeight: 500, fontSize: 13.5 }}>{ep.title}</div></td>
                   <td><span style={{ color: 'var(--text-2)', fontSize: 13 }}>{ep.guest}</span></td>
@@ -305,7 +305,7 @@ function EpisodenTab() {
                   <td><I.chevron size={12} style={{ transform: expandedEp === ep.id ? 'rotate(90deg)' : 'none', transition: '0.15s' }} /></td>
                 </tr>
                 {expandedEp === ep.id && (
-                  <tr key={ep.id + '-expand'}>
+                  <tr>
                     <td colSpan={9} style={{ padding: 0 }}>
                       <div style={{ padding: '16px 20px', background: 'var(--bg)', borderBottom: '1px solid var(--border-soft)' }}>
                         <div className="grid gap-4" style={{ gridTemplateColumns: ep.hasVideo ? '1fr 1.4fr' : '1fr' }}>
@@ -332,7 +332,7 @@ function EpisodenTab() {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
