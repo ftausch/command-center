@@ -92,7 +92,7 @@ export async function createTask(input: {
       activity: synthActivity({
         workspaceId: input.workspaceId,
         user: userId,
-        verb: 'created Task',
+        verb: 'hat Task angelegt',
         target: task.id,
         meta: title,
         icon: 'plus',
@@ -153,7 +153,7 @@ export async function createTask(input: {
     activity: synthActivity({
       workspaceId: input.workspaceId,
       user: userId,
-      verb: 'created Task',
+      verb: 'hat Task angelegt',
       target: task.id,
       meta: title,
       icon: 'plus',
@@ -211,7 +211,7 @@ export async function changeTaskStatus(input: {
   const activity = synthActivity({
     workspaceId: input.workspaceId,
     user: userId,
-    verb: 'pushed Status',
+    verb: 'hat Status geändert',
     target: input.taskId,
     meta: `→ ${input.to}`,
     icon: 'arrow-right',
@@ -273,7 +273,7 @@ export async function markTaskDone(input: {
   const activity = synthActivity({
     workspaceId: input.workspaceId,
     user: userId,
-    verb: 'completed',
+    verb: 'hat Task abgeschlossen',
     target: input.taskId,
     icon: 'check',
   });
@@ -330,7 +330,7 @@ export async function markTaskBlocked(input: {
   const activity = synthActivity({
     workspaceId: input.workspaceId,
     user: userId,
-    verb: 'blocked',
+    verb: 'hat Task blockiert',
     target: input.taskId,
     meta: reason ?? 'Blocker gemeldet',
     icon: 'block',

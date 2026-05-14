@@ -13,7 +13,7 @@ import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
-export function DashboardScreen({ setRoute }) {
+export function DashboardScreen({ setRoute, onOpenTask }) {
   const { currentWorkspace: brand, data, me } = useWorkspace();
 
   const allTasks = data.tasks;
@@ -128,7 +128,7 @@ export function DashboardScreen({ setRoute }) {
             </div>
             <div>
               {myOpen.slice(0, 5).map((t) => (
-                <FocusRow key={t.id} task={t} setRoute={setRoute} />
+                <FocusRow key={t.id} task={t} setRoute={setRoute} onOpenTask={onOpenTask} />
               ))}
               {myOpen.length === 0 && (
                 <EmptyState icon={<I.check size={20} />} title="Inbox leer." body="Keine Tasks für dich heute. Genieß den Kaffee." />
@@ -280,7 +280,7 @@ export const KPI = ({ label, value, trend, tone }) => (
   </div>
 );
 
-function FocusRow({ task, setRoute }) {
+function FocusRow({ task, setRoute, onOpenTask }) {
   const { data, currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
   const p = data.projects.find((pr) => pr.id === task.projectId);
   const due = dueLabel(task.due);
@@ -320,7 +320,7 @@ function FocusRow({ task, setRoute }) {
   return (
     <div
       className="row gap-3"
-      onClick={() => setRoute('project:' + task.projectId)}
+      onClick={() => onOpenTask ? onOpenTask(task.id, task.projectId) : setRoute('project:' + task.projectId)}
       style={{ padding: '11px 18px', borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}
     >
       <button

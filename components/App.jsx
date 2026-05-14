@@ -132,7 +132,7 @@ export function App() {
   } else {
     switch (route) {
       case 'dashboard':
-        screen = <DashboardScreen setRoute={setRoute} />;
+        screen = <DashboardScreen setRoute={setRoute} onOpenTask={(taskId, projectId) => setDrawerTask({ taskId, projectId })} />;
         breadcrumb = 'Dashboard';
         break;
       case 'mytasks':
