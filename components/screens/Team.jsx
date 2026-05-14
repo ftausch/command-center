@@ -9,9 +9,10 @@ import { daysUntil } from '@/lib/utils';
 import { KPI } from '@/components/screens/Dashboard';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
 import { MemberManageModal } from '@/components/MemberManageModal';
+import { CAN } from '@/lib/roles';
 
 export function TeamScreen({ setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole } = useWorkspace();
   const users = data.members;
   const tasks = data.tasks;
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -29,7 +30,9 @@ export function TeamScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <button className="btn btn-ghost btn-sm" disabled title="Noch nicht verfügbar"><I.filter size={13} /> Filter</button>
-          <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Person einladen</button>
+          {CAN.inviteMember(myRole) && (
+            <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)}><I.plus size={13} /> Person einladen</button>
+          )}
         </div>
       </div>
 
@@ -46,6 +49,19 @@ export function TeamScreen({ setRoute }) {
         <KPI label="Überfällig" value={tasks.filter((t) => t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="auf 2 Personen verteilt" tone="bad" />
         <KPI label="Ø Tasks pro Person" value={users.length ? Math.round((tasks.filter((t) => t.status !== 'Done').length / users.length) * 10) / 10 : 0} trend="Balance gut" tone="ok" />
       </div>
+
+      {users.length === 0 && (
+        <div className="card" style={{ padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Noch keine Teammitglieder</div>
+          <div className="meta" style={{ marginBottom: 16 }}>Lade Kolleg:innen ein um gemeinsam Tasks und Projekte zu verwalten.</div>
+          {CAN.inviteMember(myRole) && (
+            <button className="btn btn-brand btn-sm" onClick={() => setInviteOpen(true)} style={{ margin: '0 auto' }}>
+              <I.plus size={13} /> Erste Person einladen
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-2 gap-3">
         {users.map((u) => {
@@ -72,11 +88,13 @@ export function TeamScreen({ setRoute }) {
                     <div className="meta">{u.role}</div>
                   </div>
                 </div>
-                <button
-                  className="btn btn-quiet btn-sm"
-                  onClick={() => setManageMember(u)}
-                  title="Mitglied verwalten"
-                ><I.more size={14} /></button>
+                {CAN.manageMember(myRole) && (
+                  <button
+                    className="btn btn-quiet btn-sm"
+                    onClick={() => setManageMember(u)}
+                    title="Mitglied verwalten"
+                  ><I.more size={14} /></button>
+                )}
               </div>
 
               <div className="row gap-4 mb-3">

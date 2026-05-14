@@ -31,6 +31,7 @@ export function App() {
     setCurrentWorkspaceId,
     data,
     loading,
+    error,
   } = useWorkspace();
   const [route, setRoute] = useState('dashboard');
   const [cmdkOpen, setCmdkOpen] = useState(false);
@@ -193,15 +194,15 @@ export function App() {
       />
       <main className="main">
         <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} setRoute={setRoute} onOpenSidebar={() => setSidebarOpen(true)} />
-        {loading && data.projects.length === 0 ? (
+        {error ? (
+          <div style={{ padding: '40px 28px', maxWidth: 480 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: 'var(--danger)' }}>Workspace konnte nicht geladen werden</div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>{error?.message ?? 'Unbekannter Fehler. Bitte Seite neu laden.'}</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>Neu laden</button>
+          </div>
+        ) : loading && data.projects.length === 0 ? (
           // First load only — flicker-free render once the cache is warm.
-          <div
-            style={{
-              padding: '40px 28px',
-              color: 'var(--text-3)',
-              fontSize: 13,
-            }}
-          >
+          <div style={{ padding: '40px 28px', color: 'var(--text-3)', fontSize: 13 }}>
             Lade Workspace …
           </div>
         ) : (
