@@ -8,7 +8,7 @@ import {
   Avatar, AvatarStack, Badge, EmptyState,
   PriorityBadge, Progress, SlackCard, StatusBadge,
 } from '@/components/ui';
-import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, projectProgress } from '@/lib/utils';
+import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, parseDate, projectProgress } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
