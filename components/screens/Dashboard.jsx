@@ -143,42 +143,49 @@ export function DashboardScreen({ setRoute }) {
               <button className="btn btn-quiet btn-sm" onClick={() => setRoute('projects')}>Alle <I.arrowRight size={13} /></button>
             </div>
             <div>
-              {activeProjects.slice(0, 4).map((p) => (
-                <ProjectRow key={p.id} project={p} setRoute={setRoute} />
-              ))}
+              {activeProjects.length === 0 ? (
+                <EmptyState icon={<I.folder size={20} />} title="Keine aktiven Projekte." body="Lege ein Projekt an um loszulegen." />
+              ) : (
+                activeProjects.slice(0, 4).map((p) => (
+                  <ProjectRow key={p.id} project={p} setRoute={setRoute} />
+                ))
+              )}
             </div>
           </section>
 
-          {/* Blocked / Needs attention */}
-          <section className="card">
-            <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div>
-                <div className="h3 row gap-2"><I.alert size={15} color="var(--danger)" /> Braucht Aufmerksamkeit</div>
-                <div className="meta mt-1">Blockiert oder überfällig</div>
+          {/* Blocked / Needs attention — only shown when there's something to show */}
+          {(blocked.length + overdue.length) > 0 && (
+            <section className="card">
+              <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
+                <div>
+                  <div className="h3 row gap-2"><I.alert size={15} color="var(--danger)" /> Braucht Aufmerksamkeit</div>
+                  <div className="meta mt-1">Blockiert oder überfällig</div>
+                </div>
+                <Badge kind="danger" dot>{blocked.length + overdue.length}</Badge>
               </div>
-              <Badge kind="danger" dot>{blocked.length + overdue.length}</Badge>
-            </div>
-            <div>
-              {[...blocked, ...overdue].slice(0, 4).map((t) => {
-                const p = data.projects.find((pr) => pr.id === t.projectId);
-                const u = data.members.find((m) => m.id === t.assignee);
-                return (
-                  <div key={t.id} style={{ padding: '12px 18px', borderTop: '1px solid var(--border-soft)' }} className="row gap-3">
-                    <I.block size={14} color="var(--danger)" />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 500 }} className="truncate">{t.title}</div>
-                      <div className="row gap-2 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                        <span>{p?.name}</span>
-                        <span>·</span>
-                        <span>{t.blocker || p?.blockedReason || 'Überfällig seit ' + Math.abs(daysUntil(t.due)) + 'd'}</span>
+              <div>
+                {[...blocked, ...overdue].slice(0, 4).map((t) => {
+                  const p = data.projects.find((pr) => pr.id === t.projectId);
+                  const u = data.members.find((m) => m.id === t.assignee);
+                  const daysBehind = t.due ? Math.abs(daysUntil(t.due)) : null;
+                  return (
+                    <div key={t.id} style={{ padding: '12px 18px', borderTop: '1px solid var(--border-soft)' }} className="row gap-3">
+                      <I.block size={14} color="var(--danger)" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 500 }} className="truncate">{t.title}</div>
+                        <div className="row gap-2 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                          <span>{p?.name}</span>
+                          {(t.blocker || (daysBehind != null && !isNaN(daysBehind))) && <span>·</span>}
+                          <span>{t.blocker || (daysBehind != null && !isNaN(daysBehind) ? `Überfällig seit ${daysBehind}d` : '')}</span>
+                        </div>
                       </div>
+                      {u && <Avatar user={u} />}
                     </div>
-                    {u && <Avatar user={u} />}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Right column */}

@@ -84,6 +84,13 @@ export function ProjectsScreen({ setRoute }) {
             </tr>
           </thead>
           <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+                  {search.trim() ? 'Keine Projekte gefunden.' : all.length === 0 ? 'Noch keine Projekte. Klicke "+ New Project" um zu starten.' : 'Keine Projekte in dieser Kategorie.'}
+                </td>
+              </tr>
+            )}
             {filtered.map((p) => {
               const team = p.team
                 .map((id) => data.members.find((u) => u.id === id))
