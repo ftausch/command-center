@@ -77,12 +77,16 @@ export const Stat2 = ({ label, value }) => (
   </div>
 );
 
-export const ToggleRow = ({ label, on }) => (
-  <div className="row between">
+export const ToggleRow = ({ label, on, onChange }) => (
+  <div
+    className="row between"
+    onClick={onChange}
+    style={onChange ? { cursor: 'pointer', userSelect: 'none' } : undefined}
+  >
     <span style={{ fontSize: 13 }}>{label}</span>
     <span style={{
       width: 28, height: 16, borderRadius: 999, background: on ? 'var(--brand)' : 'var(--bg-sunk)',
-      position: 'relative', transition: 'background 0.15s',
+      position: 'relative', transition: 'background 0.15s', flexShrink: 0,
     }}>
       <span style={{
         position: 'absolute', top: 2, left: on ? 14 : 2,
