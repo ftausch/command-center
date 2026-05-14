@@ -1,15 +1,44 @@
 'use client';
 // Sidebar — left nav with brand pill + nav sections; Topbar with breadcrumb + search
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
 import { NewTaskModal } from '@/components/NewTaskModal';
 
+// Returns the number of activity entries newer than the last time the user
+// visited the Activity screen. Stored per workspace in localStorage so it
+// survives page reloads. Cleared when route === 'activity'.
+function useActivityUnread(workspaceId, route) {
+  const { data } = useWorkspace();
+  const key = workspaceId ? `cc.activity.seen.${workspaceId}` : null;
+  const [lastSeen, setLastSeen] = useState(0);
+
+  // Read persisted timestamp on mount / workspace switch
+  useEffect(() => {
+    if (!key) return;
+    try { setLastSeen(parseInt(localStorage.getItem(key) ?? '0', 10)); } catch {}
+  }, [key]);
+
+  // Clear when user opens Activity
+  useEffect(() => {
+    if (route !== 'activity' || !key) return;
+    const now = Date.now();
+    try { localStorage.setItem(key, String(now)); } catch {}
+    setLastSeen(now);
+  }, [route, key]);
+
+  return data.activity.filter((a) => {
+    const t = new Date(a.time).getTime();
+    return Number.isFinite(t) && t > lastSeen;
+  }).length;
+}
+
 export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const unreadActivity = useActivityUnread(currentWorkspaceId, route);
 
   if (!brand) return (
     <>
@@ -83,6 +112,11 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => setRoute(n.id)}>
             {n.icon}
             <span>{n.label}</span>
+            {n.id === 'activity' && unreadActivity > 0 && (
+              <span className="nav-count" style={{ background: 'var(--danger)', color: 'white', minWidth: 18, textAlign: 'center' }}>
+                {unreadActivity > 9 ? '9+' : unreadActivity}
+              </span>
+            )}
           </div>
         ))}
 
@@ -150,8 +184,24 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
 }
 
 export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
-  const { currentWorkspace: brand } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+
+  // Show a dot on the bell when there are unread activity entries.
+  // Reads same localStorage key as Sidebar; no clearing here — Sidebar
+  // clears it when the user opens Activity.
+  const [hasUnread, setHasUnread] = useState(false);
+  useEffect(() => {
+    const key = currentWorkspaceId ? `cc.activity.seen.${currentWorkspaceId}` : null;
+    if (!key) return;
+    try {
+      const lastSeen = parseInt(localStorage.getItem(key) ?? '0', 10);
+      setHasUnread(data.activity.some((a) => {
+        const t = new Date(a.time).getTime();
+        return Number.isFinite(t) && t > lastSeen;
+      }));
+    } catch {}
+  }, [currentWorkspaceId, data.activity]);
 
   return (
     <div className="topbar">
@@ -191,8 +241,21 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
         <span className="topbar-search-hint" style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
       </button>
 
-      <button className="btn btn-icon btn-quiet" title="Notifications" disabled>
+      <button
+        className="btn btn-icon btn-quiet"
+        title="Activity"
+        onClick={() => setRoute?.('activity')}
+        style={{ position: 'relative' }}
+      >
         <I.bell size={16} />
+        {hasUnread && (
+          <span style={{
+            position: 'absolute', top: 4, right: 4,
+            width: 7, height: 7, borderRadius: 999,
+            background: 'var(--danger)',
+            border: '1.5px solid var(--bg)',
+          }} />
+        )}
       </button>
       <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
         <I.plus size={14} /> New
