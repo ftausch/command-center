@@ -1,7 +1,7 @@
 'use client';
 // Dashboard Overview screen
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
@@ -18,7 +18,6 @@ export function DashboardScreen({ setRoute }) {
 
   const allTasks = data.tasks;
   const projects = data.projects;
-  const events = data.calendarEvents;
 
   const open = allTasks.filter((t) => t.status !== 'Done');
   const dueToday = open.filter((t) => daysUntil(t.due) === 0);
@@ -30,12 +29,45 @@ export function DashboardScreen({ setRoute }) {
 
   const activeProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Planning');
 
-  // Current calendar date, in ISO + a human weekday label. Was hardcoded
-  // to "Montag · 11. Mai 2026" — looked wrong every day except one.
+  // Current date
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const todayWeekday = WEEKDAY_LABEL[now.getDay()];
   const unassignedToday = dueToday.filter((t) => !t.assignee).length;
+
+  // Tasks completed in the last 7 days — derived from the activity log so it
+  // works without a dedicated completed_at column on tasks.
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
+  const completedThisWeek = data.activity.filter((a) => {
+    const t = new Date(a.time).getTime();
+    return a.icon === 'check' && Number.isFinite(t) && t >= sevenDaysAgo;
+  }).length;
+
+  // Upcoming events for the next 7 days — derived from task + project due
+  // dates so the section works in real mode (data.calendarEvents is empty
+  // in Supabase mode; the Calendar screen uses the same approach).
+  const nowMs = now.getTime();
+  const sevenDaysLaterMs = nowMs + SEVEN_DAYS_MS;
+  const upcomingEvents = useMemo(() => {
+    const evs = [];
+    allTasks.forEach((t) => {
+      if (!t.due) return;
+      const d = parseDate(t.due).getTime();
+      if (d >= nowMs && d <= sevenDaysLaterMs) {
+        evs.push({ date: t.due, type: t.status === 'Review' ? 'review' : 'deadline', title: t.title, projectId: t.projectId });
+      }
+    });
+    projects.forEach((p) => {
+      if (!p.due) return;
+      const d = parseDate(p.due).getTime();
+      if (d >= nowMs && d <= sevenDaysLaterMs) {
+        evs.push({ date: p.due, type: 'deadline', title: p.name, projectId: p.id });
+      }
+    });
+    return evs.sort((a, b) => a.date.localeCompare(b.date));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTasks, projects]);
 
   return (
     <div className="page fade-in">
@@ -48,7 +80,7 @@ export function DashboardScreen({ setRoute }) {
           </div>
           <h1 className="h1">Guten Morgen, {me?.name?.split(' ')[0] ?? 'Fabian'}.</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14.5, margin: '6px 0 0' }}>
-            {dueToday.length} Aufgaben heute fällig, {blocked.length} blockiert, {inReview.length} warten auf Review.
+            {dueToday.length} Aufgaben heute fällig · {blocked.length} blockiert · {completedThisWeek} diese Woche erledigt.
           </p>
         </div>
         <div className="row gap-2">
@@ -59,10 +91,25 @@ export function DashboardScreen({ setRoute }) {
 
       {/* KPIs */}
       <div className="grid grid-4 gap-3 mb-6">
-        <KPI label="Offene Aufgaben" value={open.length} trend={`${overdue.length} überfällig`} tone={overdue.length > 0 ? 'bad' : 'ok'} />
-        <KPI label="Heute fällig" value={dueToday.length} trend={dueToday.length ? `${unassignedToday} ohne Zuweisung` : 'Alles im Plan'} tone={dueToday.length > 0 ? 'warn' : 'ok'} />
+        <KPI
+          label="Offene Aufgaben"
+          value={open.length}
+          trend={completedThisWeek > 0 ? `+${completedThisWeek} diese Woche erledigt` : overdue.length > 0 ? `${overdue.length} überfällig` : 'Im Plan'}
+          tone={overdue.length > 0 ? 'bad' : completedThisWeek > 0 ? 'ok' : ''}
+        />
+        <KPI
+          label="Erledigt · 7 Tage"
+          value={completedThisWeek}
+          trend={completedThisWeek > 0 ? 'Gute Velocity' : 'Noch nichts diese Woche'}
+          tone={completedThisWeek > 0 ? 'ok' : ''}
+        />
         <KPI label="Blockiert" value={blocked.length} trend={blocked.length ? 'Aufmerksamkeit nötig' : 'Keine Blocker'} tone={blocked.length > 0 ? 'bad' : 'ok'} />
-        <KPI label="In Review" value={inReview.length} trend={inReview.length ? 'Warten auf Feedback' : 'Keine offenen Reviews'} />
+        <KPI
+          label="Heute fällig"
+          value={dueToday.length}
+          trend={overdue.length > 0 ? `${overdue.length} überfällig` : dueToday.length ? `${unassignedToday} ohne Zuweisung` : 'Alles im Plan'}
+          tone={overdue.length > 0 ? 'bad' : dueToday.length > 0 ? 'warn' : 'ok'}
+        />
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
@@ -183,16 +230,29 @@ export function DashboardScreen({ setRoute }) {
           {/* Upcoming */}
           <section className="card">
             <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div className="h3">Diese Woche im Kalender</div>
+              <div>
+                <div className="h3">Diese Woche im Kalender</div>
+                <div className="meta mt-1">Nächste 7 Tage · Tasks & Projekte</div>
+              </div>
               <button className="btn btn-quiet btn-sm" onClick={() => setRoute('calendar')}>Kalender <I.arrowRight size={13} /></button>
             </div>
             <div>
-              {events.slice(0, 5).map((ev, i) => (
-                <div key={i} className="row gap-3" style={{ padding: '10px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
+              {upcomingEvents.length === 0 && (
+                <div className="meta" style={{ padding: '16px 18px' }}>Keine Deadlines in den nächsten 7 Tagen.</div>
+              )}
+              {upcomingEvents.slice(0, 5).map((ev, i) => (
+                <div
+                  key={i}
+                  className="row gap-3"
+                  style={{ padding: '10px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)', cursor: 'pointer' }}
+                  onClick={() => setRoute('project:' + ev.projectId)}
+                >
                   <div className="mono" style={{ fontSize: 11.5, color: 'var(--text-3)', minWidth: 50 }}>{formatDate(ev.date)}</div>
                   <span className="dot-indicator" style={{ background: eventColor(ev.type) }} />
-                  <div style={{ flex: 1, fontSize: 13 }}>{ev.title}</div>
-                  <span className="badge ghost" style={{ fontSize: 10.5 }}>{ev.type}</span>
+                  <div style={{ flex: 1, fontSize: 13 }} className="truncate">{ev.title}</div>
+                  <span className={`badge ${daysUntil(ev.date) === 0 ? 'warning' : daysUntil(ev.date) < 0 ? 'danger' : 'ghost'}`} style={{ fontSize: 10.5 }}>
+                    {dueLabel(ev.date).text}
+                  </span>
                 </div>
               ))}
             </div>
