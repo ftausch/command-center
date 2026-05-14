@@ -139,7 +139,23 @@ export async function inviteWorkspaceMember(input: {
     userId = data.user.id;
   }
 
-  // 7. Upsert workspace_members. Admin client bypasses RLS — this IS the
+  // 7. Ensure a profiles row exists before touching workspace_members.
+  //
+  // workspace_members.user_id → profiles.id (FK). For brand-new invited
+  // users, auth.users gets the row from inviteUserByEmail, but the
+  // profiles row is created by a trigger that may not have fired yet.
+  // Upserting the profile here guarantees the FK resolves immediately.
+  // The onConflict: 'id' makes this a no-op for existing users.
+  const { error: profileErr } = await admin.from('profiles').upsert(
+    { id: userId, email, full_name: email },
+    { onConflict: 'id' },
+  );
+  if (profileErr) {
+    console.error('[invite] profiles upsert failed', profileErr.message);
+    // Non-fatal — trigger may have already created it; continue.
+  }
+
+  // 8. Upsert workspace_members. Admin client bypasses RLS — this IS the
   // moment the membership becomes effective, before the invitee has even
   // clicked the email. That's intentional: it makes the new row visible
   // in the Team / Settings → Members list immediately after the admin
