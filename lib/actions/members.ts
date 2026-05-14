@@ -24,6 +24,19 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type { ActionResult } from '@/lib/types';
 
+const RATE_LIMIT_WARNING =
+  'E-Mail-Limit erreicht. Mitglied wurde angelegt, aber die Einladungs-E-Mail konnte nicht gesendet werden. ' +
+  'Bitte später erneut einladen oder SMTP in den Supabase Auth-Settings konfigurieren.';
+
+function isRateLimitError(err: { message?: string; status?: number; code?: string } | null): boolean {
+  if (!err) return false;
+  return (
+    err.code === 'over_email_send_rate_limit' ||
+    (err.message?.toLowerCase().includes('rate limit') ?? false) ||
+    err.status === 429
+  );
+}
+
 const ALLOWED_INVITE_ROLES = ['owner', 'admin', 'manager', 'member', 'viewer'] as const;
 const MAY_INVITE_ROLES = ['owner', 'admin'] as const;
 
@@ -91,6 +104,7 @@ export async function inviteWorkspaceMember(input: {
   // 6. Branch: invite (new) vs recovery (existing).
   let userId: string;
   let mode: InviteMode;
+  let emailRateLimited = false;
   if (existing) {
     userId = existing.id;
     // Reject early if the user is already a member of THIS workspace —
@@ -116,27 +130,55 @@ export async function inviteWorkspaceMember(input: {
       };
     }
     mode = 'recovery';
-    const { error } = await admin.auth.resetPasswordForEmail(email, {
+    const { error: recoveryErr } = await admin.auth.resetPasswordForEmail(email, {
       redirectTo,
     });
-    if (error) {
-      console.error('[invite] resetPasswordForEmail failed', error.message);
-      return { ok: false, error: error.message };
+    if (recoveryErr) {
+      if (isRateLimitError(recoveryErr)) {
+        // Rate-limited: email not sent, but user exists. Still add them to
+        // workspace_members below — the admin can resend manually later.
+        emailRateLimited = true;
+        console.warn('[invite] resetPasswordForEmail rate-limited; proceeding with workspace upsert');
+        // userId is already set above from the existing-user lookup. Fall through.
+      } else {
+        console.error('[invite] resetPasswordForEmail failed', recoveryErr.message);
+        return { ok: false, error: recoveryErr.message };
+      }
     }
   } else {
     mode = 'invite';
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    const { data, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo,
     });
-    if (error) {
-      console.error('[invite] inviteUserByEmail failed', error.message);
-      return { ok: false, error: error.message };
+    if (inviteErr) {
+      if (isRateLimitError(inviteErr)) {
+        // Supabase creates the auth.users row before sending the email. Re-check
+        // whether the user was persisted despite the email failure.
+        console.warn('[invite] inviteUserByEmail rate-limited; re-checking if user was created');
+        const { data: recheck } = await admin.auth.admin.listUsers({ perPage: 1000 });
+        const recheckUsers = (recheck as { users: { id: string; email?: string }[] } | null)?.users ?? [];
+        const created = recheckUsers.find((u) => u.email?.toLowerCase() === email);
+        if (!created) {
+          // User was not created at all — return a clear rate-limit error.
+          return {
+            ok: false,
+            error: 'E-Mail-Limit erreicht. Bitte später erneut versuchen oder SMTP in Supabase konfigurieren.',
+          };
+        }
+        // User was created; add them to the workspace and return a warning.
+        emailRateLimited = true;
+        userId = created.id;
+      } else {
+        console.error('[invite] inviteUserByEmail failed', inviteErr.message);
+        return { ok: false, error: inviteErr.message };
+      }
+    } else {
+      if (!data?.user?.id) {
+        console.error('[invite] inviteUserByEmail returned no user id');
+        return { ok: false, error: 'Invite hat keine User-ID geliefert.' };
+      }
+      userId = data.user.id;
     }
-    if (!data?.user?.id) {
-      console.error('[invite] inviteUserByEmail returned no user id');
-      return { ok: false, error: 'Invite hat keine User-ID geliefert.' };
-    }
-    userId = data.user.id;
   }
 
   // 7. Ensure a profiles row exists before touching workspace_members.
@@ -169,6 +211,10 @@ export async function inviteWorkspaceMember(input: {
     return { ok: false, error: memErr.message };
   }
 
+  if (emailRateLimited) {
+    console.warn(`[invite] ⚠ rate-limited — ${email} added to workspace_members as ${input.role} but email not sent`);
+    return { ok: true, data: { userId, mode, email }, warning: RATE_LIMIT_WARNING };
+  }
   console.log(
     `[invite] ✓ ${mode} sent to ${email}; workspace_members upserted as ${input.role}`,
   );

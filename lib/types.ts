@@ -252,4 +252,8 @@ export type ActionResult<T> = {
   data?: T;
   activity?: ActivityView;
   error?: string;
+  /** Non-blocking warning: main operation succeeded but a secondary step (e.g.
+   *  sending an email) failed. UI should show an amber notice rather than a
+   *  blocking red error. */
+  warning?: string;
 };

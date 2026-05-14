@@ -25,8 +25,9 @@ export function InvitePersonModal({ open, onClose }) {
   const { currentWorkspaceId: workspaceId, refresh } = useWorkspace();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
-  const [status, setStatus] = useState('idle'); // idle | submitting | success | error
+  const [status, setStatus] = useState('idle'); // idle | submitting | success | warning | error
   const [errorMsg, setErrorMsg] = useState(null);
+  const [warningMsg, setWarningMsg] = useState(null);
   const [success, setSuccess] = useState(null); // { email, mode }
 
   // Fresh state every time the modal opens.
@@ -36,6 +37,7 @@ export function InvitePersonModal({ open, onClose }) {
     setRole('member');
     setStatus('idle');
     setErrorMsg(null);
+    setWarningMsg(null);
     setSuccess(null);
   }, [open]);
 
@@ -69,6 +71,15 @@ export function InvitePersonModal({ open, onClose }) {
     if (!result.ok) {
       setErrorMsg(result.error ?? 'Einladung fehlgeschlagen');
       setStatus('error');
+      return;
+    }
+    // Partial success: member was added to workspace_members but the email
+    // could not be sent (rate limit). Show a warning instead of a success.
+    if (result.warning) {
+      setWarningMsg(result.warning);
+      setStatus('warning');
+      refresh();
+      // Don't auto-close so the admin can read the warning.
       return;
     }
     setSuccess({ email: result.data.email, mode: result.data.mode });
@@ -127,6 +138,30 @@ export function InvitePersonModal({ open, onClose }) {
           >
             {success.mode === 'invite' ? 'Einladungs-Mail' : 'Recovery-Mail'} gesendet an{' '}
             <span className="mono">{success.email}</span>.
+          </div>
+        ) : status === 'warning' && warningMsg ? (
+          <div className="col gap-3">
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--warning)',
+                padding: '10px 12px',
+                background: 'var(--warning-bg)',
+                borderRadius: 6,
+                border: '1px solid var(--warning-border)',
+                lineHeight: 1.55,
+              }}
+            >
+              ⚠️ {warningMsg}
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onClose}
+              style={{ alignSelf: 'flex-end' }}
+            >
+              Schließen
+            </button>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="col gap-3">
