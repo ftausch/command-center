@@ -23,6 +23,7 @@ import { TeamScreen } from '@/components/screens/Team';
 import { ActivityScreen } from '@/components/screens/Activity';
 import { SettingsScreen } from '@/components/screens/Settings';
 import { ConceptScreen } from '@/components/screens/Concept';
+import { PodcastHubScreen } from '@/components/screens/PodcastHub';
 
 export function App() {
   const {
@@ -165,6 +166,10 @@ export function App() {
       case 'settings':
         screen = <SettingsScreen />;
         breadcrumb = 'Settings';
+        break;
+      case 'podcast':
+        screen = <PodcastHubScreen setRoute={setRoute} />;
+        breadcrumb = 'Podcast Hub';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;
