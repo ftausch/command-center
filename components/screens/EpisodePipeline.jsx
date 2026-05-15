@@ -195,7 +195,7 @@ function NewEpisodeForm({ defaultStatus, workspaceId, onDone, onCancel }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────
 
-export function EpisodePipelineScreen({ setRoute }) {
+export function EpisodePipelineScreen({ setRoute, embedded = false }) {
   const {
     currentWorkspace: brand,
     currentWorkspaceId: workspaceId,
@@ -246,25 +246,34 @@ export function EpisodePipelineScreen({ setRoute }) {
     ? (COLS.find((c) => c.id === activeEp.status)?.accent ?? 'var(--border)')
     : 'var(--border)';
 
-  return (
-    <div className="page fade-in">
-      {/* Header */}
-      <div className="page-head mb-4">
-        <div>
-          <div className="row gap-2 mb-1" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
-            <button className="btn btn-quiet btn-sm" onClick={() => setRoute('podcast')} style={{ padding: '0 6px', height: 22 }}>
-              Podcast Hub
-            </button>
-            <I.chevron size={11} />
-            <span>Pipeline</span>
+  const boardContent = (
+    <>
+      {!embedded && (
+        <div className="page-head mb-4">
+          <div>
+            <div className="row gap-2 mb-1" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+              <button className="btn btn-quiet btn-sm" onClick={() => setRoute('podcast')} style={{ padding: '0 6px', height: 22 }}>
+                Podcast Hub
+              </button>
+              <I.chevron size={11} />
+              <span>Pipeline</span>
+            </div>
+            <h1 className="h1">Episode Pipeline</h1>
+            <p className="meta mt-1">{(data.episodes ?? []).length} Episoden · Ziehe Karten um den Status zu ändern</p>
           </div>
-          <h1 className="h1">Episode Pipeline</h1>
-          <p className="meta mt-1">{(data.episodes ?? []).length} Episoden · Ziehe Karten um den Status zu ändern</p>
+          <button className="btn btn-brand btn-sm" onClick={() => setAddingTo('idea')}>
+            <I.plus size={13} /> Neue Episode
+          </button>
         </div>
-        <button className="btn btn-brand btn-sm" onClick={() => setAddingTo('idea')}>
-          <I.plus size={13} /> Neue Episode
-        </button>
-      </div>
+      )}
+      {embedded && (
+        <div className="row between mb-4" style={{ alignItems: 'center' }}>
+          <p className="meta">{(data.episodes ?? []).length} Episoden · Ziehe Karten um den Status zu ändern</p>
+          <button className="btn btn-brand btn-sm" onClick={() => setAddingTo('idea')}>
+            <I.plus size={13} /> Neue Episode
+          </button>
+        </div>
+      )}
 
       {/* Board */}
       <DndContext
@@ -314,6 +323,14 @@ export function EpisodePipelineScreen({ setRoute }) {
           </span>
         ))}
       </div>
+    </>
+  );
+
+  if (embedded) return boardContent;
+
+  return (
+    <div className="page fade-in">
+      {boardContent}
     </div>
   );
 }
