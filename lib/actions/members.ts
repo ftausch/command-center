@@ -25,8 +25,8 @@ import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type { ActionResult } from '@/lib/types';
 
 const RATE_LIMIT_WARNING =
-  'E-Mail-Limit erreicht. Mitglied wurde angelegt, aber die Einladungs-E-Mail konnte nicht gesendet werden. ' +
-  'Bitte später erneut einladen oder SMTP in den Supabase Auth-Settings konfigurieren.';
+  'E-Mail-Limit bei Resend erreicht. Mitglied wurde angelegt, aber die Einladungs-E-Mail konnte nicht gesendet werden. ' +
+  'Bitte den Backup-Link unten per Slack oder WhatsApp teilen oder später erneut einladen.';
 
 function isRateLimitError(err: { message?: string; status?: number; code?: string } | null): boolean {
   if (!err) return false;

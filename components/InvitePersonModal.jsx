@@ -119,7 +119,7 @@ export function InvitePersonModal({ open, onClose }) {
         <div className="row between mb-3">
           <div>
             <div className="h3">Person einladen</div>
-            <div className="meta mt-1">Invite-Link wird generiert — per Slack oder E-Mail teilen.</div>
+            <div className="meta mt-1">Einladungs-Email wird automatisch über Resend versendet.</div>
           </div>
           <button
             type="button"
@@ -146,7 +146,7 @@ export function InvitePersonModal({ open, onClose }) {
 
             {inviteLink && (
               <div className="col gap-2">
-                <div className="label">Invite-Link (per Slack / WhatsApp teilen)</div>
+                <div className="label">Backup-Link (falls Email nicht ankommt)</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
                   <input
                     readOnly
