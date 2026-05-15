@@ -34,7 +34,9 @@ try {
   process.exit(1);
 }
 
-const body = await res.json().catch(() => res.text());
+const raw  = await res.text();
+let body;
+try { body = JSON.parse(raw); } catch { body = raw; }
 
 console.log(`HTTP ${res.status}`);
 console.log(JSON.stringify(body, null, 2));
