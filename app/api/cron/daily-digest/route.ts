@@ -210,6 +210,12 @@ export async function GET(req: NextRequest) {
 
   const today = berlinToday();
 
+  // Diagnostic: log which Supabase project this function is connecting to.
+  // NEXT_PUBLIC_SUPABASE_URL is already public (embedded in the client bundle).
+  const supabaseRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')
+    .replace('https://', '').split('.')[0];
+  console.log(`[cron/digest] supabase project ref: ${supabaseRef}`);
+
   // 1. Active Slack integrations
   const { data: integrations, error: intErr } = await admin
     .from('slack_integrations')
@@ -321,5 +327,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, today, workspaces: integrations.length, notified, results });
+  return NextResponse.json({ ok: true, today, supabaseRef, workspaces: integrations.length, notified, results });
 }
