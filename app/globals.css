@@ -3,84 +3,93 @@
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Surfaces — warm off-white */
-  --bg: #fafaf8;
-  --bg-elev: #ffffff;
-  --bg-sunk: #f4f2ed;
-  --bg-hover: #f0eee9;
-  --bg-active: #ebe9e3;
+  /* ── Editorial Command Design System ──────────────────────────
+     Warm-tinted foundation. "Paper-like" digital workspace.
+     Source: DESIGN.md — surface-container family + on-surface tokens.
+  ───────────────────────────────────────────────────────────── */
 
-  /* Borders */
-  --border: #e7e5e0;
-  --border-strong: #d6d3cc;
-  --border-soft: #efede8;
+  /* Surfaces — warm pinkish-white (#fcf8fa base) */
+  --bg:        #fcf8fa;   /* background / surface */
+  --bg-elev:   #ffffff;   /* surface-container-lowest — cards, modals */
+  --bg-sunk:   #f0edef;   /* surface-container — recessed areas */
+  --bg-hover:  #eae7e9;   /* surface-container-high — hover */
+  --bg-active: #e4e2e4;   /* surface-container-highest — pressed */
 
-  /* Text */
-  --text-1: #1a1d24;
-  --text-2: #5a5d66;
-  --text-3: #8a8d96;
-  --text-4: #b5b3ad;
+  /* Borders — from outline-variant / surface-container-highest */
+  --border:        #e4e2e4;   /* outline-variant light */
+  --border-strong: #c6c6cd;   /* outline */
+  --border-soft:   #f0edef;   /* surface-container */
+
+  /* Text — on-surface family */
+  --text-1: #1b1b1d;   /* on-surface */
+  --text-2: #45464d;   /* on-surface-variant */
+  --text-3: #76777d;   /* outline */
+  --text-4: #c6c6cd;   /* outline-variant */
   --text-inv: #ffffff;
 
-  /* Status — muted oklch */
-  --success: oklch(0.62 0.11 145);
+  /* Status — calibrated for warm background */
+  --success: oklch(0.55 0.13 145);
   --success-bg: oklch(0.96 0.02 145);
-  --success-border: oklch(0.88 0.04 145);
+  --success-border: oklch(0.87 0.05 145);
 
-  --warning: oklch(0.68 0.12 70);
-  --warning-bg: oklch(0.97 0.025 75);
-  --warning-border: oklch(0.88 0.05 70);
+  --warning: oklch(0.62 0.14 68);
+  --warning-bg: oklch(0.97 0.025 72);
+  --warning-border: oklch(0.87 0.06 68);
 
-  --danger: oklch(0.56 0.15 25);
-  --danger-bg: oklch(0.96 0.025 25);
-  --danger-border: oklch(0.87 0.06 25);
+  --danger: oklch(0.52 0.18 22);
+  --danger-bg: oklch(0.96 0.025 22);
+  --danger-border: oklch(0.86 0.07 22);
 
-  --info: oklch(0.58 0.10 240);
-  --info-bg: oklch(0.96 0.02 240);
-  --info-border: oklch(0.88 0.04 240);
+  --info: oklch(0.55 0.12 238);
+  --info-bg: oklch(0.96 0.02 238);
+  --info-border: oklch(0.87 0.05 238);
 
-  --neutral: #5a5d66;
-  --neutral-bg: #f0eee9;
-  --neutral-border: #d6d3cc;
+  --neutral: #45464d;
+  --neutral-bg: #f0edef;
+  --neutral-border: #c6c6cd;
 
-  /* Brand — current workspace accent (set per brand below) */
-  --brand: #1a3d5c;
-  --brand-soft: rgba(26, 61, 92, 0.08);
-  --brand-strong: #0f2a42;
+  /* Brand — Rich Purple (secondary in Editorial Command) */
+  --brand:       #712edd;                    /* secondary */
+  --brand-soft:  rgba(113, 46, 221, 0.08);
+  --brand-strong: #5b00c5;                   /* on-secondary-fixed-variant */
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(20, 22, 28, 0.04);
-  --shadow-md: 0 2px 6px rgba(20, 22, 28, 0.05), 0 1px 2px rgba(20, 22, 28, 0.04);
-  --shadow-lg: 0 12px 32px rgba(20, 22, 28, 0.08), 0 2px 6px rgba(20, 22, 28, 0.04);
-  --shadow-pop: 0 24px 60px rgba(20, 22, 28, 0.14), 0 4px 12px rgba(20, 22, 28, 0.06);
+  /* Shadows — soft ambient, tonal not aggressive */
+  --shadow-sm:  0 1px 3px rgba(27, 27, 29, 0.05);
+  --shadow-md:  0 4px 12px rgba(27, 27, 29, 0.06), 0 1px 3px rgba(27, 27, 29, 0.04);
+  --shadow-lg:  0 10px 24px rgba(27, 27, 29, 0.08), 0 2px 6px rgba(27, 27, 29, 0.04);
+  --shadow-pop: 0 20px 48px rgba(27, 27, 29, 0.12), 0 4px 12px rgba(27, 27, 29, 0.06);
 
-  /* Radii */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
-  --r-pill: 999px;
+  /* Radii — 8px grid, rounded level 2 */
+  --r-xs:   4px;
+  --r-sm:   8px;    /* standard elements: buttons, inputs, chips */
+  --r-md:   10px;
+  --r-lg:   16px;   /* cards, containers */
+  --r-xl:   20px;   /* large modals */
+  --r-pill: 9999px; /* pill badges, avatars */
 
   /* Type */
   --font-sans: 'Hanken Grotesk', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Layout */
-  --sidebar-w: 248px;
-  --topbar-h: 56px;
+  --sidebar-w: 240px;
+  --topbar-h:  56px;
 }
 
+/* Both workspaces share the Editorial Command purple accent.
+   The workspace "identity" lives in the brand-pill color only. */
 [data-brand="unicornbakery"] {
-  --brand: #1a3d5c;
-  --brand-soft: rgba(26, 61, 92, 0.08);
-  --brand-strong: #0f2a42;
+  --brand:        #712edd;
+  --brand-soft:   rgba(113, 46, 221, 0.08);
+  --brand-strong: #5b00c5;
+  --brand-pill-bg: #131b2e; /* Deep Navy for the workspace pill */
 }
 
 [data-brand="selbstfrei"] {
-  --brand: #7a3dc4;
-  --brand-soft: rgba(122, 61, 196, 0.08);
-  --brand-strong: #5e2ba0;
+  --brand:        #712edd;
+  --brand-soft:   rgba(113, 46, 221, 0.08);
+  --brand-strong: #5b00c5;
+  --brand-pill-bg: #2d1060;
 }
 
 * { box-sizing: border-box; }
@@ -92,10 +101,10 @@ html, body {
   color: var(--text-1);
   font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'ss01', 'ss02', 'cv01';
+  font-feature-settings: 'ss01', 'ss02', 'cv01', 'tnum';
 }
 
 #root { min-height: 100vh; }
@@ -130,9 +139,9 @@ a { color: inherit; text-decoration: none; }
 .body { font-size: 14px; color: var(--text-1); }
 .body-2 { font-size: 13px; color: var(--text-2); }
 
-/* ===== Card ===== */
+/* ===== Card — white, 1px border, no heavy shadows ===== */
 .card {
-  background: var(--bg-elev);
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
@@ -146,59 +155,72 @@ a { color: inherit; text-decoration: none; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: var(--r-sm);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.003em;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
   border: 1px solid transparent;
 }
 
+/* Primary — Deep Navy, high authority */
 .btn-primary {
-  background: var(--text-1);
-  color: var(--text-inv);
+  background: #131b2e;
+  color: #ffffff;
+  border-color: #131b2e;
 }
-.btn-primary:hover { background: #0c0f15; }
+.btn-primary:hover { background: #1e2a45; }
 
+/* Brand — uses workspace accent (purple) */
 .btn-brand {
-  background: var(--brand);
-  color: var(--text-inv);
+  background: #131b2e;
+  color: #ffffff;
+  border-color: #131b2e;
 }
-.btn-brand:hover { background: var(--brand-strong); }
+.btn-brand:hover { background: #1e2a45; }
 
-.btn-ghost {
+/* Secondary — Purple outline */
+.btn-secondary {
   background: transparent;
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.btn-secondary:hover { background: var(--brand-soft); }
+
+/* Ghost — no border, subtle */
+.btn-ghost {
+  background: var(--bg-elev);
   color: var(--text-1);
   border-color: var(--border);
-  background: var(--bg-elev);
 }
-.btn-ghost:hover { background: var(--bg-hover); }
+.btn-ghost:hover { background: var(--bg-hover); border-color: var(--border-strong); }
 
+/* Quiet — toolbar actions */
 .btn-quiet {
   background: transparent;
   color: var(--text-2);
 }
 .btn-quiet:hover { background: var(--bg-hover); color: var(--text-1); }
 
-.btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
-.btn-lg { height: 38px; padding: 0 16px; font-size: 14px; }
-.btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
-.btn-icon.btn-sm { width: 28px; height: 28px; }
+.btn-sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.btn-lg { height: 40px; padding: 0 18px; font-size: 14.5px; }
+.btn-icon { width: 34px; height: 34px; padding: 0; justify-content: center; }
+.btn-icon.btn-sm { width: 30px; height: 30px; }
 
-/* ===== Badge ===== */
+/* ===== Badge — pill-shaped status chips ===== */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 22px;
-  padding: 0 8px;
-  border-radius: var(--r-sm);
+  padding: 0 10px;
+  border-radius: var(--r-pill);
   font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: -0.002em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   background: var(--neutral-bg);
   color: var(--text-2);
   border: 1px solid var(--border);
@@ -221,11 +243,11 @@ a { color: inherit; text-decoration: none; }
 
 /* ===== Input ===== */
 .input {
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
-  background: var(--bg-elev);
+  background: #ffffff;
   color: var(--text-1);
   outline: none;
   transition: border-color 0.12s, box-shadow 0.12s;
@@ -446,9 +468,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .modal {
-  background: var(--bg-elev);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
   width: 100%;
   max-width: 560px;
   overflow: hidden;
@@ -517,11 +541,11 @@ a { color: inherit; text-decoration: none; }
 .topbar {
   height: var(--topbar-h);
   border-bottom: 1px solid var(--border);
-  background: rgba(250, 250, 248, 0.85);
-  backdrop-filter: blur(10px);
+  background: rgba(252, 248, 250, 0.92);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
   gap: 12px;
   position: sticky;
   top: 0;
@@ -562,11 +586,11 @@ a { color: inherit; text-decoration: none; }
 }
 .nav-item:hover { background: var(--bg-hover); color: var(--text-1); }
 .nav-item.active {
-  background: var(--bg-elev);
-  color: var(--text-1);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
-  padding: 6px 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  box-shadow: none;
+  border: 1px solid transparent;
+  padding: 7px 10px;
 }
 .nav-item .nav-count {
   margin-left: auto;
@@ -578,7 +602,8 @@ a { color: inherit; text-decoration: none; }
   border-radius: 999px;
   font-weight: 500;
 }
-.nav-item.active .nav-count { background: var(--brand-soft); color: var(--brand); }
+.nav-item.active .nav-count { background: rgba(113, 46, 221, 0.15); color: var(--brand); }
+.nav-item.active svg { color: var(--brand); }
 
 .nav-section {
   padding: 14px 18px 4px;
@@ -607,7 +632,7 @@ a { color: inherit; text-decoration: none; }
 .brand-pill .brand-mark {
   width: 28px; height: 28px;
   border-radius: var(--r-sm);
-  background: var(--brand);
+  background: var(--brand-pill-bg, #131b2e);
   color: white;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700;
