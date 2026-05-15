@@ -368,6 +368,7 @@ function handleHelp(cmd: string): string {
 
 async function handleTask(
   text: string, workspaceUuid: string, slackUser: string, cmd: string, admin: SupabaseClient,
+  slackUserId = '',
 ): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} task @tim Thumbnail bis Freitag\``;
 
@@ -375,14 +376,28 @@ async function handleTask(
   if (!title) return 'Bitte einen Task-Titel angeben.';
 
   const needsMembers = !!mentionedName;
+
+  // Resolve caller to check project access
+  const caller = await resolveSlackUserWithRole(workspaceUuid, slackUser, admin, slackUserId);
+
+  // Determine which projects the caller may create tasks in:
+  // Manager+ → all non-Done projects; Member/Viewer → only projects they're a member of.
+  let projectsQuery = admin.from('projects').select('id, name').eq('workspace_id', workspaceUuid).neq('status', 'Done').order('created_at', { ascending: true });
+  if (caller && !roleAtLeast(caller.role, 'manager')) {
+    const { data: pm } = await admin.from('project_members').select('project_id').eq('workspace_id', workspaceUuid).eq('user_id', caller.id);
+    const ids = (pm ?? []).map((r: any) => r.project_id as string);
+    if (!ids.length) return '⛔ Du bist noch keinem Projekt zugewiesen. Bitte einen Manager bitten, dich zu einem Projekt hinzuzufügen.';
+    projectsQuery = projectsQuery.in('id', ids);
+  }
+
   const [membersRes, projectsRes] = await Promise.all([
     needsMembers
       ? admin.from('workspace_members').select('user_id, profiles!inner(id, full_name, email)').eq('workspace_id', workspaceUuid)
       : Promise.resolve({ data: [] as any[] }),
-    admin.from('projects').select('id, name').eq('workspace_id', workspaceUuid).neq('status', 'Done').order('created_at', { ascending: true }).limit(1),
+    projectsQuery.limit(1),
   ]);
 
-  if (!projectsRes.data?.length) return '⚠️ Kein aktives Projekt. Bitte zuerst ein Projekt in Command Center anlegen.';
+  if (!projectsRes.data?.length) return '⚠️ Kein zugängliches aktives Projekt gefunden.';
   const { id: projectId, name: projectName } = projectsRes.data[0];
 
   let assigneeId: string | null = null;
@@ -794,7 +809,7 @@ export async function POST(req: NextRequest) {
   let responseText: string;
 
   switch (sub) {
-    case 'task':    responseText = await handleTask(rest, workspaceUuid, userName, cmd, admin); break;
+    case 'task':    responseText = await handleTask(rest, workspaceUuid, userName, cmd, admin, userId); break;
     case 'mytasks': responseText = await handleMyTasks(workspaceUuid, userName, userId, admin); break;
     case 'today':   responseText = await handleToday(workspaceUuid, admin); break;
     case 'done':    responseText = await handleDone(rest, workspaceUuid, userName, userId, cmd, admin); break;

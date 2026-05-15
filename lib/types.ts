@@ -223,6 +223,17 @@ export interface SlackNotificationView {
   time: string;
 }
 
+export type ProjectMemberRole = 'manager' | 'member' | 'viewer';
+
+export interface ProjectMemberView {
+  id: string;         // project_members.id
+  projectId: string;
+  userId: string;
+  role: ProjectMemberRole;
+  name: string;       // profiles.full_name or email
+  email: string;
+}
+
 export type EpisodeStatus = 'draft' | 'scheduled' | 'published';
 
 export interface EpisodeView {

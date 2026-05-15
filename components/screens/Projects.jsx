@@ -90,7 +90,13 @@ export function ProjectsScreen({ setRoute }) {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={9} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
-                  {search.trim() ? 'Keine Projekte gefunden.' : all.length === 0 ? 'Noch keine Projekte. Klicke "+ New Project" um zu starten.' : 'Keine Projekte in dieser Kategorie.'}
+                  {search.trim()
+                    ? 'Keine Projekte gefunden.'
+                    : all.length === 0
+                      ? CAN.createProject(myRole)
+                        ? 'Noch keine Projekte. Klicke "+ New Project" um zu starten.'
+                        : 'Du bist noch keinem Projekt zugewiesen. Bitte einen Manager, dich zu einem Projekt hinzuzufügen.'
+                      : 'Keine Projekte in dieser Kategorie.'}
                 </td>
               </tr>
             )}
