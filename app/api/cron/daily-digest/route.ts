@@ -217,6 +217,12 @@ export async function GET(req: NextRequest) {
   console.log(`[cron/digest] supabase project ref: ${supabaseRef}`);
 
   // 1. Active Slack integrations
+  // Diagnostic: count ALL rows (ignoring is_active) to detect RLS filtering.
+  const { count: totalRows } = await admin
+    .from('slack_integrations')
+    .select('*', { count: 'exact', head: true });
+  console.log(`[cron/digest] slack_integrations total rows visible: ${totalRows}`);
+
   const { data: integrations, error: intErr } = await admin
     .from('slack_integrations')
     .select('workspace_id')
@@ -327,5 +333,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, today, supabaseRef, workspaces: integrations.length, notified, results });
+  return NextResponse.json({ ok: true, today, supabaseRef, slackIntegrationsTotal: totalRows, workspaces: integrations.length, notified, results });
 }
