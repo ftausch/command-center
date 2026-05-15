@@ -187,7 +187,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
 }
 
 export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, realtimeStatus } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   // Show a dot on the bell when there are unread activity entries.
@@ -240,8 +240,25 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
           justifyContent: 'space-between',
         }}
       >
-        <span className="row gap-2"><I.search size={14} /> Suche Tasks, Projekte, Personen…</span>
-        <span className="topbar-search-hint" style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+        <span className="row gap-2">
+          <I.search size={14} />
+          Suche Tasks, Projekte, Episoden…
+        </span>
+        <span className="row gap-2">
+          {realtimeStatus === 'live' && (
+            <span
+              title="Live-Sync aktiv"
+              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--success)', flexShrink: 0, display: 'inline-block' }}
+            />
+          )}
+          {realtimeStatus === 'error' && (
+            <span
+              title="Verbindung unterbrochen — Änderungen werden nicht live übertragen"
+              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--danger)', flexShrink: 0, display: 'inline-block' }}
+            />
+          )}
+          <span className="topbar-search-hint" style={{ display: 'flex', gap: 2 }}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+        </span>
       </button>
 
       <button

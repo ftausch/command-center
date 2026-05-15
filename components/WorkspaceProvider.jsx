@@ -93,6 +93,8 @@ export function WorkspaceProvider({ children }) {
   const [error, setError] = useState(null);
   const [me, setMe] = useState(null);
   const [mode, setMode] = useState(isSupabaseConfigured() ? 'supabase' : 'mock');
+  // 'off' | 'connecting' | 'live' | 'error'
+  const [realtimeStatus, setRealtimeStatus] = useState('off');
 
   // Load the "me" identity once on mount. Works in both modes:
   //   - mock: returns D.users[0] (Fabian)
@@ -216,6 +218,7 @@ export function WorkspaceProvider({ children }) {
 
     let channel = null;
     let cancelled = false;
+    setRealtimeStatus('connecting');
 
     (async () => {
       const { data: ws } = await supabase
@@ -273,11 +276,18 @@ export function WorkspaceProvider({ children }) {
             return { ...d, activity: [entry, ...d.activity] };
           });
         })
-        .subscribe();
+        .subscribe((status) => {
+          if (cancelled) return;
+          if (status === 'SUBSCRIBED')                         setRealtimeStatus('live');
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRealtimeStatus('error');
+          else if (status === 'CLOSED')                        setRealtimeStatus('off');
+          else                                                 setRealtimeStatus('connecting');
+        });
     })();
 
     return () => {
       cancelled = true;
+      setRealtimeStatus('off');
       if (channel) supabase.removeChannel(channel);
     };
   }, [currentWorkspaceId]);
@@ -404,6 +414,7 @@ export function WorkspaceProvider({ children }) {
       me,
       mode,
       myRole,
+      realtimeStatus,
       addTask,
       updateTaskInCache,
       removeTask,
@@ -429,6 +440,7 @@ export function WorkspaceProvider({ children }) {
       me,
       mode,
       myRole,
+      realtimeStatus,
       addTask,
       updateTaskInCache,
       removeTask,
