@@ -11,7 +11,7 @@ import {
 import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
 import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
-import { listProjectMembers } from '@/lib/db/supabase';
+import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
@@ -55,6 +55,9 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const [newMemberRole, setNewMemberRole] = useState('member');
   const [pmPending, setPmPending] = useState(false);
 
+  // ── Project Resources ─────────────────────────────────────────────────────
+  const [projectResources, setProjectResources] = useState([]);
+
   // ── Bulk task selection ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkPending, setBulkPending] = useState(false);
@@ -70,15 +73,24 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
   useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
 
-  // Load project members whenever this project is opened
+  // Load project members + resources whenever this project is opened
   useEffect(() => {
     const wsId = brand?.id ?? '';
     if (!projectId || !wsId) return;
     let cancelled = false;
     setPmLoading(true);
     setPmError(null);
-    listProjectMembers(wsId, projectId)
-      .then((members) => { if (!cancelled) { setProjectMembers(members); setPmLoading(false); } })
+    Promise.all([
+      listProjectMembers(wsId, projectId),
+      listProjectResources(wsId, projectId),
+    ])
+      .then(([members, resources]) => {
+        if (!cancelled) {
+          setProjectMembers(members);
+          setProjectResources(resources);
+          setPmLoading(false);
+        }
+      })
       .catch((e) => { if (!cancelled) { setPmError(e.message); setPmLoading(false); } });
     return () => { cancelled = true; };
   }, [projectId, brand?.id]);
@@ -641,6 +653,38 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </>
             )}
           </div>
+
+          {/* ── External Resources ──────────────────────────────────────── */}
+          {projectResources.length > 0 && (
+            <div className="card card-pad">
+              <div className="label mb-3">Externe Ressourcen</div>
+              <div className="col gap-2">
+                {projectResources.map((r) => (
+                  <div key={r.id} className="row between items-center" style={{ padding: '8px 10px', background: 'var(--bg-sunk)', borderRadius: 8 }}>
+                    <div className="row gap-2 items-center">
+                      <span style={{ fontSize: 15 }}>{r.provider === 'slack' ? '💬' : '📁'}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'capitalize' }}>{r.provider} · {r.type.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                    {r.url && (
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontSize: 11.5 }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        Öffnen <I.arrowRight size={11} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Project Members ─────────────────────────────────────────── */}
           {(() => {

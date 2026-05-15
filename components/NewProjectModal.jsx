@@ -11,9 +11,13 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
-import { createProject } from '@/lib/actions/projects';
+import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
+import { safeSlackChannelName } from '@/lib/workspace-utils';
 
-const PROJECT_TYPES = ['Episode', 'Newsletter', 'Clips', 'Design', 'Andere'];
+const PROJECT_TYPES = ['Episode', 'Recording', 'Event', 'Shoot', 'Client', 'Production', 'Workshop', 'Newsletter', 'Clips', 'Design', 'Andere'];
+
+// Event types that benefit from workspace setup
+const SETUP_TYPES = new Set(['Episode', 'Recording', 'Event', 'Shoot', 'Client', 'Production', 'Workshop']);
 const PRIORITIES = ['High', 'Medium', 'Low'];
 
 export function NewProjectModal({ open, onClose, onCreated }) {
@@ -31,6 +35,12 @@ export function NewProjectModal({ open, onClose, onCreated }) {
   const [status, setStatus] = useState('idle'); // idle | submitting | error
   const [errorMsg, setErrorMsg] = useState(null);
 
+  // Workspace setup
+  const [setupSlack,         setSetupSlack]         = useState(false);
+  const [slackChannelName,   setSlackChannelName]   = useState('');
+  const [postSetupMsg,       setPostSetupMsg]       = useState(true);
+  const [setupWarning,       setSetupWarning]       = useState(null);
+
   // Reset state every time the modal opens.
   useEffect(() => {
     if (!open) return;
@@ -41,7 +51,16 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     setDue('');
     setStatus('idle');
     setErrorMsg(null);
+    setSetupSlack(false);
+    setSlackChannelName('');
+    setPostSetupMsg(true);
+    setSetupWarning(null);
   }, [open]);
+
+  // Auto-generate channel name from project name
+  useEffect(() => {
+    if (name.trim()) setSlackChannelName(safeSlackChannelName(name.trim()));
+  }, [name]);
 
   // ESC closes when idle. Same rule as the invite modal — refuse to close
   // mid-submit so the user isn't left wondering whether the project was
@@ -81,9 +100,22 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     }
     addProject(result.data);
     if (result.activity) pushActivity(result.activity);
+
+    // Workspace setup (best-effort, non-blocking)
+    if (setupSlack && result.data?.id) {
+      const setupResult = await setupProjectWorkspace({
+        projectId:        result.data.id,
+        workspaceId,
+        setupSlack,
+        slackChannelName,
+        postSetupMessage: postSetupMsg,
+        projectName:      name.trim(),
+        projectType:      type,
+      });
+      if (setupResult.warning) setSetupWarning(setupResult.warning);
+    }
+
     onClose();
-    // Hand the new project back so the parent can navigate the user into
-    // its detail view (the natural next action after "Create").
     if (onCreated) onCreated(result.data);
   };
 
@@ -177,13 +209,95 @@ export function NewProjectModal({ open, onClose, onCreated }) {
             style={{ resize: 'vertical', minHeight: 64, padding: '8px 12px', lineHeight: 1.4 }}
           />
 
+          {/* ── Workspace vorbereiten ──────────────────────────────── */}
+          <div style={{
+            borderTop: '1px solid var(--border-soft)',
+            paddingTop: 14, marginTop: 2,
+          }}>
+            <button
+              type="button"
+              onClick={() => setSetupSlack(s => !s)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 0, width: '100%', textAlign: 'left',
+              }}
+            >
+              <span style={{
+                fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
+                textTransform: 'uppercase', color: 'var(--text-3)',
+              }}>
+                Workspace vorbereiten
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 'auto' }}>
+                {setupSlack ? '▾' : '▸'}
+              </span>
+            </button>
+
+            {setupSlack && (
+              <div className="col gap-3 mt-3 fade-in">
+                {/* Slack */}
+                <div style={{ background: 'var(--bg-sunk)', borderRadius: 8, padding: '12px 14px' }}>
+                  <div className="row between mb-2">
+                    <div className="row gap-2">
+                      <I.slack size={14} />
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Slack-Channel</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 500 }}>● Verbunden</span>
+                  </div>
+                  <input
+                    className="input"
+                    value={slackChannelName}
+                    onChange={e => setSlackChannelName(e.target.value)}
+                    placeholder="channel-name"
+                    disabled={status === 'submitting'}
+                    style={{ fontSize: 13, fontFamily: 'var(--font-mono)', marginBottom: 8 }}
+                  />
+                  <label className="row gap-2" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+                    <input
+                      type="checkbox"
+                      checked={postSetupMsg}
+                      onChange={e => setPostSetupMsg(e.target.checked)}
+                      disabled={status === 'submitting'}
+                      style={{ accentColor: 'var(--brand)' }}
+                    />
+                    Setup-Nachricht in Slack posten
+                  </label>
+                </div>
+
+                {/* Google Drive — disabled */}
+                <div style={{
+                  background: 'var(--bg-sunk)', borderRadius: 8, padding: '12px 14px',
+                  opacity: 0.5,
+                }}>
+                  <div className="row between">
+                    <div className="row gap-2">
+                      <span style={{ fontSize: 14 }}>📁</span>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Google Drive Ordner</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Nicht verbunden</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 6 }}>
+                    Google Drive Integration noch nicht eingerichtet.
+                  </div>
+                </div>
+
+                {setupWarning && (
+                  <div style={{ fontSize: 12, color: 'var(--warning)', padding: '6px 10px', background: 'var(--warning-bg)', borderRadius: 6 }}>
+                    ⚠️ {setupWarning}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="submit"
             className="btn btn-brand"
             disabled={!name.trim() || status === 'submitting'}
             style={{ width: '100%', justifyContent: 'center' }}
           >
-            {status === 'submitting' ? 'Wird angelegt…' : 'Projekt anlegen'}
+            {status === 'submitting' ? 'Wird angelegt…' : setupSlack ? 'Projekt anlegen & Workspace vorbereiten' : 'Projekt anlegen'}
           </button>
 
           {errorMsg && (

@@ -12,6 +12,7 @@ import type {
   ActivityView,
   ProjectMemberRole,
   ProjectMemberView,
+  ProjectResource,
   ProjectStatus,
   ProjectView,
   TaskPriority,
@@ -333,4 +334,109 @@ export async function updateProjectMemberRole(input: {
   if (error) return { ok: false, error: error.message };
 
   return { ok: true, data: { userId: input.userId, role: input.role } };
+}
+
+// ── Workspace Setup ───────────────────────────────────────────────────────
+
+import { safeSlackChannelName } from '@/lib/workspace-utils';
+export { safeSlackChannelName };
+
+export async function setupProjectWorkspace(input: {
+  projectId: string;
+  workspaceId: string;
+  setupSlack: boolean;
+  slackChannelName: string;
+  postSetupMessage: boolean;
+  projectName: string;
+  projectType?: string;
+}): Promise<ActionResult<{ resources: ProjectResource[] }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden.' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Nur Manager+ können Workspace-Ressourcen anlegen.' };
+  }
+
+  const userId = await actor();
+  const resources: ProjectResource[] = [];
+  const warnings: string[] = [];
+
+  if (input.setupSlack && input.slackChannelName.trim()) {
+    const channelName = safeSlackChannelName(input.slackChannelName);
+    const slackUrl = `https://slack.com/app_redirect?channel=${encodeURIComponent(channelName)}`;
+
+    // Save to project_resources
+    const { data: resRow, error: resErr } = await supabase
+      .from('project_resources')
+      .insert({
+        workspace_id: ctx.uuid,
+        project_id:   input.projectId,
+        type:         'slack_channel',
+        provider:     'slack',
+        name:         `#${channelName}`,
+        url:          slackUrl,
+        metadata:     { channel_name: channelName, project_type: input.projectType ?? '' },
+        created_by:   userId,
+      })
+      .select()
+      .single();
+
+    if (resErr) {
+      console.error('[setupWorkspace] project_resources insert failed', resErr.message);
+      warnings.push('Slack-Ressource konnte nicht gespeichert werden.');
+    } else {
+      resources.push({
+        id:         resRow.id,
+        projectId:  input.projectId,
+        type:       'slack_channel',
+        provider:   'slack',
+        externalId: null,
+        name:       `#${channelName}`,
+        url:        slackUrl,
+        createdAt:  resRow.created_at,
+      });
+
+      // Update projects.slack_channel
+      await supabase
+        .from('projects')
+        .update({ slack_channel: `#${channelName}`, slack_connected: true })
+        .eq('id', input.projectId)
+        .eq('workspace_id', ctx.uuid);
+    }
+
+    // Post setup message via existing webhook (best-effort)
+    if (input.postSetupMessage) {
+      const { postSlackNotification } = await import('@/lib/integrations/slack');
+      const typeLabel = input.projectType ? ` (${input.projectType})` : '';
+      await postSlackNotification({
+        workspaceUuid: ctx.uuid,
+        text: [
+          `🚀 *Workspace bereit: ${input.projectName}*${typeLabel}`,
+          `📋 Projekt angelegt in Command Center`,
+          `💬 Slack-Channel: *#${channelName}*`,
+          `🔗 <https://team.unicornbakery.de|Command Center öffnen>`,
+        ].join('\n'),
+        channelLabel: 'workspace-setup',
+      });
+    }
+  }
+
+  // Activity log
+  await supabase.from('activity_logs').insert({
+    workspace_id: ctx.uuid,
+    actor_id:     userId,
+    kind:         'project_created',
+    target_type:  'project',
+    target_id:    input.projectId,
+    meta:         { setup: true, slack: input.setupSlack, resources: resources.length },
+  });
+
+  const result: ActionResult<{ resources: ProjectResource[] }> = {
+    ok:   true,
+    data: { resources },
+  };
+  if (warnings.length) result.warning = warnings.join(' ');
+  return result;
 }

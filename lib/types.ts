@@ -251,6 +251,17 @@ export interface EpisodeView {
   description?: string;
 }
 
+export interface ProjectResource {
+  id: string;
+  projectId: string;
+  type: 'slack_channel' | 'drive_folder' | 'drive_subfolder';
+  provider: 'slack' | 'google_drive';
+  externalId: string | null;
+  name: string;
+  url: string | null;
+  createdAt: string;
+}
+
 export interface WorkspaceStats {
   projects: number;
   tasks: number; // open tasks

@@ -24,6 +24,7 @@ import type {
   CalendarEventView,
   EpisodeView,
   ProjectMemberView,
+  ProjectResource,
   ProjectView,
   SlackNotificationView,
   TaskView,
@@ -348,6 +349,31 @@ export async function listEpisodes(
 // These three are read-only view data with no schema in Phase 2. Until they
 // get tables, defer to the mock adapter so screens render. Phase 4+ replaces
 // these with real queries.
+
+export async function listProjectResources(
+  workspaceSlug: string,
+  projectId: string,
+): Promise<ProjectResource[]> {
+  const wsId = await workspaceIdFromSlug(workspaceSlug);
+  if (!wsId) return [];
+  const { data, error } = await client()
+    .from('project_resources')
+    .select('id, project_id, type, provider, external_id, name, url, created_at')
+    .eq('workspace_id', wsId)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r: any): ProjectResource => ({
+    id:         r.id,
+    projectId:  r.project_id,
+    type:       r.type,
+    provider:   r.provider,
+    externalId: r.external_id ?? null,
+    name:       r.name,
+    url:        r.url ?? null,
+    createdAt:  r.created_at,
+  }));
+}
 
 export const listCalendarEvents = fallback.listCalendarEvents;
 export const listTemplates = fallback.listTemplates;
