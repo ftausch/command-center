@@ -198,7 +198,13 @@ export function App() {
         onMobileClose={() => setSidebarOpen(false)}
       />
       <main className="main">
-        <Topbar openCmdK={() => setCmdkOpen(true)} breadcrumb={breadcrumb} setRoute={setRoute} onOpenSidebar={() => setSidebarOpen(true)} />
+        <Topbar
+          openCmdK={() => setCmdkOpen(true)}
+          breadcrumb={breadcrumb}
+          setRoute={setRoute}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onOpenTask={(taskId, projectId) => setDrawerTask({ taskId, projectId })}
+        />
         {error ? (
           <div style={{ padding: '40px 28px', maxWidth: 480 }}>
             <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: 'var(--danger)' }}>Workspace konnte nicht geladen werden</div>

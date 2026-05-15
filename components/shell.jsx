@@ -1,11 +1,12 @@
 'use client';
 // Sidebar — left nav with brand pill + nav sections; Topbar with breadcrumb + search
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Kbd } from '@/components/ui';
 import { NewTaskModal } from '@/components/NewTaskModal';
+import { NotificationsPanel, useNotificationCount } from '@/components/NotificationsPanel';
 
 // Returns the number of activity entries newer than the last time the user
 // visited the Activity screen. Stored per workspace in localStorage so it
@@ -189,25 +190,12 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   );
 }
 
-export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, realtimeStatus } = useWorkspace();
+export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTask }) {
+  const { currentWorkspace: brand, currentWorkspaceId, myRole, realtimeStatus } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
-
-  // Show a dot on the bell when there are unread activity entries.
-  // Reads same localStorage key as Sidebar; no clearing here — Sidebar
-  // clears it when the user opens Activity.
-  const [hasUnread, setHasUnread] = useState(false);
-  useEffect(() => {
-    const key = currentWorkspaceId ? `cc.activity.seen.${currentWorkspaceId}` : null;
-    if (!key) return;
-    try {
-      const lastSeen = parseInt(localStorage.getItem(key) ?? '0', 10);
-      setHasUnread(data.activity.some((a) => {
-        const t = new Date(a.time).getTime();
-        return Number.isFinite(t) && t > lastSeen;
-      }));
-    } catch {}
-  }, [currentWorkspaceId, data.activity]);
+  const [notifOpen, setNotifOpen]     = useState(false);
+  const bellRef = useRef(null);
+  const notifCount = useNotificationCount();
 
   return (
     <div className="topbar">
@@ -264,22 +252,41 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar }) {
         </span>
       </button>
 
-      <button
-        className="btn btn-icon btn-quiet"
-        title="Activity"
-        onClick={() => setRoute?.('activity')}
-        style={{ position: 'relative' }}
-      >
-        <I.bell size={16} />
-        {hasUnread && (
-          <span style={{
-            position: 'absolute', top: 4, right: 4,
-            width: 7, height: 7, borderRadius: 999,
-            background: 'var(--danger)',
-            border: '1.5px solid var(--bg)',
-          }} />
+      <div ref={bellRef} style={{ position: 'relative' }}>
+        <button
+          className="btn btn-icon btn-quiet"
+          title="Benachrichtigungen"
+          onClick={() => setNotifOpen((o) => !o)}
+          style={{ position: 'relative' }}
+        >
+          <I.bell size={16} />
+          {notifCount > 0 && (
+            <span style={{
+              position: 'absolute', top: 3, right: 3,
+              minWidth: notifCount > 9 ? 14 : 10,
+              height: notifCount > 9 ? 14 : 10,
+              borderRadius: 999,
+              background: 'var(--danger)',
+              border: '1.5px solid var(--bg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8, fontWeight: 700, color: '#fff',
+              lineHeight: 1,
+            }}>
+              {notifCount > 9 ? '9+' : notifCount > 1 ? notifCount : ''}
+            </span>
+          )}
+        </button>
+        {notifOpen && (
+          <NotificationsPanel
+            onClose={() => setNotifOpen(false)}
+            onOpenTask={(taskId, projectId) => {
+              setNotifOpen(false);
+              onOpenTask?.(taskId, projectId);
+            }}
+            setRoute={(r) => { setNotifOpen(false); setRoute?.(r); }}
+          />
         )}
-      </button>
+      </div>
       {(myRole !== 'viewer') && (
         <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
           <I.plus size={14} /> New
