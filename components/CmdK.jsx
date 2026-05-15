@@ -27,6 +27,7 @@ function KindIcon({ kind }) {
   if (kind === 'Task')    return <I.check size={s} />;
   if (kind === 'Project') return <I.folder size={s} />;
   if (kind === 'Person')  return <I.user size={s} />;
+  if (kind === 'Episode') return <I.mic size={s} />;
   return <I.arrowRight size={s} />;
 }
 
@@ -81,6 +82,10 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
         kind: 'Action', id: 'go-calendar', label: 'Kalender öffnen', sub: 'Calendar',
         action: () => setRoute('calendar'),
       },
+      {
+        kind: 'Action', id: 'go-podcast', label: 'Podcast Hub öffnen', sub: 'Episoden',
+        action: () => setRoute('podcast'),
+      },
     ];
 
     const projectItems = data.projects.map((p) => ({
@@ -105,6 +110,13 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       action: () => setRoute('team'),
     }));
 
+    const episodeItems = (data.episodes ?? []).map((e) => ({
+      kind: 'Episode', id: e.id,
+      label: e.num != null ? `Ep. ${e.num} — ${e.title}` : e.title,
+      sub: [e.status, e.guest, e.date].filter(Boolean).join(' · '),
+      action: () => setRoute('podcast'),
+    }));
+
     const filtering = q.trim() !== '';
     const filtered = (items) => filtering ? items.filter((it) => matches(it, q)) : items;
 
@@ -112,12 +124,13 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       { label: 'Actions',  items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
       { label: 'Projekte', items: filtered(projectItems).slice(0, filtering ? 10 : 3) },
       { label: 'Tasks',    items: filtered(taskItems).slice(0, filtering ? 12 : 4) },
+      { label: 'Episoden', items: filtered(episodeItems).slice(0, filtering ? 10 : 3) },
       { label: 'Personen', items: filtered(personItems).slice(0, 5) },
     ].filter((g) => g.items.length > 0);
 
     const flat = groups.flatMap((g) => g.items);
     return { groups, flat };
-  }, [q, open, brand, data, setRoute, onOpenTask]);
+  }, [q, open, brand, data, data.episodes, setRoute, onOpenTask]);
 
   // Clamp idx when results change
   useEffect(() => {
@@ -165,7 +178,7 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
               ref={inputRef}
               value={q}
               onChange={(e) => { setQ(e.target.value); setIdx(0); }}
-              placeholder="Suche Tasks, Projekte, Personen…"
+              placeholder="Suche Tasks, Projekte, Episoden, Personen…"
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, color: 'var(--text-1)' }}
             />
             {q && (
