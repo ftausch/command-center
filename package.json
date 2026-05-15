@@ -9,7 +9,8 @@
     "lint": "next lint",
     "verify:supabase": "node --env-file=.env.local scripts/verify-supabase.mjs",
     "test:slack": "node --env-file=.env.local scripts/test-slack.mjs",
-    "invite": "node --env-file=.env.local scripts/invite-user.mjs"
+    "invite": "node --env-file=.env.local scripts/invite-user.mjs",
+    "test:daily-digest": "node --env-file=.env.local scripts/test-daily-digest.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
