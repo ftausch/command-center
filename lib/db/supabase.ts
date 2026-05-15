@@ -23,6 +23,7 @@ import type {
   BrandView,
   CalendarEventView,
   EpisodeView,
+  ProjectMemberView,
   ProjectView,
   SlackNotificationView,
   TaskView,
@@ -285,6 +286,29 @@ export async function listSlackNotifications(
     user: n.user_name ?? '',
     text: n.message,
     time: n.posted_at,
+  }));
+}
+
+export async function listProjectMembers(
+  workspaceSlug: string,
+  projectId: string,
+): Promise<ProjectMemberView[]> {
+  const wsId = await workspaceIdFromSlug(workspaceSlug);
+  if (!wsId) return [];
+  const { data, error } = await client()
+    .from('project_members')
+    .select('id, project_id, user_id, role, profiles!inner(full_name, email)')
+    .eq('workspace_id', wsId)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r: any): ProjectMemberView => ({
+    id:        r.id,
+    projectId: r.project_id,
+    userId:    r.user_id,
+    role:      r.role,
+    name:      (r.profiles?.full_name ?? r.profiles?.email ?? r.user_id) as string,
+    email:     (r.profiles?.email ?? '') as string,
   }));
 }
 

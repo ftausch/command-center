@@ -9,8 +9,9 @@ import {
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
-import { updateProject, deleteProject } from '@/lib/actions/projects';
+import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
+import { listProjectMembers } from '@/lib/db/supabase';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
@@ -45,6 +46,15 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
 
+  // ── Project Members ───────────────────────────────────────────────────────
+  const [projectMembers, setProjectMembers] = useState([]);
+  const [pmLoading, setPmLoading] = useState(false);
+  const [pmError, setPmError] = useState(null);
+  const [addingMember, setAddingMember] = useState(false);
+  const [newMemberId, setNewMemberId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('member');
+  const [pmPending, setPmPending] = useState(false);
+
   // ── Bulk task selection ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkPending, setBulkPending] = useState(false);
@@ -59,6 +69,19 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
   useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
+
+  // Load project members whenever this project is opened
+  useEffect(() => {
+    const wsId = brand?.id ?? '';
+    if (!projectId || !wsId) return;
+    let cancelled = false;
+    setPmLoading(true);
+    setPmError(null);
+    listProjectMembers(wsId, projectId)
+      .then((members) => { if (!cancelled) { setProjectMembers(members); setPmLoading(false); } })
+      .catch((e) => { if (!cancelled) { setPmError(e.message); setPmLoading(false); } });
+    return () => { cancelled = true; };
+  }, [projectId, brand?.id]);
 
   if (!project) return <div className="page">Projekt nicht gefunden.</div>;
 
@@ -111,6 +134,37 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     if (!r.ok) { setFieldError(r.error ?? 'Slack konnte nicht gespeichert werden'); return; }
     updateProjectInCache(projectId, { slackChannel: channel, slackConnected: connected });
     setEditingSlack(false);
+  };
+
+  const handleAddMember = async () => {
+    if (!newMemberId) return;
+    setPmPending(true);
+    setPmError(null);
+    const r = await addProjectMember({ workspaceId, projectId, userId: newMemberId, role: newMemberRole });
+    setPmPending(false);
+    if (!r.ok) { setPmError(r.error ?? 'Fehler beim Hinzufügen'); return; }
+    setProjectMembers((prev) => [...prev, r.data]);
+    setNewMemberId('');
+    setNewMemberRole('member');
+    setAddingMember(false);
+  };
+
+  const handleRemoveMember = async (userId) => {
+    setPmPending(true);
+    setPmError(null);
+    const r = await removeProjectMember({ workspaceId, projectId, userId });
+    setPmPending(false);
+    if (!r.ok) { setPmError(r.error ?? 'Fehler beim Entfernen'); return; }
+    setProjectMembers((prev) => prev.filter((m) => m.userId !== userId));
+  };
+
+  const handleRoleMember = async (userId, role) => {
+    setPmPending(true);
+    setPmError(null);
+    const r = await updateProjectMemberRole({ workspaceId, projectId, userId, role });
+    setPmPending(false);
+    if (!r.ok) { setPmError(r.error ?? 'Fehler beim Rollenändern'); return; }
+    setProjectMembers((prev) => prev.map((m) => m.userId === userId ? { ...m, role } : m));
   };
 
   const onDelete = async () => {
@@ -587,6 +641,111 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </>
             )}
           </div>
+
+          {/* ── Project Members ─────────────────────────────────────────── */}
+          {(() => {
+            const canManage = CAN.editProject(myRole);
+            const memberIds = new Set(projectMembers.map((m) => m.userId));
+            const eligible = data.members.filter((u) => !memberIds.has(u.id));
+            return (
+              <div className="card card-pad">
+                <div className="row between mb-3">
+                  <div className="h3">Team</div>
+                  {canManage && !addingMember && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => { setAddingMember(true); setNewMemberId(eligible[0]?.id ?? ''); setNewMemberRole('member'); setPmError(null); }}
+                      disabled={pmPending || eligible.length === 0}
+                      title={eligible.length === 0 ? 'Alle Workspace-Mitglieder sind bereits im Projekt' : undefined}
+                    >
+                      <I.plus size={12} /> Hinzufügen
+                    </button>
+                  )}
+                </div>
+
+                {pmLoading && <div className="meta">Wird geladen…</div>}
+                {pmError && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>{pmError}</div>}
+
+                {!pmLoading && projectMembers.length === 0 && (
+                  <div className="meta">Noch keine Projektmitglieder.</div>
+                )}
+
+                <div className="col gap-2">
+                  {projectMembers.map((m) => (
+                    <div key={m.userId} className="row between items-center" style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-sunk)' }}>
+                      <div className="row gap-2 items-center" style={{ minWidth: 0 }}>
+                        <Avatar user={data.members.find((u) => u.id === m.userId) ?? { name: m.name, initials: m.name.slice(0, 2).toUpperCase() }} />
+                        <span style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                      </div>
+                      <div className="row gap-2 items-center">
+                        {canManage ? (
+                          <select
+                            className="input"
+                            value={m.role}
+                            onChange={(e) => handleRoleMember(m.userId, e.target.value)}
+                            disabled={pmPending}
+                            style={{ height: 26, fontSize: 12, width: 90, padding: '0 4px' }}
+                          >
+                            <option value="manager">Manager</option>
+                            <option value="member">Member</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text-3)', textTransform: 'capitalize' }}>{m.role}</span>
+                        )}
+                        {canManage && (
+                          <button
+                            className="btn btn-icon btn-quiet btn-sm"
+                            onClick={() => handleRemoveMember(m.userId)}
+                            disabled={pmPending}
+                            title="Entfernen"
+                          >
+                            <I.x size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {addingMember && (
+                  <div className="col gap-2 mt-3" style={{ paddingTop: 12, borderTop: '1px solid var(--border-soft)' }}>
+                    <div className="row gap-2">
+                      <select
+                        className="input"
+                        value={newMemberId}
+                        onChange={(e) => setNewMemberId(e.target.value)}
+                        disabled={pmPending}
+                        style={{ height: 28, fontSize: 12.5, flex: 1 }}
+                      >
+                        {eligible.length === 0
+                          ? <option value="">Alle hinzugefügt</option>
+                          : eligible.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)
+                        }
+                      </select>
+                      <select
+                        className="input"
+                        value={newMemberRole}
+                        onChange={(e) => setNewMemberRole(e.target.value)}
+                        disabled={pmPending}
+                        style={{ height: 28, fontSize: 12.5, width: 90 }}
+                      >
+                        <option value="manager">Manager</option>
+                        <option value="member">Member</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </div>
+                    <div className="row gap-2">
+                      <button className="btn btn-brand btn-sm" onClick={handleAddMember} disabled={pmPending || !newMemberId}>
+                        {pmPending ? '…' : 'Hinzufügen'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setAddingMember(false); setPmError(null); }} disabled={pmPending}>Abbrechen</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {project.links?.length > 0 && (
             <div className="card card-pad">

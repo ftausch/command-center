@@ -10,6 +10,8 @@ import { postSlackNotification, actorDisplayName } from '@/lib/integrations/slac
 import type {
   ActionResult,
   ActivityView,
+  ProjectMemberRole,
+  ProjectMemberView,
   ProjectStatus,
   ProjectView,
   TaskPriority,
@@ -112,6 +114,16 @@ export async function createProject(input: {
     .select()
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
+
+  // Add creator as project manager so they retain access under project-level RLS.
+  await supabase.from('project_members').insert({
+    workspace_id: ctx.uuid,
+    project_id:   data.id,
+    user_id:      userId,
+    role:         'manager',
+  }).then(({ error: e }) => {
+    if (e) console.error('[createProject] project_members insert failed:', e.message);
+  });
 
   await supabase.from('activity_logs').insert({
     workspace_id: ctx.uuid,
@@ -233,4 +245,92 @@ export async function updateProject(input: {
   if (error) return { ok: false, error: error.message };
 
   return { ok: true, data: { id: input.projectId, ...input.patch } };
+}
+
+// ── Project member management ─────────────────────────────────────────────
+
+export async function addProjectMember(input: {
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  role: ProjectMemberRole;
+}): Promise<ActionResult<ProjectMemberView>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Not configured' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden oder kein Zugriff.' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Nur Manager+ können Projektmitglieder hinzufügen.' };
+  }
+
+  const { data, error } = await supabase
+    .from('project_members')
+    .insert({ workspace_id: ctx.uuid, project_id: input.projectId, user_id: input.userId, role: input.role })
+    .select('id, project_id, user_id, role, profiles!inner(full_name, email)')
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
+
+  return {
+    ok: true,
+    data: {
+      id:        data.id,
+      projectId: data.project_id,
+      userId:    data.user_id,
+      role:      data.role as ProjectMemberRole,
+      name:      ((data as any).profiles?.full_name ?? (data as any).profiles?.email ?? data.user_id) as string,
+      email:     ((data as any).profiles?.email ?? '') as string,
+    },
+  };
+}
+
+export async function removeProjectMember(input: {
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+}): Promise<ActionResult<{ userId: string }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Not configured' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden oder kein Zugriff.' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Nur Manager+ können Projektmitglieder entfernen.' };
+  }
+
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', input.projectId)
+    .eq('user_id', input.userId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, data: { userId: input.userId } };
+}
+
+export async function updateProjectMemberRole(input: {
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  role: ProjectMemberRole;
+}): Promise<ActionResult<{ userId: string; role: ProjectMemberRole }>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Not configured' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden oder kein Zugriff.' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Nur Manager+ können Projektrollen ändern.' };
+  }
+
+  const { error } = await supabase
+    .from('project_members')
+    .update({ role: input.role })
+    .eq('project_id', input.projectId)
+    .eq('user_id', input.userId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, data: { userId: input.userId, role: input.role } };
 }
