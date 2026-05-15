@@ -13,6 +13,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { sendPasswordReset } from '@/lib/actions/auth';
 
 function humanizeError(
   code: string | null,
@@ -122,28 +123,12 @@ function LoginInner() {
     e.preventDefault();
     setErrorMsg(null);
     setStatus('submitting');
-    const supabase = createClient();
-    if (!supabase) {
-      setErrorMsg('Auth is not configured in this environment.');
-      setStatus('error');
-      return;
-    }
     try {
       sessionStorage.setItem(EMAIL_KEY, email);
     } catch {}
-    const redirectTo = `${window.location.origin.replace(/\/+$/, '')}/auth/callback`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) {
-      // Surface Supabase's error directly — typically rate limit hits.
-      // resetPasswordForEmail is otherwise silent on success/failure;
-      // it does not leak whether the email exists.
-      setErrorMsg(error.message);
-      setStatus('error');
-      return;
-    }
-    // Same message regardless of whether the email exists. Don't leak
-    // account existence — same security principle as the sign-in
-    // "Invalid login credentials" error.
+    // Use Resend via server action — bypasses Supabase SMTP entirely.
+    // Never reveals if the email exists (server action always returns ok: true).
+    await sendPasswordReset(email);
     setStatus('sent');
   }
 
