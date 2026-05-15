@@ -31,8 +31,13 @@ export async function sendPasswordReset(
       return { ok: true }; // return ok: true to not leak account existence
     }
 
-    const link = (linkData as any)?.properties?.action_link;
-    if (!link) return { ok: true };
+    // Use hashed_token → our own /auth/callback, not Supabase's direct URL.
+    // The direct action_link (supabase.co/auth/v1/verify) requires an
+    // apikey param that Supabase strips in newer project configs — our
+    // callback route calls verifyOtp() server-side and avoids that entirely.
+    const hashedToken = (linkData as any)?.properties?.hashed_token;
+    if (!hashedToken) return { ok: true };
+    const link = `${SITE_URL}/auth/callback?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`;
 
     // Send via Resend.
     const resendKey = process.env.RESEND_API_KEY;

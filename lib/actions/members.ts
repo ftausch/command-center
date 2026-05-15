@@ -188,7 +188,15 @@ export async function inviteWorkspaceMember(input: {
     console.error('[invite] generateLink failed', linkErr.message);
     return { ok: false, error: linkErr.message };
   }
-  inviteLink = (linkData as any)?.properties?.action_link ?? undefined;
+  // Build link to our own /auth/callback using hashed_token.
+  // The direct action_link (supabase.co/auth/v1/verify) can fail with
+  // "No API key" on some Supabase project configs — our callback route
+  // calls verifyOtp() server-side which has no such restriction.
+  const hashedToken = (linkData as any)?.properties?.hashed_token;
+  if (hashedToken) {
+    const linkType = mode === 'invite' ? 'invite' : 'recovery';
+    inviteLink = `${siteUrl}/auth/callback?token_hash=${encodeURIComponent(hashedToken)}&type=${linkType}`;
+  }
 
   // Resolve userId for new users (generateLink creates the auth.users row).
   if (mode === 'invite') {

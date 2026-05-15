@@ -66,8 +66,11 @@ const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
 });
 if (linkErr) { console.error(`generateLink failed: ${linkErr.message}`); process.exit(3); }
 
-const inviteLink = linkData?.properties?.action_link;
-if (!inviteLink) { console.error('generateLink returned no action_link'); process.exit(3); }
+// Use hashed_token → our /auth/callback instead of Supabase's direct URL.
+// The action_link (supabase.co/auth/v1/verify) requires apikey in some configs.
+const hashedToken = linkData?.properties?.hashed_token;
+if (!hashedToken) { console.error('generateLink returned no hashed_token'); process.exit(3); }
+const inviteLink = `${siteUrl}/auth/callback?token_hash=${encodeURIComponent(hashedToken)}&type=${mode}`;
 
 // Resolve userId for new users.
 if (!existing) {
