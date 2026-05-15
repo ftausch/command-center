@@ -24,6 +24,7 @@ import { ActivityScreen } from '@/components/screens/Activity';
 import { SettingsScreen } from '@/components/screens/Settings';
 import { ConceptScreen } from '@/components/screens/Concept';
 import { PodcastHubScreen } from '@/components/screens/PodcastHub';
+import { EpisodePipelineScreen } from '@/components/screens/EpisodePipeline';
 
 export function App() {
   const {
@@ -171,6 +172,10 @@ export function App() {
       case 'podcast':
         screen = <PodcastHubScreen setRoute={setRoute} />;
         breadcrumb = 'Podcast Hub';
+        break;
+      case 'pipeline':
+        screen = <EpisodePipelineScreen setRoute={setRoute} />;
+        breadcrumb = 'Episode Pipeline';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

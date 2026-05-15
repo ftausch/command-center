@@ -234,7 +234,7 @@ export interface ProjectMemberView {
   email: string;
 }
 
-export type EpisodeStatus = 'draft' | 'scheduled' | 'published';
+export type EpisodeStatus = 'idea' | 'draft' | 'review' | 'scheduled' | 'published';
 
 export interface EpisodeView {
   id: string;

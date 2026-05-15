@@ -127,7 +127,10 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => setRoute('podcast')} style={{ position: 'relative' }}>
           <I.mic size={16} />
           <span>Podcast Hub</span>
-          <span className="nav-count" style={{ background: 'var(--brand)', color: 'white', fontSize: 9, padding: '1px 5px' }}>neu</span>
+        </div>
+        <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => setRoute('pipeline')} style={{ paddingLeft: 28 }}>
+          <I.kanban size={15} />
+          <span style={{ fontSize: 13 }}>Episode Pipeline</span>
         </div>
 
         <div className="nav-section">Pinned Projects</div>
