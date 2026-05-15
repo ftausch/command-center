@@ -131,27 +131,59 @@ function slackText(text: string, status = 200) {
 }
 
 // ── Slack user → workspace profile + role ─────────────────────────────────
-// profiles has no slack_user_id. Fuzzy-match user_name against full_name/email.
+// Two-phase resolution:
+//   1. Exact match on profiles.slack_user_id (populated after first use)
+//   2. Fuzzy match on full_name / email (first-time fallback)
+// On a successful fuzzy match the slack_user_id is auto-saved so the next
+// invocation uses the fast exact path.
 
 async function resolveSlackUserWithRole(
   workspaceUuid: string,
   slackUserName: string,
   admin: SupabaseClient,
+  slackUserId = '',          // Slack user ID e.g. U0ATF1U5LNT — from payload user_id
 ): Promise<SlackProfile | null> {
   const { data: members } = await admin
     .from('workspace_members')
-    .select('user_id, role, profiles!inner(id, full_name, email)')
+    .select('user_id, role, profiles!inner(id, full_name, email, slack_user_id)')
     .eq('workspace_id', workspaceUuid);
 
-  const needle = slackUserName.toLowerCase();
-  const match = (members ?? []).find((m: any) => {
-    const full  = ((m.profiles?.full_name ?? '') as string).toLowerCase();
-    const email = ((m.profiles?.email ?? '') as string).toLowerCase();
-    return full === needle || full.startsWith(needle) || full.includes(needle) ||
-           email.startsWith(needle + '@') || email === needle;
-  });
+  if (!members?.length) return null;
+
+  // Phase 1: exact Slack user ID match (fast, reliable after first use)
+  let match: any = null;
+  if (slackUserId) {
+    match = members.find((m: any) => (m.profiles?.slack_user_id as string | null) === slackUserId);
+  }
+
+  // Phase 2: fuzzy name / email match (first-time fallback)
+  let usedFuzzy = false;
+  if (!match) {
+    const needle = slackUserName.toLowerCase();
+    match = members.find((m: any) => {
+      const full  = ((m.profiles?.full_name ?? '') as string).toLowerCase();
+      const email = ((m.profiles?.email ?? '') as string).toLowerCase();
+      return full === needle || full.startsWith(needle) || full.includes(needle) ||
+             email.startsWith(needle + '@') || email === needle;
+    });
+    if (match) usedFuzzy = true;
+  }
 
   if (!match) return null;
+
+  // Auto-save Slack user ID after first successful fuzzy match so future
+  // lookups use the fast exact path. Fire-and-forget — never blocks response.
+  if (usedFuzzy && slackUserId && !(match.profiles?.slack_user_id)) {
+    admin
+      .from('profiles')
+      .update({ slack_user_id: slackUserId })
+      .eq('id', match.profiles.id)
+      .then(({ error }) => {
+        if (error) console.error('[slack] auto-save slack_user_id failed:', error.message);
+        else console.log(`[slack] linked ${slackUserName} → profile ${match.profiles.id}`);
+      });
+  }
+
   return {
     id:   match.user_id as string,
     name: ((match.profiles as any)?.full_name ?? (match.profiles as any)?.email ?? slackUserName) as string,
@@ -159,13 +191,14 @@ async function resolveSlackUserWithRole(
   };
 }
 
-// Simpler version without role (for read-only commands)
+// Simpler alias without role (for read-only commands)
 async function resolveSlackUser(
   workspaceUuid: string,
   slackUserName: string,
   admin: SupabaseClient,
+  slackUserId = '',
 ): Promise<{ id: string; name: string } | null> {
-  return resolveSlackUserWithRole(workspaceUuid, slackUserName, admin);
+  return resolveSlackUserWithRole(workspaceUuid, slackUserName, admin, slackUserId);
 }
 
 // ── Resolve a @mention string to a workspace profile ─────────────────────
@@ -386,8 +419,8 @@ async function handleTask(
 
 // ── /cc mytasks ───────────────────────────────────────────────────────────
 
-async function handleMyTasks(workspaceUuid: string, slackUserName: string, admin: SupabaseClient): Promise<string> {
-  const profile = await resolveSlackUser(workspaceUuid, slackUserName, admin);
+async function handleMyTasks(workspaceUuid: string, slackUserName: string, slackUserId: string, admin: SupabaseClient): Promise<string> {
+  const profile = await resolveSlackUser(workspaceUuid, slackUserName, admin, slackUserId);
   if (!profile) return `⚠️ Slack-Name \`${slackUserName}\` konnte keinem Command Center Profil zugeordnet werden.\nName in Slack muss mit dem Namen in Command Center übereinstimmen.`;
 
   const { data: tasks, error } = await admin
@@ -434,12 +467,12 @@ async function handleToday(workspaceUuid: string, admin: SupabaseClient): Promis
 
 // ── /cc done ──────────────────────────────────────────────────────────────
 
-async function handleDone(text: string, workspaceUuid: string, slackUserName: string, cmd: string, admin: SupabaseClient): Promise<string> {
+async function handleDone(text: string, workspaceUuid: string, slackUserName: string, slackUserId: string, cmd: string, admin: SupabaseClient): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} done Thumbnail Ep. 5\``;
 
   const needle = text.trim().toLowerCase();
   const [profile, tasksRes] = await Promise.all([
-    resolveSlackUser(workspaceUuid, slackUserName, admin),
+    resolveSlackUser(workspaceUuid, slackUserName, admin, slackUserId),
     admin.from('tasks').select('id, title, status, assignee_id').eq('workspace_id', workspaceUuid).neq('status', 'Done').ilike('title', `%${needle}%`).limit(10),
   ]);
 
@@ -514,7 +547,7 @@ async function handleSearch(text: string, workspaceUuid: string, admin: Supabase
 // ── /cc status ────────────────────────────────────────────────────────────
 
 async function handleStatus(
-  text: string, workspaceUuid: string, slackUserName: string, cmd: string, admin: SupabaseClient,
+  text: string, workspaceUuid: string, slackUserName: string, slackUserId: string, cmd: string, admin: SupabaseClient,
 ): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} status Trailer review\`\nAliase: todo · progress · review · done · backlog · blocked`;
 
@@ -524,7 +557,7 @@ async function handleStatus(
 
   // Parallel: resolve caller + find matching tasks
   const [caller, tasks] = await Promise.all([
-    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin),
+    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin, slackUserId),
     findMatchingTasks(workspaceUuid, taskText.trim(), admin),
   ]);
 
@@ -556,7 +589,7 @@ async function handleStatus(
 // ── /cc assign ────────────────────────────────────────────────────────────
 
 async function handleAssign(
-  text: string, workspaceUuid: string, slackUserName: string, cmd: string, admin: SupabaseClient,
+  text: string, workspaceUuid: string, slackUserName: string, slackUserId: string, cmd: string, admin: SupabaseClient,
 ): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} assign Trailer Hanno @malik\``;
 
@@ -566,7 +599,7 @@ async function handleAssign(
 
   // Parallel: caller role + task match + target user
   const [caller, tasks, targetUser] = await Promise.all([
-    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin),
+    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin, slackUserId),
     findMatchingTasks(workspaceUuid, taskText.trim(), admin),
     resolveMentionedUser(workspaceUuid, mentionedName, admin),
   ]);
@@ -596,13 +629,13 @@ async function handleAssign(
 // ── /cc comment ───────────────────────────────────────────────────────────
 
 async function handleComment(
-  text: string, workspaceUuid: string, slackUserName: string, cmd: string, admin: SupabaseClient,
+  text: string, workspaceUuid: string, slackUserName: string, slackUserId: string, cmd: string, admin: SupabaseClient,
 ): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} comment Trailer Bitte Outro kürzen\``;
 
   // Requires user mapping — author_id is NOT NULL in task_comments
   const [caller, allTasks] = await Promise.all([
-    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin),
+    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin, slackUserId),
     admin.from('tasks').select('id, title, status, assignee_id, project_id').eq('workspace_id', workspaceUuid).neq('status', 'Done').limit(100).then(r => (r.data ?? []) as TaskRow[]),
   ]);
 
@@ -645,7 +678,7 @@ async function handleComment(
 // ── /cc project ───────────────────────────────────────────────────────────
 
 async function handleProject(
-  text: string, workspaceUuid: string, slackUserName: string, cmd: string, admin: SupabaseClient,
+  text: string, workspaceUuid: string, slackUserName: string, slackUserId: string, cmd: string, admin: SupabaseClient,
 ): Promise<string> {
   if (!text.trim()) return [
     `Verfügbare Subcommands:`,
@@ -688,7 +721,7 @@ async function handleProject(
   const name = text.trim();
 
   const [caller] = await Promise.all([
-    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin),
+    resolveSlackUserWithRole(workspaceUuid, slackUserName, admin, slackUserId),
   ]);
 
   if (caller && !roleAtLeast(caller.role, 'manager')) {
@@ -732,6 +765,7 @@ export async function POST(req: NextRequest) {
   const text     = (params.get('text')     ?? '').trim();
   const teamId   = params.get('team_id')   ?? '';
   const userName = params.get('user_name') ?? 'unknown';
+  const userId   = params.get('user_id')   ?? '';  // Slack user ID e.g. U0ATF1U5LNT
 
   const admin = createAdminClient();
   if (!admin) {
@@ -761,15 +795,15 @@ export async function POST(req: NextRequest) {
 
   switch (sub) {
     case 'task':    responseText = await handleTask(rest, workspaceUuid, userName, cmd, admin); break;
-    case 'mytasks': responseText = await handleMyTasks(workspaceUuid, userName, admin); break;
+    case 'mytasks': responseText = await handleMyTasks(workspaceUuid, userName, userId, admin); break;
     case 'today':   responseText = await handleToday(workspaceUuid, admin); break;
-    case 'done':    responseText = await handleDone(rest, workspaceUuid, userName, cmd, admin); break;
+    case 'done':    responseText = await handleDone(rest, workspaceUuid, userName, userId, cmd, admin); break;
     case 'review':  responseText = await handleReview(workspaceUuid, admin); break;
     case 'search':  responseText = await handleSearch(rest, workspaceUuid, admin); break;
-    case 'status':  responseText = await handleStatus(rest, workspaceUuid, userName, cmd, admin); break;
-    case 'assign':  responseText = await handleAssign(rest, workspaceUuid, userName, cmd, admin); break;
-    case 'comment': responseText = await handleComment(rest, workspaceUuid, userName, cmd, admin); break;
-    case 'project': responseText = await handleProject(rest, workspaceUuid, userName, cmd, admin); break;
+    case 'status':  responseText = await handleStatus(rest, workspaceUuid, userName, userId, cmd, admin); break;
+    case 'assign':  responseText = await handleAssign(rest, workspaceUuid, userName, userId, cmd, admin); break;
+    case 'comment': responseText = await handleComment(rest, workspaceUuid, userName, userId, cmd, admin); break;
+    case 'project': responseText = await handleProject(rest, workspaceUuid, userName, userId, cmd, admin); break;
     case 'help':
     default:        responseText = handleHelp(cmd);
   }
