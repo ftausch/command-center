@@ -116,7 +116,7 @@ function buildDigest(
   const hasCritical = overdue.length || dueToday.length || highPrio.length || inReview.length;
 
   const lines: string[] = [
-    `🌅 *Daily Digest — ${berlinDateLong(today)}*`,
+    `<!here> 🌅 *Daily Digest — ${berlinDateLong(today)}*`,
     `*${workspaceName}*`,
     '',
   ];
