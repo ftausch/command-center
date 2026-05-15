@@ -1,7 +1,7 @@
 'use client';
 // Podcast Hub — 3 Tabs: Übersicht · Episoden · Pipeline
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
@@ -148,7 +148,7 @@ export function PodcastHubScreen({ setRoute }) {
       {tab === 'distribution' && <DistributionTab />}
       {tab === 'privatefeeds' && <PrivateFeedsTab episodes={episodes} />}
       {tab === 'migration'    && <MigrationTab />}
-      {tab === 'studio'       && <StudioTab />}
+      {tab === 'studio'       && <StudioTab episodes={episodes} workspaceId={currentWorkspaceId} />}
     </div>
   );
 }
@@ -1322,121 +1322,334 @@ function MigrationTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 8 — Studio (Write Tools + Dynamic Pages)
 // ═══════════════════════════════════════════════════════════════════════════
-function StudioTab() {
+const CHECKLIST_ITEMS = [
+  { id: 'topic',     label: 'Thema & Gast bestätigt' },
+  { id: 'prep',      label: 'Fragen & Outline vorbereitet' },
+  { id: 'record',    label: 'Aufnahme durchgeführt' },
+  { id: 'edit',      label: 'Schnitt & Mastering fertig' },
+  { id: 'thumbnail', label: 'Thumbnail erstellt' },
+  { id: 'shownotes', label: 'Show Notes geschrieben' },
+  { id: 'upload',    label: 'Episode hochgeladen' },
+  { id: 'schedule',  label: 'Veröffentlichung geplant' },
+];
+
+function generateLinkedIn(ep) {
+  const num  = ep.num != null ? `Ep. ${ep.num}: ` : '';
+  const guest = ep.guest ? `\n\nIm Gespräch mit ${ep.guest}.` : '';
+  const desc  = ep.description ? `\n\n${ep.description}` : '';
+  return `🎙️ Neue Episode: "${num}${ep.title}"${guest}${desc}\n\n📅 Jetzt anhören auf Apple Podcasts, Spotify und überall wo es Podcasts gibt.\n\n#UnicornBakery #Podcast #Entrepreneurship #Startup`;
+}
+
+function generateTwitter(ep) {
+  const num  = ep.num != null ? `Ep. ${ep.num} · ` : '';
+  const guest = ep.guest ? ` mit ${ep.guest}` : '';
+  return `🎙️ Neue Episode!\n\n${num}"${ep.title}"${guest}\n\nJetzt reinhören 👇\n#UnicornBakery #Podcast`;
+}
+
+function generateNewsletter(ep) {
+  const num   = ep.num != null ? `Folge ${ep.num}: ` : '';
+  const guest = ep.guest ? `\n\nIn dieser Folge spreche ich mit **${ep.guest}**` : '';
+  const desc  = ep.description ? `\n\n${ep.description}` : '';
+  return `Hey,\n\neine neue Episode von UnicornBakery ist online!\n\n**${num}${ep.title}**${guest}${desc}\n\n→ [Jetzt anhören](https://unicornbakery.de/podcast)\n\nViel Spaß beim Hören,\nFabian`;
+}
+
+function generateEmbed(ep) {
+  const num   = ep.num != null ? `Ep. ${ep.num} · ` : '';
+  const guest = ep.guest ? ` · ${ep.guest}` : '';
+  const dur   = ep.duration && ep.duration !== '—' ? ` · ${ep.duration}` : '';
+  return `<!-- UnicornBakery Podcast Embed -->
+<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;max-width:480px;font-family:-apple-system,system-ui,sans-serif">
+  <div style="display:flex;gap:12px;align-items:center">
+    <div style="width:52px;height:52px;border-radius:8px;background:linear-gradient(135deg,#1a1d24,#3b4a6b);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px">🎙️</div>
+    <div>
+      <div style="font-weight:700;font-size:14px;color:#111;line-height:1.3">${ep.title}</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:2px">${num}UnicornBakery${guest}${dur}</div>
+    </div>
+  </div>${ep.description ? `\n  <p style="font-size:13px;color:#374151;margin:12px 0 0;line-height:1.5">${ep.description.slice(0, 120)}${ep.description.length > 120 ? '…' : ''}</p>` : ''}
+  <a href="https://unicornbakery.de/podcast" style="display:inline-block;margin-top:12px;background:#1a1d24;color:white;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500">Jetzt anhören →</a>
+</div>`;
+}
+
+function CopyButton({ text, label = 'Kopieren' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
   return (
-    <div className="col gap-4">
-      {/* Write Tools */}
-      <div>
-        <div className="row gap-2 mb-3 items-center">
-          <div className="h3">Write Tools</div>
-          <Badge kind="warning">Coming Soon</Badge>
-        </div>
-        <div className="grid grid-2 gap-3">
-          <StudioCard
-            icon="✍️"
-            title="Episode erstellen"
-            desc="Neues Skript, Show Notes und Metadaten direkt im Command Center verfassen."
-            tools={['create_episode', 'update_episode']}
-            eta="Q3 2026"
-          />
-          <StudioCard
-            icon="✏️"
-            title="Episode bearbeiten"
-            desc="Titel, Beschreibung, Gäste und Kapitel einer bestehenden Episode anpassen."
-            tools={['update_episode', 'get_episode']}
-            eta="Q3 2026"
-          />
-          <StudioCard
-            icon="📋"
-            title="Skript-Editor"
-            desc="KI-unterstützter Skript-Editor mit Kapitel-Erkennung und Zeitstempel-Vorschau."
-            tools={['create_episode']}
-            eta="Q4 2026"
-            badge="KI"
-          />
-          <StudioCard
-            icon="🎯"
-            title="Episode SEO"
-            desc="Automatische Optimierung von Titel und Beschreibung für Apple und Spotify-Suche."
-            tools={['update_episode']}
-            eta="Q4 2026"
-            badge="KI"
-          />
+    <button className="btn btn-ghost btn-sm" onClick={copy} style={{ flexShrink: 0 }}>
+      {copied ? <><I.check size={12} /> Kopiert!</> : <><I.paperclip size={12} /> {label}</>}
+    </button>
+  );
+}
+
+function StudioTab({ episodes, workspaceId }) {
+  const [selectedId, setSelectedId] = useState(episodes[0]?.id ?? '');
+  const ep = episodes.find(e => e.id === selectedId) ?? episodes[0] ?? null;
+
+  // ── Show Notes ────────────────────────────────────────────────────────────
+  const [notesDraft, setNotesDraft]   = useState(ep?.description ?? '');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSaved,  setNotesSaved]  = useState(false);
+
+  useEffect(() => { setNotesDraft(ep?.description ?? ''); }, [ep?.id]);
+
+  const saveNotes = async () => {
+    if (!ep) return;
+    setNotesSaving(true);
+    await updateEpisode({ episodeId: ep.id, workspaceId, patch: { description: notesDraft } });
+    setNotesSaving(false);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+
+  // ── Social share ──────────────────────────────────────────────────────────
+  const [shareFormat, setShareFormat] = useState('linkedin');
+  const shareText = ep
+    ? shareFormat === 'linkedin'   ? generateLinkedIn(ep)
+    : shareFormat === 'twitter'    ? generateTwitter(ep)
+    : generateNewsletter(ep)
+    : '';
+
+  // ── Checklist ────────────────────────────────────────────────────────────
+  const checkKey = ep ? `cc.studio.checklist.${ep.id}` : null;
+  const [checked, setChecked] = useState(() => {
+    if (!ep) return new Set();
+    try { return new Set(JSON.parse(localStorage.getItem(`cc.studio.checklist.${ep.id}`) ?? '[]')); }
+    catch { return new Set(); }
+  });
+
+  useEffect(() => {
+    if (!ep) return;
+    try { setChecked(new Set(JSON.parse(localStorage.getItem(`cc.studio.checklist.${ep.id}`) ?? '[]'))); }
+    catch { setChecked(new Set()); }
+  }, [ep?.id]);
+
+  const toggleCheck = (id) => {
+    setChecked(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      if (checkKey) localStorage.setItem(checkKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const doneCount = CHECKLIST_ITEMS.filter(i => checked.has(i.id)).length;
+
+  if (!ep) return (
+    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-3)' }}>
+      Keine Episoden vorhanden. Erstelle zuerst eine Episode im Tab "Episoden".
+    </div>
+  );
+
+  return (
+    <div className="col gap-5">
+      {/* Episode selector */}
+      <div className="card card-pad" style={{ padding: '14px 18px' }}>
+        <div className="row gap-3 items-center">
+          <I.mic size={15} color="var(--brand)" />
+          <span style={{ fontWeight: 600, fontSize: 13.5 }}>Episode auswählen</span>
+          <select
+            className="input"
+            value={selectedId}
+            onChange={e => setSelectedId(e.target.value)}
+            style={{ maxWidth: 400, height: 32, fontSize: 13 }}
+          >
+            {episodes.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.num != null ? `Ep. ${e.num} — ` : ''}{e.title}{e.guest ? ` (${e.guest})` : ''}
+              </option>
+            ))}
+          </select>
+          <span className="meta">{ep.status} {ep.date ? `· ${ep.date}` : ''}</span>
         </div>
       </div>
 
-      {/* Dynamic Pages */}
-      <div>
-        <div className="row gap-2 mb-3 items-center">
-          <div className="h3">Dynamic Pages · Audio Teaser</div>
-          <Badge kind="warning">Coming Soon</Badge>
+      <div className="grid gap-5" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        {/* ── Show Notes ──────────────────────────────────────────────── */}
+        <div className="card card-pad col gap-3">
+          <div className="row between">
+            <div>
+              <div className="h3">✍️ Show Notes</div>
+              <div className="meta mt-1">Wird in der Episoden-Beschreibung gespeichert</div>
+            </div>
+            <div className="row gap-2">
+              {notesDraft !== (ep.description ?? '') && (
+                <button className="btn btn-quiet btn-sm" onClick={() => setNotesDraft(ep.description ?? '')}>
+                  Verwerfen
+                </button>
+              )}
+              <button
+                className="btn btn-brand btn-sm"
+                onClick={saveNotes}
+                disabled={notesSaving || notesDraft === (ep.description ?? '')}
+              >
+                {notesSaved ? <><I.check size={12} /> Gespeichert</> : notesSaving ? '…' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+          <textarea
+            className="input"
+            value={notesDraft}
+            onChange={e => setNotesDraft(e.target.value)}
+            placeholder="Schreibe hier die Show Notes für diese Episode…&#10;&#10;Was wird besprochen? Welche Links werden erwähnt? Timestamps?"
+            rows={10}
+            style={{ resize: 'vertical', fontSize: 13.5, lineHeight: 1.6, padding: '10px 12px', height: 'auto' }}
+          />
+          <div className="row between">
+            <span className="meta">{notesDraft.length} Zeichen</span>
+            <CopyButton text={notesDraft} label="Kopieren" />
+          </div>
         </div>
-        <div className="grid grid-2 gap-3">
-          <StudioCard
-            icon="🎧"
-            title="Audio-Teaser Seite"
-            desc="Einbettbare Landingpage mit 60-Sekunden-Teaser, Gäste-Bio und CTA zum Abonnieren."
-            tools={['get_episode']}
-            eta="Q3 2026"
-          />
-          <StudioCard
-            icon="📱"
-            title="Episode Embed"
-            desc="Responsiver Audio-Player im beehiiv Embed-Design — für Newsletter, Website und Social."
-            tools={['get_episode']}
-            eta="Q3 2026"
-            badge="beehiiv Design"
-          />
-          <StudioCard
-            icon="🎬"
-            title="Video Teaser Page"
-            desc="Automatische Clip-Extraktion und Kurzform-Content für YouTube Shorts und TikTok."
-            tools={['get_episode']}
-            eta="Juli 2026"
-            badge="Video"
-          />
-          <StudioCard
-            icon="🌐"
-            title="Podcast Website"
-            desc="Vollständige Podcast-Website aus deinen Episoden-Daten mit SEO-Optimierung."
-            tools={['get_show', 'list_episodes']}
-            eta="Q4 2026"
-          />
+
+        {/* ── Produktions-Checkliste ───────────────────────────────────── */}
+        <div className="card card-pad col gap-3">
+          <div className="row between">
+            <div>
+              <div className="h3">✅ Produktions-Checkliste</div>
+              <div className="meta mt-1">{doneCount} / {CHECKLIST_ITEMS.length} erledigt</div>
+            </div>
+            {doneCount === CHECKLIST_ITEMS.length && (
+              <Badge kind="success" dot>Fertig</Badge>
+            )}
+          </div>
+
+          {/* Progress */}
+          <div style={{ background: 'var(--bg-sunk)', borderRadius: 999, height: 4, overflow: 'hidden' }}>
+            <div style={{
+              width: `${(doneCount / CHECKLIST_ITEMS.length) * 100}%`,
+              height: '100%',
+              background: doneCount === CHECKLIST_ITEMS.length ? 'var(--success)' : 'var(--brand)',
+              borderRadius: 999,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+
+          <div className="col gap-1">
+            {CHECKLIST_ITEMS.map(item => (
+              <label
+                key={item.id}
+                className="row gap-3"
+                style={{
+                  padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                  background: checked.has(item.id) ? 'var(--success-bg)' : 'var(--bg-sunk)',
+                  transition: 'background 0.12s',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked.has(item.id)}
+                  onChange={() => toggleCheck(item.id)}
+                  style={{ flexShrink: 0, accentColor: 'var(--brand)', width: 15, height: 15 }}
+                />
+                <span style={{
+                  fontSize: 13.5,
+                  color: checked.has(item.id) ? 'var(--success)' : 'var(--text-1)',
+                  textDecoration: checked.has(item.id) ? 'line-through' : 'none',
+                  transition: 'color 0.12s',
+                }}>
+                  {item.label}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <button
+            className="btn btn-quiet btn-sm"
+            style={{ alignSelf: 'flex-start', color: 'var(--text-4)', fontSize: 11.5 }}
+            onClick={() => {
+              setChecked(new Set());
+              if (checkKey) localStorage.removeItem(checkKey);
+            }}
+          >
+            Zurücksetzen
+          </button>
         </div>
       </div>
 
-      {/* beehiiv Embed Design Reference */}
-      <div className="card card-pad" style={{ background: 'var(--info-bg)', borderColor: 'var(--info-border)' }}>
-        <div className="row gap-3 mb-3">
-          <I.radio size={18} color="var(--info)" />
+      <div className="grid gap-5" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        {/* ── Social Share ────────────────────────────────────────────── */}
+        <div className="card card-pad col gap-3">
           <div>
-            <div style={{ fontWeight: 600 }}>beehiiv Final Opinionated Design · Embed-Referenz</div>
-            <div className="meta mt-1">Alle Audio-Embeds folgen diesem Design-System für maximale Konsistenz</div>
+            <div className="h3">📣 Social Share</div>
+            <div className="meta mt-1">Fertige Texte für LinkedIn, Twitter und Newsletter</div>
           </div>
+
+          <div className="row gap-2">
+            {[
+              { id: 'linkedin',   label: 'LinkedIn',   icon: '💼' },
+              { id: 'twitter',    label: 'Twitter / X', icon: '🐦' },
+              { id: 'newsletter', label: 'Newsletter',  icon: '📧' },
+            ].map(f => (
+              <button
+                key={f.id}
+                className={`btn btn-sm ${shareFormat === f.id ? 'btn-brand' : 'btn-ghost'}`}
+                onClick={() => setShareFormat(f.id)}
+              >
+                {f.icon} {f.label}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            readOnly
+            value={shareText}
+            rows={9}
+            style={{
+              width: '100%', fontSize: 13, lineHeight: 1.6,
+              border: '1px solid var(--border)', borderRadius: 8,
+              padding: '10px 12px', background: 'var(--bg-sunk)',
+              color: 'var(--text-1)', resize: 'none', outline: 'none',
+              fontFamily: 'var(--font-sans)',
+            }}
+          />
+          <CopyButton text={shareText} label="Text kopieren" />
         </div>
-        {/* Mock beehiiv-style embed */}
-        <div style={{ background: 'white', borderRadius: 12, padding: '16px 18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', maxWidth: 480 }}>
-          <div className="row gap-3 items-center">
-            <div style={{ width: 52, height: 52, borderRadius: 8, background: 'linear-gradient(135deg, #1a1d24, #3b4a6b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ color: 'white', fontSize: 22 }}>🎙</span>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 13.5, color: '#111', lineHeight: 1.3 }}>UnicornBakery Podcast</div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Ep. 142 · Fabian Tausch · 58 Min</div>
-            </div>
+
+        {/* ── Embed Generator ─────────────────────────────────────────── */}
+        <div className="card card-pad col gap-3">
+          <div>
+            <div className="h3">🔗 Embed Generator</div>
+            <div className="meta mt-1">Copy-paste HTML für Newsletter, Website und beehiiv</div>
           </div>
-          <div style={{ marginTop: 12, background: '#f3f4f6', borderRadius: 6, height: 4, position: 'relative' }}>
-            <div style={{ width: '35%', height: '100%', background: '#1a1d24', borderRadius: 6 }} />
-          </div>
-          <div className="row between" style={{ marginTop: 8, fontSize: 11, color: '#9ca3af' }}>
-            <span>20:24</span>
-            <div className="row gap-3">
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⏮</button>
-              <button style={{ width: 32, height: 32, borderRadius: 999, background: '#1a1d24', border: 'none', cursor: 'pointer', color: 'white', fontSize: 14 }}>▶</button>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⏭</button>
+
+          {/* Live Preview */}
+          <div style={{ background: 'white', borderRadius: 12, padding: '16px 18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div className="row gap-3 items-center">
+              <div style={{ width: 52, height: 52, borderRadius: 8, background: 'linear-gradient(135deg,#1a1d24,#3b4a6b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>🎙️</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13.5, color: '#111', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.title}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                  {ep.num != null ? `Ep. ${ep.num} · ` : ''}UnicornBakery{ep.guest ? ` · ${ep.guest}` : ''}{ep.duration && ep.duration !== '—' ? ` · ${ep.duration}` : ''}
+                </div>
+              </div>
             </div>
-            <span>58:24</span>
+            {ep.description && (
+              <p style={{ fontSize: 12.5, color: '#374151', margin: '10px 0 0', lineHeight: 1.5 }}>
+                {ep.description.slice(0, 100)}{ep.description.length > 100 ? '…' : ''}
+              </p>
+            )}
+            <a style={{ display: 'inline-block', marginTop: 12, background: '#1a1d24', color: 'white', textDecoration: 'none', padding: '7px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 500 }}>
+              Jetzt anhören →
+            </a>
           </div>
+
+          {/* Code */}
+          <textarea
+            readOnly
+            value={generateEmbed(ep)}
+            rows={6}
+            style={{
+              width: '100%', fontSize: 11, lineHeight: 1.5,
+              border: '1px solid var(--border)', borderRadius: 8,
+              padding: '10px 12px', background: '#0e1014',
+              color: '#a6abb6', resize: 'none', outline: 'none',
+              fontFamily: 'var(--font-mono)',
+            }}
+          />
+          <CopyButton text={generateEmbed(ep)} label="HTML kopieren" />
         </div>
       </div>
     </div>
