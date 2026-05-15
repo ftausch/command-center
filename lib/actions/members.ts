@@ -20,9 +20,52 @@
 //     already ensures the caller is owner/admin, so only an authorized
 //     person can transfer ownership-level access.
 
+import { Resend } from 'resend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
 import type { ActionResult } from '@/lib/types';
+
+const FROM_EMAIL = 'noreply@unicornbakery.de';
+const FROM_NAME  = 'Command Center';
+
+async function sendInviteEmail(to: string, link: string, mode: 'invite' | 'recovery') {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn('[invite] RESEND_API_KEY not set — skipping email send');
+    return;
+  }
+  const resend = new Resend(key);
+  const subject = mode === 'invite'
+    ? 'Du wurdest zu Command Center eingeladen'
+    : 'Dein Zugang zu Command Center';
+  const actionLabel = mode === 'invite' ? 'Einladung annehmen →' : 'Jetzt einloggen →';
+  const intro = mode === 'invite'
+    ? 'Du hast eine Einladung zu <strong>Command Center</strong> erhalten — dem zentralen Workspace für Projekte, Tasks und Podcast-Produktion bei UnicornBakery.'
+    : 'Hier ist dein persönlicher Zugangslink zu <strong>Command Center</strong>. Klicke unten um dein Passwort zu setzen und loszulegen.';
+
+  const html = `<div style="font-family:-apple-system,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fcf8fa">
+  <div style="margin-bottom:32px">
+    <span style="font-size:20px;font-weight:700;color:#1b1b1d;letter-spacing:-0.02em">Command Center</span>
+    <span style="color:#76777d;font-size:14px;margin-left:8px">· UnicornBakery</span>
+  </div>
+  <h2 style="font-size:24px;font-weight:700;color:#1b1b1d;margin:0 0 12px;letter-spacing:-0.02em">${mode === 'invite' ? 'Du wurdest eingeladen 🎉' : 'Dein Zugangslink 🔑'}</h2>
+  <p style="font-size:15px;color:#45464d;line-height:1.6;margin:0 0 28px">${intro}</p>
+  <a href="${link}" style="display:inline-block;background:#131b2e;color:#ffffff;text-decoration:none;padding:13px 24px;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:-0.01em">${actionLabel}</a>
+  <p style="font-size:12px;color:#76777d;margin:28px 0 0;line-height:1.5">
+    Dieser Link ist 24 Stunden gültig. Falls du keine Einladung erwartet hast, kannst du diese Email ignorieren.<br><br>
+    <a href="https://team.unicornbakery.de" style="color:#712edd;text-decoration:none">team.unicornbakery.de</a>
+  </p>
+</div>`;
+
+  const { error } = await resend.emails.send({
+    from: `${FROM_NAME} <${FROM_EMAIL}>`,
+    to,
+    subject,
+    html,
+  });
+  if (error) console.error('[invite] Resend send failed:', error.message);
+  else console.log(`[invite] ✓ Resend email sent to ${to} (${mode})`);
+}
 
 const RATE_LIMIT_WARNING =
   'E-Mail-Limit bei Resend erreicht. Mitglied wurde angelegt, aber die Einladungs-E-Mail konnte nicht gesendet werden. ' +
@@ -102,16 +145,15 @@ export async function inviteWorkspaceMember(input: {
   );
 
   // 6. Branch: invite (new) vs recovery (existing).
+  //    We skip Supabase's built-in email sending entirely and use Resend
+  //    directly. generateLink creates the auth user if needed and returns
+  //    the magic link — we handle delivery ourselves.
   let userId: string;
   let mode: InviteMode;
-  let emailRateLimited = false;
+
   if (existing) {
     userId = existing.id;
-    // Reject early if the user is already a member of THIS workspace —
-    // we don't want to silently overwrite a role via the invite UI, and
-    // we definitely don't want to email a recovery link to a user who
-    // is already signed up here. Role changes for existing members go
-    // through the dedicated change-role flow (P1 follow-up).
+    // Reject if already a member of this workspace.
     const { data: existingMember, error: memCheckErr } = await admin
       .from('workspace_members')
       .select('role')
@@ -123,85 +165,53 @@ export async function inviteWorkspaceMember(input: {
       return { ok: false, error: 'Mitgliedschaft konnte nicht geprüft werden.' };
     }
     if (existingMember) {
-      console.log('[invite] reject: already a member of', input.workspaceId);
       return {
         ok: false,
         error: `Diese Person ist bereits Mitglied dieses Workspaces (Rolle: ${existingMember.role}).`,
       };
     }
     mode = 'recovery';
-    const { error: recoveryErr } = await admin.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    });
-    if (recoveryErr) {
-      if (isRateLimitError(recoveryErr)) {
-        // Rate-limited: email not sent, but user exists. Still add them to
-        // workspace_members below — the admin can resend manually later.
-        emailRateLimited = true;
-        console.warn('[invite] resetPasswordForEmail rate-limited; proceeding with workspace upsert');
-        // userId is already set above from the existing-user lookup. Fall through.
-      } else {
-        console.error('[invite] resetPasswordForEmail failed', recoveryErr.message);
-        return { ok: false, error: recoveryErr.message };
-      }
-    }
   } else {
+    // generateLink with type 'invite' creates the auth.users row implicitly.
     mode = 'invite';
-    const { data, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-    });
-    if (inviteErr) {
-      if (isRateLimitError(inviteErr)) {
-        // Supabase creates the auth.users row before sending the email. Re-check
-        // whether the user was persisted despite the email failure.
-        console.warn('[invite] inviteUserByEmail rate-limited; re-checking if user was created');
-        const { data: recheck } = await admin.auth.admin.listUsers({ perPage: 1000 });
-        const recheckUsers = (recheck as { users: { id: string; email?: string }[] } | null)?.users ?? [];
-        const created = recheckUsers.find((u) => u.email?.toLowerCase() === email);
-        if (!created) {
-          // User was not created at all — return a clear rate-limit error.
-          return {
-            ok: false,
-            error: 'E-Mail-Limit erreicht. Bitte später erneut versuchen oder SMTP in Supabase konfigurieren.',
-          };
-        }
-        // User was created; add them to the workspace and return a warning.
-        emailRateLimited = true;
-        userId = created.id;
-      } else {
-        console.error('[invite] inviteUserByEmail failed', inviteErr.message);
-        return { ok: false, error: inviteErr.message };
-      }
+  }
+
+  // 7. Generate magic link first — for new users this also creates the
+  //    auth.users row and gives us the userId we need for steps 8 & 9.
+  let inviteLink: string | undefined;
+  const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+    type: mode === 'invite' ? 'invite' : 'recovery',
+    email,
+    options: { redirectTo },
+  } as Parameters<typeof admin.auth.admin.generateLink>[0]);
+  if (linkErr) {
+    console.error('[invite] generateLink failed', linkErr.message);
+    return { ok: false, error: linkErr.message };
+  }
+  inviteLink = (linkData as any)?.properties?.action_link ?? undefined;
+
+  // Resolve userId for new users (generateLink creates the auth.users row).
+  if (mode === 'invite') {
+    const newId = (linkData as any)?.user?.id;
+    if (newId) {
+      userId = newId;
     } else {
-      if (!data?.user?.id) {
-        console.error('[invite] inviteUserByEmail returned no user id');
-        return { ok: false, error: 'Invite hat keine User-ID geliefert.' };
-      }
-      userId = data.user.id;
+      const { data: recheck } = await admin.auth.admin.listUsers({ perPage: 1000 });
+      const found = (recheck as { users: { id: string; email?: string }[] } | null)?.users
+        ?.find((u) => u.email?.toLowerCase() === email);
+      if (!found) return { ok: false, error: 'Nutzer konnte nicht angelegt werden.' };
+      userId = found.id;
     }
   }
 
-  // 7. Ensure a profiles row exists before touching workspace_members.
-  //
-  // workspace_members.user_id → profiles.id (FK). For brand-new invited
-  // users, auth.users gets the row from inviteUserByEmail, but the
-  // profiles row is created by a trigger that may not have fired yet.
-  // Upserting the profile here guarantees the FK resolves immediately.
-  // The onConflict: 'id' makes this a no-op for existing users.
+  // 8. Ensure profiles row exists (FK guard for workspace_members).
   const { error: profileErr } = await admin.from('profiles').upsert(
     { id: userId, email, full_name: email },
     { onConflict: 'id' },
   );
-  if (profileErr) {
-    console.error('[invite] profiles upsert failed', profileErr.message);
-    // Non-fatal — trigger may have already created it; continue.
-  }
+  if (profileErr) console.error('[invite] profiles upsert failed (non-fatal)', profileErr.message);
 
-  // 8. Upsert workspace_members. Admin client bypasses RLS — this IS the
-  // moment the membership becomes effective, before the invitee has even
-  // clicked the email. That's intentional: it makes the new row visible
-  // in the Team / Settings → Members list immediately after the admin
-  // submits the modal.
+  // 9. Upsert workspace_members — membership is effective immediately.
   const { error: memErr } = await admin.from('workspace_members').upsert(
     { workspace_id: ctx.uuid, user_id: userId, role: input.role },
     { onConflict: 'workspace_id,user_id' },
@@ -211,27 +221,14 @@ export async function inviteWorkspaceMember(input: {
     return { ok: false, error: memErr.message };
   }
 
-  // 9. Generate a direct invite link so the admin can share it via
-  //    Slack/WhatsApp when email delivery is unreliable (no SMTP configured).
-  //    Best-effort: never blocks the happy path if it fails.
-  let inviteLink: string | undefined;
-  try {
-    const linkType = mode === 'invite' ? 'invite' : 'recovery';
-    const { data: linkData } = await admin.auth.admin.generateLink({
-      type: linkType,
-      email,
-      options: { redirectTo },
-    } as Parameters<typeof admin.auth.admin.generateLink>[0]);
-    inviteLink = (linkData as any)?.properties?.action_link ?? undefined;
-  } catch (e) {
-    console.warn('[invite] generateLink failed (non-fatal)', (e as Error)?.message);
+  // 10. Send via Resend. Fire-and-forget — never blocks the response.
+  if (inviteLink) {
+    sendInviteEmail(email, inviteLink, mode).catch((e) =>
+      console.error('[invite] sendInviteEmail threw', e?.message),
+    );
   }
 
-  if (emailRateLimited) {
-    console.warn(`[invite] ⚠ rate-limited — ${email} added to workspace_members as ${input.role} but email not sent`);
-    return { ok: true, data: { userId, mode, email, inviteLink }, warning: RATE_LIMIT_WARNING };
-  }
-  console.log(`[invite] ✓ ${mode} sent to ${email}; workspace_members upserted as ${input.role}`);
+  console.log(`[invite] ✓ ${mode} for ${email}; workspace_members upserted as ${input.role}`);
   return { ok: true, data: { userId, mode, email, inviteLink } };
 }
 

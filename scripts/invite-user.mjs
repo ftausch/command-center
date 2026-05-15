@@ -1,34 +1,15 @@
-// Invite (or recover) a user via the Supabase admin client. Optionally
-// add them to a workspace at a given role in the same call.
+// Invite (or recover) a user via generateLink + Resend.
+// Bypasses Supabase built-in email sending entirely.
 //
 // Usage:
 //   node --env-file=.env.local scripts/invite-user.mjs <email>
 //   node --env-file=.env.local scripts/invite-user.mjs <email> <workspace-slug>
 //   node --env-file=.env.local scripts/invite-user.mjs <email> <workspace-slug> <role>
 //
-// Roles: owner, admin, manager, member (default), viewer
-//
-// Behavior:
-//   - If the email is unknown, inviteUserByEmail() sends an "invite"
-//     email and creates an auth.users row with no password.
-//   - If the email already exists, resetPasswordForEmail() sends a
-//     "recovery" email. Same end UX — user clicks, lands on
-//     /auth/set-password, sets their password.
-//
-// Set NEXT_PUBLIC_SITE_URL in .env.local to point at the deployment whose
-// /auth/callback should receive the click; defaults to the production
-// branch alias. Make sure that URL is in the Supabase Redirect URLs
-// allowlist (dashboard → Authentication → URL Configuration), or
-// Supabase will silently fall back to the project Site URL.
-//
-// Exit codes:
-//   0  success
-//   1  bad CLI args
-//   2  env vars missing
-//   3  invite / recovery call failed
-//   4  workspace slug given but not found
-//   5  invited user had no id returned (shouldn't happen)
-//   6  workspace_members upsert failed
+// Requires in .env.local:
+//   NEXT_PUBLIC_SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY
+//   RESEND_API_KEY
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -48,10 +29,9 @@ if (!VALID_ROLES.includes(role)) {
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  'https://command-center-git-main-unicorn-bakery.vercel.app';
+const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const resendKey   = process.env.RESEND_API_KEY;
+const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://team.unicornbakery.de';
 
 if (!supabaseUrl || !serviceKey) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
@@ -66,42 +46,74 @@ const redirectTo = `${siteUrl}/auth/callback`;
 console.log(`[invite] email=${email}`);
 console.log(`[invite] redirect → ${redirectTo}`);
 
-// Determine whether the user already exists. Supabase paginates listUsers,
-// so for projects with many users we'd want to switch to a direct
-// auth.users query via SQL — for now perPage=1000 covers any realistic
-// team size.
+// Determine whether the user already exists.
 const { data: list, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 });
-if (listErr) {
-  console.error(`listUsers failed: ${listErr.message}`);
-  process.exit(3);
-}
-const existing = list.users.find(
-  (u) => u.email?.toLowerCase() === email.toLowerCase(),
-);
+if (listErr) { console.error(`listUsers failed: ${listErr.message}`); process.exit(3); }
 
-let userId;
-if (existing) {
-  userId = existing.id;
-  console.log(`[invite] user exists (${userId}) — sending recovery email.`);
-  const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) {
-    console.error(`resetPasswordForEmail failed: ${error.message}`);
-    process.exit(3);
-  }
-  console.log('[invite] ✓ recovery email sent');
-} else {
-  console.log('[invite] user does not exist — sending invite email.');
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-  if (error) {
-    console.error(`inviteUserByEmail failed: ${error.message}`);
-    process.exit(3);
-  }
-  userId = data?.user?.id;
+const existing = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+const mode = existing ? 'recovery' : 'invite';
+let userId = existing?.id;
+
+console.log(existing
+  ? `[invite] user exists (${userId}) — generating recovery link`
+  : '[invite] new user — generating invite link');
+
+// generateLink creates the auth.users row for new users + gives us the magic link.
+const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+  type: mode,
+  email,
+  options: { redirectTo },
+});
+if (linkErr) { console.error(`generateLink failed: ${linkErr.message}`); process.exit(3); }
+
+const inviteLink = linkData?.properties?.action_link;
+if (!inviteLink) { console.error('generateLink returned no action_link'); process.exit(3); }
+
+// Resolve userId for new users.
+if (!existing) {
+  userId = linkData?.user?.id;
   if (!userId) {
-    console.error('inviteUserByEmail returned no user id');
-    process.exit(5);
+    const { data: recheck } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    const found = recheck?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    if (!found) { console.error('Could not find newly created user'); process.exit(5); }
+    userId = found.id;
   }
-  console.log(`[invite] ✓ invite email sent (user id: ${userId})`);
+}
+
+console.log(`[invite] ✓ link generated`);
+
+// Send via Resend.
+if (resendKey) {
+  const intro = mode === 'invite'
+    ? 'Du hast eine Einladung zu <strong>Command Center</strong> erhalten.'
+    : 'Hier ist dein persönlicher Zugangslink zu <strong>Command Center</strong>.';
+  const label = mode === 'invite' ? 'Einladung annehmen →' : 'Jetzt einloggen →';
+  const subject = mode === 'invite'
+    ? 'Du wurdest zu Command Center eingeladen'
+    : 'Dein Zugang zu Command Center';
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Command Center <noreply@unicornbakery.de>',
+      to: [email],
+      subject,
+      html: `<div style="font-family:-apple-system,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fcf8fa">
+  <div style="margin-bottom:32px"><span style="font-size:20px;font-weight:700;color:#1b1b1d">Command Center</span><span style="color:#76777d;font-size:14px;margin-left:8px">· UnicornBakery</span></div>
+  <h2 style="font-size:24px;font-weight:700;color:#1b1b1d;margin:0 0 12px">${mode === 'invite' ? 'Du wurdest eingeladen 🎉' : 'Dein Zugangslink 🔑'}</h2>
+  <p style="font-size:15px;color:#45464d;line-height:1.6;margin:0 0 28px">${intro}</p>
+  <a href="${inviteLink}" style="display:inline-block;background:#131b2e;color:#ffffff;text-decoration:none;padding:13px 24px;border-radius:8px;font-size:15px;font-weight:600">${label}</a>
+  <p style="font-size:12px;color:#76777d;margin:28px 0 0;line-height:1.5">Dieser Link ist 24 Stunden gültig.<br><a href="https://team.unicornbakery.de" style="color:#712edd;text-decoration:none">team.unicornbakery.de</a></p>
+</div>`,
+    }),
+  });
+  const body = await res.json();
+  if (res.ok) console.log(`[invite] ✓ Email via Resend gesendet (id: ${body.id})`);
+  else console.error('[invite] Resend failed:', JSON.stringify(body));
+} else {
+  console.log('[invite] RESEND_API_KEY not set — skipping email. Use this link manually:');
+  console.log(inviteLink);
 }
 
 if (!workspaceSlug) {
@@ -110,23 +122,16 @@ if (!workspaceSlug) {
 }
 
 const { data: ws, error: wsErr } = await admin
-  .from('workspaces')
-  .select('id, name')
-  .eq('slug', workspaceSlug)
-  .maybeSingle();
+  .from('workspaces').select('id, name').eq('slug', workspaceSlug).maybeSingle();
 if (wsErr || !ws) {
   console.error(`workspace lookup failed: ${wsErr?.message ?? 'no row for slug ' + workspaceSlug}`);
   process.exit(4);
 }
 
-const { error: memErr } = await admin
-  .from('workspace_members')
-  .upsert(
-    { workspace_id: ws.id, user_id: userId, role },
-    { onConflict: 'workspace_id,user_id' },
-  );
-if (memErr) {
-  console.error(`workspace_members upsert failed: ${memErr.message}`);
-  process.exit(6);
-}
+// Ensure profiles row.
+await admin.from('profiles').upsert({ id: userId, email, full_name: email }, { onConflict: 'id' });
+
+const { error: memErr } = await admin.from('workspace_members')
+  .upsert({ workspace_id: ws.id, user_id: userId, role }, { onConflict: 'workspace_id,user_id' });
+if (memErr) { console.error(`workspace_members upsert failed: ${memErr.message}`); process.exit(6); }
 console.log(`[invite] ✓ added to ${ws.name} (${workspaceSlug}) as ${role}`);
