@@ -205,13 +205,15 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
         <I.menu size={18} />
       </button>
 
-      {/* Breadcrumb */}
+      {/* Logotype + Breadcrumb */}
       <div className="row gap-2" style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{brand?.name}</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)', letterSpacing: '-0.02em', flexShrink: 0 }}>
+          Command Center
+        </span>
         {breadcrumb && (
           <React.Fragment>
-            <span style={{ color: 'var(--text-4)' }}><I.chevron size={12} /></span>
-            <span style={{ fontWeight: 500, fontSize: 13.5 }} className="truncate">{breadcrumb}</span>
+            <span style={{ color: 'var(--border-strong)', fontSize: 16, fontWeight: 300 }}>/</span>
+            <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-3)' }} className="truncate">{breadcrumb}</span>
           </React.Fragment>
         )}
       </div>
@@ -221,9 +223,9 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
         onClick={openCmdK}
         className="row gap-2 topbar-search"
         style={{
-          height: 32, padding: '0 10px', minWidth: 280,
-          border: '1px solid var(--border)', borderRadius: 6,
-          background: 'var(--bg-elev)', color: 'var(--text-3)', fontSize: 13,
+          height: 34, padding: '0 12px', minWidth: 260,
+          border: '1px solid var(--border-strong)', borderRadius: 8,
+          background: '#ffffff', color: 'var(--text-3)', fontSize: 13,
           justifyContent: 'space-between',
         }}
       >
