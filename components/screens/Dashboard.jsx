@@ -12,6 +12,16 @@ import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, parseDate,
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+const SPECIALTY_LABEL = {
+  host:      { icon: '🎙️', label: 'Host / Moderator' },
+  editor:    { icon: '✂️', label: 'Cutter / Editor' },
+  thumbnail: { icon: '🎨', label: 'Thumbnail Designer' },
+  shownotes: { icon: '📝', label: 'Show Notes' },
+  social:    { icon: '📱', label: 'Social Media' },
+  audio:     { icon: '🎵', label: 'Audio Engineer' },
+  manager:   { icon: '⚙️', label: 'Manager / Producer' },
+};
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function greeting(name) {
@@ -82,9 +92,23 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
         <div>
           <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>
           <h1 className="h1" style={{ fontSize: 28 }} suppressHydrationWarning>{greeting(firstName)}</h1>
-          <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '5px 0 0' }}>
-            Das ist dein Überblick für heute.
-          </p>
+          <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
+            <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
+              Das ist dein Überblick für heute.
+            </p>
+            {me?.specialty && SPECIALTY_LABEL[me.specialty] && (
+              <span style={{
+                fontSize: 12.5, fontWeight: 500,
+                color: 'var(--brand)',
+                background: 'var(--brand-soft)',
+                border: '1px solid transparent',
+                borderRadius: 'var(--r-pill)',
+                padding: '2px 10px',
+              }}>
+                {SPECIALTY_LABEL[me.specialty].icon} {SPECIALTY_LABEL[me.specialty].label}
+              </span>
+            )}
+          </div>
         </div>
         <button className="btn btn-brand btn-sm" onClick={() => setRoute('projects')} style={{ alignSelf: 'flex-start' }}>
           <I.plus size={13} /> Neues Projekt

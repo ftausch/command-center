@@ -11,6 +11,16 @@ import { InvitePersonModal } from '@/components/InvitePersonModal';
 import { MemberManageModal } from '@/components/MemberManageModal';
 import { CAN } from '@/lib/roles';
 
+const SPECIALTY_LABEL = {
+  host:      { icon: '🎙️', label: 'Host / Moderator' },
+  editor:    { icon: '✂️', label: 'Cutter / Editor' },
+  thumbnail: { icon: '🎨', label: 'Thumbnail Designer' },
+  shownotes: { icon: '📝', label: 'Show Notes' },
+  social:    { icon: '📱', label: 'Social Media' },
+  audio:     { icon: '🎵', label: 'Audio Engineer' },
+  manager:   { icon: '⚙️', label: 'Manager / Producer' },
+};
+
 export function TeamScreen({ setRoute }) {
   const { currentWorkspace: brand, data, myRole } = useWorkspace();
   const users = data.members;
@@ -85,7 +95,14 @@ export function TeamScreen({ setRoute }) {
                   </div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14.5 }}>{u.name}</div>
-                    <div className="meta">{u.role}</div>
+                    <div className="row gap-2 mt-1">
+                      <span className="meta">{u.role}</span>
+                      {u.specialty && SPECIALTY_LABEL[u.specialty] && (
+                        <span style={{ fontSize: 11.5, color: 'var(--brand)', background: 'var(--brand-soft)', borderRadius: 'var(--r-pill)', padding: '1px 8px', fontWeight: 500 }}>
+                          {SPECIALTY_LABEL[u.specialty].icon} {SPECIALTY_LABEL[u.specialty].label}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {CAN.manageMember(myRole) && (

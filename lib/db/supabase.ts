@@ -170,11 +170,13 @@ export async function getCurrentUser(): Promise<UserView | null> {
   if (!user) return null;
   const { data, error } = await c
     .from('profiles')
-    .select('id, email, full_name, avatar_url')
+    .select('id, email, full_name, avatar_url, specialty')
     .eq('id', user.id)
     .maybeSingle();
   if (error || !data) return null;
-  return mapProfile(data);
+  const view = mapProfile(data);
+  view.specialty = (data as any).specialty ?? null;
+  return view;
 }
 
 export async function listWorkspaces(): Promise<BrandView[]> {

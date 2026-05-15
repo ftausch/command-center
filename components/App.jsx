@@ -12,6 +12,7 @@ import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
+import { OnboardingScreen } from '@/components/OnboardingScreen';
 import { DashboardScreen } from '@/components/screens/Dashboard';
 import { MyTasksScreen } from '@/components/screens/MyTasks';
 import { ProjectsScreen } from '@/components/screens/Projects';
@@ -33,7 +34,31 @@ export function App() {
     data,
     loading,
     error,
+    me,
+    mode,
   } = useWorkspace();
+
+  // Onboarding: show role-picker on first login (specialty not yet set).
+  // Only in Supabase mode — mock mode always skips.
+  const [onboardingDone, setOnboardingDone] = useState(false);
+  const showOnboarding =
+    mode === 'supabase' &&
+    me !== null &&
+    me.specialty == null &&
+    !onboardingDone;
+
+  if (showOnboarding) {
+    return (
+      <OnboardingScreen
+        onDone={(specialty) => {
+          setOnboardingDone(true);
+          // me.specialty is updated optimistically so the screen doesn't
+          // re-appear on navigation even before a full reload.
+          if (me) me.specialty = specialty ?? 'skipped';
+        }}
+      />
+    );
+  }
   const [route, setRoute] = useState('dashboard');
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null

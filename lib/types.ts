@@ -153,6 +153,7 @@ export interface UserView {
   role: string;
   workspaces: string[];
   online: boolean;
+  specialty?: string | null;
 }
 
 export interface ProjectView {
