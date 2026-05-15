@@ -210,23 +210,16 @@ export async function GET(req: NextRequest) {
 
   const today = berlinToday();
 
-  // Diagnostic: log which Supabase project this function is connecting to.
-  // NEXT_PUBLIC_SUPABASE_URL is already public (embedded in the client bundle).
-  const supabaseRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')
-    .replace('https://', '').split('.')[0];
-  console.log(`[cron/digest] supabase project ref: ${supabaseRef}`);
 
   // 1. Active Slack integrations
-  // Diagnostic: fetch ALL rows unfiltered to see exact is_active values.
-  const { data: allRows, count: totalRows } = await admin
+  // Fetch all rows then filter in JS — avoids a PostgREST boolean-filter
+  // quirk that caused .eq('is_active', true) to skip rows whose is_active
+  // was set via a CTE INSERT even when the value reads as true in raw queries.
+  const { data: allRows, error: intErr } = await admin
     .from('slack_integrations')
-    .select('workspace_id, is_active, team_name', { count: 'exact' });
-  console.log(`[cron/digest] slack_integrations all rows:`, JSON.stringify(allRows));
+    .select('workspace_id, is_active');
 
-  const { data: integrations, error: intErr } = await admin
-    .from('slack_integrations')
-    .select('workspace_id')
-    .eq('is_active', true);
+  const integrations = (allRows ?? []).filter((r: any) => r.is_active === true);
 
   if (intErr) {
     console.error('[cron/digest] integration lookup failed:', intErr.message);
@@ -333,5 +326,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, today, supabaseRef, slackIntegrationsAll: allRows, workspaces: integrations.length, notified, results });
+  return NextResponse.json({ ok: true, today, workspaces: integrations.length, notified, results });
 }
