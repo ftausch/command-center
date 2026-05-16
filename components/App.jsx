@@ -38,39 +38,28 @@ export function App() {
     mode,
   } = useWorkspace();
 
+  // All hooks must be declared unconditionally before any early return.
+  const [onboardingDone, setOnboardingDone] = useState(false);
+  const [route, setRoute] = useState('dashboard');
+  const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [drawerTask, setDrawerTask] = useState(null);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const gPending = useRef(false);
+  const gTimer = useRef(null);
+
   // Onboarding: show role-picker on first login (specialty not yet set).
   // Only in Supabase mode — mock mode always skips.
-  const [onboardingDone, setOnboardingDone] = useState(false);
   const showOnboarding =
     mode === 'supabase' &&
     me !== null &&
     me.specialty == null &&
     !onboardingDone;
 
-  if (showOnboarding) {
-    return (
-      <OnboardingScreen
-        onDone={(specialty) => {
-          setOnboardingDone(true);
-          // me.specialty is updated optimistically so the screen doesn't
-          // re-appear on navigation even before a full reload.
-          if (me) me.specialty = specialty ?? 'skipped';
-        }}
-      />
-    );
-  }
-  const [route, setRoute] = useState('dashboard');
-  const [cmdkOpen, setCmdkOpen] = useState(false);
-  const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
-  const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  // 'g' prefix state for two-key nav shortcuts (g→d, g→p, g→t, g→b, g→c)
-  const gPending = useRef(false);
-  const gTimer = useRef(null);
-
   // Keyboard shortcuts. Skip when focus is in an input/textarea/select so
   // typing doesn't accidentally trigger navigation.
   useEffect(() => {
+    if (showOnboarding) return;
     const onKey = (e) => {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const inInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
@@ -116,7 +105,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); clearTimeout(gTimer.current); };
-  }, [setCmdkOpen, cmdkOpen, setRoute]);
+  }, [setCmdkOpen, cmdkOpen, setRoute, showOnboarding]);
 
   // Reflect workspace as a data-brand on <body> so the brand CSS variables
   // in styles.css (which key off [data-brand]) light up the right palette.
@@ -129,14 +118,25 @@ export function App() {
   // Sidebar counts
   const counts = useMemo(() => {
     if (!workspace) return { myTasks: 0, projects: 0 };
-    const me = data.members[0]?.id ?? 'fabian';
+    const meId = data.members[0]?.id ?? 'fabian';
     return {
       myTasks: data.tasks.filter(
-        (t) => t.assignee === me && t.status !== 'Done',
+        (t) => t.assignee === meId && t.status !== 'Done',
       ).length,
       projects: data.projects.filter((p) => p.status !== 'Done').length,
     };
   }, [workspace, data]);
+
+  if (showOnboarding) {
+    return (
+      <OnboardingScreen
+        onDone={(specialty) => {
+          setOnboardingDone(true);
+          if (me) me.specialty = specialty ?? 'skipped';
+        }}
+      />
+    );
+  }
 
   if (!workspace) {
     return (
