@@ -1,24 +1,153 @@
-// Slack integration — Slice A: Incoming Webhooks.
+// Slack integration — Slice A: Incoming Webhooks + Slice B: Bot API.
 //
-// Each workspace has one row in `slack_integrations` with a webhook_url
-// (set up via supabase/setup-slack-webhook.sql). On notable events,
-// server actions call postSlackNotification, which:
-//   1. Looks up the workspace's webhook URL via the service-role admin
-//      client (the URL is column-level revoked from authenticated/anon).
-//   2. POSTs a JSON payload to that URL (Slack accepts `text`, no auth).
-//   3. Mirrors the message into our `slack_notifications` table so the
-//      Activity screen can render it.
+// Slice A (webhook): each workspace has one row in `slack_integrations` with
+// a webhook_url. postSlackNotification posts there and mirrors to our DB.
 //
-// The function is best-effort: never throws, bounds wait to 3 seconds.
-// Failures are logged but do not block the user's action from succeeding.
+// Slice B (Bot API): uses SLACK_BOT_TOKEN (xoxb-...) to actually create
+// channels via conversations.create. Requires the Slack App to have the
+// channels:manage + chat:write scopes installed to the workspace.
 //
-// Why server-only: webhook_url is a credential — anyone with the URL can
-// post to the channel — so this module must never end up in the browser
-// bundle. The `import 'server-only'` line errors at build time if it's
-// imported from a client component.
+// Why server-only: both the webhook URL and the bot token are credentials.
 
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
+
+const SLACK_API_TIMEOUT_MS = 6_000;
+
+// ── Slice B: Bot API ───────────────────────────────────────────────────────
+
+export interface CreateChannelResult {
+  channelId: string;
+  channelName: string;
+  /** Deep-link URL using the channel ID — more stable than name-based links. */
+  url: string;
+  /** True when the channel already existed (name_taken). */
+  alreadyExisted: boolean;
+}
+
+/**
+ * Create a Slack channel via the Bot Token (conversations.create).
+ * Returns null when SLACK_BOT_TOKEN is not configured — callers fall back
+ * to storing only the name without creating anything in Slack.
+ *
+ * Handles name_taken gracefully: tries to look up the existing channel ID
+ * so we still get a real deep-link URL.
+ */
+export async function createSlackChannel(
+  channelName: string,
+  isPrivate = false,
+): Promise<CreateChannelResult | null> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SLACK_API_TIMEOUT_MS);
+
+  try {
+    const res = await fetch('https://slack.com/api/conversations.create', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: channelName, is_private: isPrivate }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    const json = (await res.json()) as any;
+
+    if (json.ok) {
+      const id = json.channel.id as string;
+      return {
+        channelId: id,
+        channelName: (json.channel.name as string) ?? channelName,
+        url: `https://slack.com/app_redirect?channel=${id}`,
+        alreadyExisted: false,
+      };
+    }
+
+    if (json.error === 'name_taken') {
+      // Channel already exists — look up its ID so we can link to it properly.
+      const existing = await findChannelByName(channelName, token);
+      if (existing) return { ...existing, alreadyExisted: true };
+      // Fallback: name-based redirect (no channel ID).
+      return {
+        channelId: '',
+        channelName,
+        url: `https://slack.com/app_redirect?channel=${encodeURIComponent(channelName)}`,
+        alreadyExisted: true,
+      };
+    }
+
+    console.error('[slack] conversations.create error:', json.error);
+    return null;
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e?.name !== 'AbortError') console.error('[slack] createSlackChannel:', e?.message ?? e);
+    else console.error('[slack] createSlackChannel timed out');
+    return null;
+  }
+}
+
+/**
+ * Post a message directly to a channel using the Bot Token (chat.postMessage).
+ * Requires chat:write scope. Best-effort — never throws.
+ */
+export async function postMessageToChannel(
+  channelId: string,
+  text: string,
+): Promise<void> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token || !channelId) return;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SLACK_API_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ channel: channelId, text }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const json = (await res.json()) as any;
+    if (!json.ok) console.error('[slack] chat.postMessage error:', json.error);
+  } catch (e: any) {
+    clearTimeout(timer);
+    console.error('[slack] postMessageToChannel error:', e?.message ?? e);
+  }
+}
+
+async function findChannelByName(
+  name: string,
+  token: string,
+): Promise<{ channelId: string; channelName: string; url: string } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SLACK_API_TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      'https://slack.com/api/conversations.list?exclude_archived=true&limit=1000&types=public_channel,private_channel',
+      { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal },
+    );
+    clearTimeout(timer);
+    const json = (await res.json()) as any;
+    if (!json.ok) return null;
+    const found = (json.channels as any[])?.find((c) => c.name === name);
+    if (!found) return null;
+    return {
+      channelId: found.id,
+      channelName: found.name,
+      url: `https://slack.com/app_redirect?channel=${found.id}`,
+    };
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
 
 const SLACK_TIMEOUT_MS = 3_000;
 

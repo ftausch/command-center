@@ -365,7 +365,21 @@ export async function setupProjectWorkspace(input: {
 
   if (input.setupSlack && input.slackChannelName.trim()) {
     const channelName = safeSlackChannelName(input.slackChannelName);
-    const slackUrl = `https://slack.com/app_redirect?channel=${encodeURIComponent(channelName)}`;
+
+    // Phase 1B: attempt real channel creation via Bot Token.
+    const { createSlackChannel, postMessageToChannel } = await import('@/lib/integrations/slack');
+    const created = await createSlackChannel(channelName);
+
+    const slackUrl = created?.url
+      ?? `https://slack.com/app_redirect?channel=${encodeURIComponent(channelName)}`;
+    const channelId = created?.channelId ?? null;
+
+    if (!created) {
+      // SLACK_BOT_TOKEN not set — log and continue (Phase 1A behaviour).
+      warnings.push('Slack-Channel wurde nicht erstellt (kein Bot Token konfiguriert). Channel-Name wurde gespeichert.');
+    } else if (created.alreadyExisted) {
+      warnings.push(`Slack-Channel #${channelName} existiert bereits — Projekt wurde damit verknüpft.`);
+    }
 
     // Save to project_resources
     const { data: resRow, error: resErr } = await supabase
@@ -377,7 +391,13 @@ export async function setupProjectWorkspace(input: {
         provider:     'slack',
         name:         `#${channelName}`,
         url:          slackUrl,
-        metadata:     { channel_name: channelName, project_type: input.projectType ?? '' },
+        external_id:  channelId,
+        metadata:     {
+          channel_name: channelName,
+          channel_id:   channelId,
+          project_type: input.projectType ?? '',
+          created_via_api: !!created && !created.alreadyExisted,
+        },
         created_by:   userId,
       })
       .select()
@@ -392,7 +412,7 @@ export async function setupProjectWorkspace(input: {
         projectId:  input.projectId,
         type:       'slack_channel',
         provider:   'slack',
-        externalId: null,
+        externalId: channelId,
         name:       `#${channelName}`,
         url:        slackUrl,
         createdAt:  resRow.created_at,
@@ -406,20 +426,28 @@ export async function setupProjectWorkspace(input: {
         .eq('workspace_id', ctx.uuid);
     }
 
-    // Post setup message via existing webhook (best-effort)
+    // Post setup message: prefer direct channel post (Bot), fall back to webhook.
     if (input.postSetupMessage) {
-      const { postSlackNotification } = await import('@/lib/integrations/slack');
       const typeLabel = input.projectType ? ` (${input.projectType})` : '';
-      await postSlackNotification({
-        workspaceUuid: ctx.uuid,
-        text: [
-          `🚀 *Workspace bereit: ${input.projectName}*${typeLabel}`,
-          `📋 Projekt angelegt in Command Center`,
-          `💬 Slack-Channel: *#${channelName}*`,
-          `🔗 <https://team.unicornbakery.de|Command Center öffnen>`,
-        ].join('\n'),
-        channelLabel: 'workspace-setup',
-      });
+      const setupText = [
+        `🚀 *Workspace bereit: ${input.projectName}*${typeLabel}`,
+        `📋 Projekt angelegt in Command Center`,
+        `💬 Slack-Channel: *#${channelName}*`,
+        `🔗 <https://team.unicornbakery.de|Command Center öffnen>`,
+      ].join('\n');
+
+      if (channelId) {
+        // Post directly to the new channel via Bot Token.
+        await postMessageToChannel(channelId, setupText);
+      } else {
+        // Fallback: use incoming webhook (goes to its fixed channel).
+        const { postSlackNotification } = await import('@/lib/integrations/slack');
+        await postSlackNotification({
+          workspaceUuid: ctx.uuid,
+          text: setupText,
+          channelLabel: 'workspace-setup',
+        });
+      }
     }
   }
 
