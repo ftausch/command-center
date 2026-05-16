@@ -62,14 +62,12 @@ export class AppErrorBoundary extends Component {
               Nochmal versuchen
             </button>
           </div>
-          {process.env.NODE_ENV === 'development' && (
-            <details style={{ marginTop: 20, textAlign: 'left' }}>
-              <summary style={{ fontSize: 12, color: '#76777d', cursor: 'pointer' }}>Debug</summary>
-              <pre style={{ fontSize: 11, color: '#76777d', marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {this.state.message}
-              </pre>
-            </details>
-          )}
+          <details style={{ marginTop: 20, textAlign: 'left' }}>
+            <summary style={{ fontSize: 12, color: '#76777d', cursor: 'pointer' }}>Details anzeigen</summary>
+            <pre style={{ fontSize: 11, color: '#76777d', marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f0edef', padding: '10px', borderRadius: 6 }}>
+              {this.state.message}
+            </pre>
+          </details>
         </div>
       </div>
     );
