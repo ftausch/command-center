@@ -303,7 +303,10 @@ export function WorkspaceProvider({ children }) {
   // a full re-fetch. The helpers themselves never call the server.
   const addTask = useCallback((task) => {
     if (!task) return;
-    setData((d) => ({ ...d, tasks: [task, ...d.tasks] }));
+    setData((d) => {
+      if (d.tasks.some((t) => t.id === task.id)) return d;
+      return { ...d, tasks: [task, ...d.tasks] };
+    });
   }, []);
   const updateTaskInCache = useCallback((taskId, patch) => {
     setData((d) => ({
@@ -316,7 +319,10 @@ export function WorkspaceProvider({ children }) {
   }, []);
   const addProject = useCallback((project) => {
     if (!project) return;
-    setData((d) => ({ ...d, projects: [project, ...d.projects] }));
+    setData((d) => {
+      if (d.projects.some((p) => p.id === project.id)) return d;
+      return { ...d, projects: [project, ...d.projects] };
+    });
   }, []);
   const updateProjectInCache = useCallback((projectId, patch) => {
     setData((d) => ({
@@ -374,7 +380,10 @@ export function WorkspaceProvider({ children }) {
   }, []);
   const addEpisode = useCallback((episode) => {
     if (!episode) return;
-    setData((d) => ({ ...d, episodes: [episode, ...d.episodes] }));
+    setData((d) => {
+      if (d.episodes.some((e) => e.id === episode.id)) return d;
+      return { ...d, episodes: [episode, ...d.episodes] };
+    });
   }, []);
   const updateEpisodeInCache = useCallback((episodeId, patch) => {
     setData((d) => ({
