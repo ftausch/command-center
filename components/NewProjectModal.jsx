@@ -8,7 +8,7 @@
 // provider cache via addProject + pushActivity and the caller is
 // notified through onCreated so it can navigate.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
@@ -34,6 +34,8 @@ export function NewProjectModal({ open, onClose, onCreated }) {
   const [due, setDue] = useState('');
   const [status, setStatus] = useState('idle'); // idle | submitting | error
   const [errorMsg, setErrorMsg] = useState(null);
+
+  const submittingRef = useRef(false);
 
   // Workspace setup
   const [setupSlack,         setSetupSlack]         = useState(false);
@@ -78,11 +80,13 @@ export function NewProjectModal({ open, onClose, onCreated }) {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     if (!workspaceId) {
       setErrorMsg('Kein aktiver Workspace ausgewählt.');
       setStatus('error');
       return;
     }
+    submittingRef.current = true;
     setErrorMsg(null);
     setStatus('submitting');
     const result = await createProject({
@@ -96,6 +100,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     if (!result.ok || !result.data) {
       setErrorMsg(result.error ?? 'Projekt konnte nicht angelegt werden');
       setStatus('error');
+      submittingRef.current = false;
       return;
     }
     addProject(result.data);
