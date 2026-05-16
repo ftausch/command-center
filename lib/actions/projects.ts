@@ -56,6 +56,8 @@ export async function createProject(input: {
   due?: string;
   priority?: TaskPriority;
   status?: ProjectStatus;
+  /** Client-generated UUID — prevents duplicate inserts on double-submit. */
+  idempotencyId?: string;
 }): Promise<ActionResult<ProjectView>> {
   const name = input.name.trim();
   if (!name) return { ok: false, error: 'Name is required' };
@@ -100,20 +102,42 @@ export async function createProject(input: {
     return { ok: false, error: 'Only managers+ can create projects' };
   }
 
+  const insertRow: Record<string, unknown> = {
+    workspace_id: ctx.uuid,
+    name,
+    type: input.type ?? 'Episode',
+    description: input.description ?? null,
+    status: input.status ?? 'Planning',
+    priority: input.priority ?? 'Medium',
+    due_date: input.due || null,
+    owner_id: input.ownerId ?? userId,
+  };
+  if (input.idempotencyId) insertRow.id = input.idempotencyId;
+
   const { data, error } = await supabase
     .from('projects')
-    .insert({
-      workspace_id: ctx.uuid,
-      name,
-      type: input.type ?? 'Episode',
-      description: input.description ?? null,
-      status: input.status ?? 'Planning',
-      priority: input.priority ?? 'Medium',
-      due_date: input.due || null,
-      owner_id: input.ownerId ?? userId,
-    })
+    .insert(insertRow)
     .select()
     .single();
+  // Conflict on id = duplicate submit — look up the existing row and return it.
+  if (error?.code === '23505') {
+    const { data: existing } = await supabase
+      .from('projects').select().eq('id', input.idempotencyId!).single();
+    if (existing) {
+      return {
+        ok: true,
+        data: {
+          id: existing.id, workspace: input.workspaceId, name: existing.name,
+          type: existing.type ?? '', desc: existing.description ?? '',
+          status: existing.status, priority: existing.priority,
+          progress: existing.progress ?? 0, phaseIdx: existing.phase_idx ?? 0,
+          due: existing.due_date ?? '', owner: existing.owner_id ?? '',
+          team: [], slackChannel: existing.slack_channel ?? '',
+          slackConnected: !!existing.slack_connected,
+        },
+      };
+    }
+  }
   if (error || !data) return { ok: false, error: error?.message ?? 'Insert failed' };
 
   // Add creator as project manager so they retain access under project-level RLS.

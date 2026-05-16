@@ -36,6 +36,9 @@ export function NewProjectModal({ open, onClose, onCreated }) {
   const [errorMsg, setErrorMsg] = useState(null);
 
   const submittingRef = useRef(false);
+  // Fresh UUID per modal open — server uses it as project id so duplicate
+  // submits hit a primary-key conflict instead of creating two rows.
+  const idempotencyId = useRef(crypto.randomUUID());
 
   // Workspace setup
   const [setupSlack,         setSetupSlack]         = useState(false);
@@ -57,6 +60,8 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     setSlackChannelName('');
     setPostSetupMsg(true);
     setSetupWarning(null);
+    submittingRef.current = false;
+    idempotencyId.current = crypto.randomUUID();
   }, [open]);
 
   // Auto-generate channel name from project name
@@ -96,6 +101,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
       description: description.trim() || undefined,
       priority,
       due: due || undefined,
+      idempotencyId: idempotencyId.current,
     });
     if (!result.ok || !result.data) {
       setErrorMsg(result.error ?? 'Projekt konnte nicht angelegt werden');
