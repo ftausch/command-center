@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/keepalive",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/overdue-reminder",
       "schedule": "0 8 * * *"
     },
