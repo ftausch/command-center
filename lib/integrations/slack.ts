@@ -38,7 +38,10 @@ export async function createSlackChannel(
   isPrivate = false,
 ): Promise<CreateChannelResult | null> {
   const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) return null;
+  if (!token) {
+    console.warn('[slack] createSlackChannel: SLACK_BOT_TOKEN not set — skipping channel creation');
+    return null;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SLACK_API_TIMEOUT_MS);
