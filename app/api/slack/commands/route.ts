@@ -368,7 +368,7 @@ function handleHelp(cmd: string): string {
 
 async function handleTask(
   text: string, workspaceUuid: string, slackUser: string, cmd: string, admin: SupabaseClient,
-  slackUserId = '',
+  slackUserId = '', channelId = '',
 ): Promise<string> {
   if (!text.trim()) return `Beispiel: \`${cmd} task @tim Thumbnail bis Freitag\``;
 
@@ -380,31 +380,53 @@ async function handleTask(
   // Resolve caller to check project access
   const caller = await resolveSlackUserWithRole(workspaceUuid, slackUser, admin, slackUserId);
 
-  // Determine which projects the caller may create tasks in:
-  // Manager+ → all non-Done projects; Member/Viewer → only projects they're a member of.
-  let projectsQuery = admin.from('projects').select('id, name').eq('workspace_id', workspaceUuid).neq('status', 'Done').order('created_at', { ascending: true });
-  if (caller && !roleAtLeast(caller.role, 'manager')) {
-    const { data: pm } = await admin.from('project_members').select('project_id').eq('workspace_id', workspaceUuid).eq('user_id', caller.id);
-    const ids = (pm ?? []).map((r: any) => r.project_id as string);
-    if (!ids.length) return '⛔ Du bist noch keinem Projekt zugewiesen. Bitte einen Manager bitten, dich zu einem Projekt hinzuzufügen.';
-    projectsQuery = projectsQuery.in('id', ids);
+  // Try to find the project linked to the channel this command was run in.
+  let channelProject: { id: string; name: string } | null = null;
+  if (channelId) {
+    const { data: res } = await admin
+      .from('project_resources')
+      .select('project_id, projects!inner(id, name, status)')
+      .eq('workspace_id', workspaceUuid)
+      .eq('external_id', channelId)
+      .eq('type', 'slack_channel')
+      .maybeSingle();
+    const proj = (res as any)?.projects;
+    if (proj && proj.status !== 'Done') {
+      channelProject = { id: proj.id, name: proj.name };
+    }
   }
 
-  const [membersRes, projectsRes] = await Promise.all([
-    needsMembers
-      ? admin.from('workspace_members').select('user_id, profiles!inner(id, full_name, email)').eq('workspace_id', workspaceUuid)
-      : Promise.resolve({ data: [] as any[] }),
-    projectsQuery.limit(1),
-  ]);
+  let projectId: string;
+  let projectName: string;
 
-  if (!projectsRes.data?.length) return '⚠️ Kein zugängliches aktives Projekt gefunden.';
-  const { id: projectId, name: projectName } = projectsRes.data[0];
+  if (channelProject) {
+    // Use the project linked to this Slack channel.
+    projectId   = channelProject.id;
+    projectName = channelProject.name;
+  } else {
+    // Fallback: first accessible non-Done project.
+    let projectsQuery = admin.from('projects').select('id, name').eq('workspace_id', workspaceUuid).neq('status', 'Done').order('created_at', { ascending: true });
+    if (caller && !roleAtLeast(caller.role, 'manager')) {
+      const { data: pm } = await admin.from('project_members').select('project_id').eq('workspace_id', workspaceUuid).eq('user_id', caller.id);
+      const ids = (pm ?? []).map((r: any) => r.project_id as string);
+      if (!ids.length) return '⛔ Du bist noch keinem Projekt zugewiesen. Bitte einen Manager bitten, dich zu einem Projekt hinzuzufügen.';
+      projectsQuery = projectsQuery.in('id', ids);
+    }
+    const projectsRes = await projectsQuery.limit(1);
+    if (!projectsRes.data?.length) return '⚠️ Kein zugängliches aktives Projekt gefunden.';
+    projectId   = projectsRes.data[0].id;
+    projectName = projectsRes.data[0].name;
+  }
+
+  const membersRes = needsMembers
+    ? await admin.from('workspace_members').select('user_id, profiles!inner(id, full_name, email)').eq('workspace_id', workspaceUuid)
+    : { data: [] as any[] };
 
   let assigneeId: string | null = null;
   let assigneeName: string | null = null;
   if (needsMembers && mentionedName) {
     const needle = mentionedName.toLowerCase();
-    const match = (membersRes.data ?? []).find((m: any) => {
+    const match = ((membersRes as any).data ?? []).find((m: any) => {
       const name = ((m.profiles?.full_name ?? m.profiles?.email) as string | null)?.toLowerCase() ?? '';
       return name.includes(needle) || name.split(/\s+/).some((p: string) => p.startsWith(needle));
     });
@@ -776,11 +798,12 @@ export async function POST(req: NextRequest) {
   }
 
   const params   = new URLSearchParams(rawBody);
-  const command  = params.get('command')   ?? '/cc';
-  const text     = (params.get('text')     ?? '').trim();
-  const teamId   = params.get('team_id')   ?? '';
-  const userName = params.get('user_name') ?? 'unknown';
-  const userId   = params.get('user_id')   ?? '';  // Slack user ID e.g. U0ATF1U5LNT
+  const command   = params.get('command')    ?? '/cc';
+  const text      = (params.get('text')      ?? '').trim();
+  const teamId    = params.get('team_id')    ?? '';
+  const userName  = params.get('user_name')  ?? 'unknown';
+  const userId    = params.get('user_id')    ?? '';
+  const channelId = params.get('channel_id') ?? '';
 
   const admin = createAdminClient();
   if (!admin) {
@@ -809,7 +832,7 @@ export async function POST(req: NextRequest) {
   let responseText: string;
 
   switch (sub) {
-    case 'task':    responseText = await handleTask(rest, workspaceUuid, userName, cmd, admin, userId); break;
+    case 'task':    responseText = await handleTask(rest, workspaceUuid, userName, cmd, admin, userId, channelId); break;
     case 'mytasks': responseText = await handleMyTasks(workspaceUuid, userName, userId, admin); break;
     case 'today':   responseText = await handleToday(workspaceUuid, admin); break;
     case 'done':    responseText = await handleDone(rest, workspaceUuid, userName, userId, cmd, admin); break;
