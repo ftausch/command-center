@@ -373,6 +373,7 @@ export async function setupProjectWorkspace(input: {
   postSetupMessage: boolean;
   projectName: string;
   projectType?: string;
+  setupDrive?: boolean;
 }): Promise<ActionResult<{ resources: ProjectResource[] }>> {
   const supabase = createClient();
   if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
@@ -475,6 +476,48 @@ export async function setupProjectWorkspace(input: {
     }
   }
 
+  // ── Google Drive folder ───────────────────────────────────────────────────
+  if (input.setupDrive) {
+    const { createProjectFolder } = await import('@/lib/integrations/drive');
+    const folder = await createProjectFolder(input.projectName);
+
+    if (!folder) {
+      warnings.push('Google Drive Ordner konnte nicht erstellt werden (Drive nicht konfiguriert oder Fehler).');
+    } else {
+      const { data: driveRow, error: driveErr } = await supabase
+        .from('project_resources')
+        .insert({
+          workspace_id: ctx.uuid,
+          project_id:   input.projectId,
+          type:         'drive_folder',
+          provider:     'google_drive',
+          external_id:  folder.folderId,
+          name:         folder.folderName,
+          url:          folder.url,
+          metadata:     { subfolders: folder.subfolders },
+          created_by:   userId,
+        })
+        .select()
+        .single();
+
+      if (driveErr) {
+        console.error('[setupWorkspace] drive insert failed:', driveErr.message);
+        warnings.push('Drive-Ressource konnte nicht gespeichert werden.');
+      } else {
+        resources.push({
+          id:         driveRow.id,
+          projectId:  input.projectId,
+          type:       'drive_folder',
+          provider:   'google_drive',
+          externalId: folder.folderId,
+          name:       folder.folderName,
+          url:        folder.url,
+          createdAt:  driveRow.created_at,
+        });
+      }
+    }
+  }
+
   // Activity log
   await supabase.from('activity_logs').insert({
     workspace_id: ctx.uuid,
@@ -482,7 +525,7 @@ export async function setupProjectWorkspace(input: {
     kind:         'project_created',
     target_type:  'project',
     target_id:    input.projectId,
-    meta:         { setup: true, slack: input.setupSlack, resources: resources.length },
+    meta:         { setup: true, slack: input.setupSlack, drive: !!input.setupDrive, resources: resources.length },
   });
 
   const result: ActionResult<{ resources: ProjectResource[] }> = {

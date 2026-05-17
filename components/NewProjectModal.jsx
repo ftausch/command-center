@@ -13,6 +13,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
+import { isDriveConfigured } from '@/lib/actions/workspace';
 
 const PROJECT_TYPES = ['Episode', 'Recording', 'Event', 'Shoot', 'Client', 'Production', 'Workshop', 'Newsletter', 'Clips', 'Design', 'Andere'];
 
@@ -36,9 +37,14 @@ export function NewProjectModal({ open, onClose, onCreated }) {
   const [errorMsg, setErrorMsg] = useState(null);
 
   const submittingRef = useRef(false);
-  // Fresh UUID per modal open — server uses it as project id so duplicate
-  // submits hit a primary-key conflict instead of creating two rows.
   const idempotencyId = useRef(crypto.randomUUID());
+
+  const [driveEnabled, setDriveEnabled] = useState(false);
+  const [setupDrive,   setSetupDrive]   = useState(false);
+
+  useEffect(() => {
+    isDriveConfigured().then(setDriveEnabled).catch(() => setDriveEnabled(false));
+  }, []);
 
   // Workspace setup
   const [setupSlack,         setSetupSlack]         = useState(false);
@@ -113,7 +119,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     if (result.activity) pushActivity(result.activity);
 
     // Workspace setup (best-effort, non-blocking)
-    if (setupSlack && result.data?.id) {
+    if ((setupSlack || setupDrive) && result.data?.id) {
       const setupResult = await setupProjectWorkspace({
         projectId:        result.data.id,
         workspaceId,
@@ -122,6 +128,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
         postSetupMessage: postSetupMsg,
         projectName:      name.trim(),
         projectType:      type,
+        setupDrive,
       });
       if (setupResult.warning) setSetupWarning(setupResult.warning);
     }
@@ -276,21 +283,43 @@ export function NewProjectModal({ open, onClose, onCreated }) {
                   </label>
                 </div>
 
-                {/* Google Drive — disabled */}
+                {/* Google Drive */}
                 <div style={{
                   background: 'var(--bg-sunk)', borderRadius: 8, padding: '12px 14px',
-                  opacity: 0.5,
+                  opacity: driveEnabled ? 1 : 0.5,
                 }}>
-                  <div className="row between">
+                  <div className="row between mb-2">
                     <div className="row gap-2">
                       <span style={{ fontSize: 14 }}>📁</span>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>Google Drive Ordner</span>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Nicht verbunden</span>
+                    <span style={{ fontSize: 11, color: driveEnabled ? 'var(--success)' : 'var(--text-3)', fontWeight: 500 }}>
+                      {driveEnabled ? '● Verbunden' : 'Nicht verbunden'}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 6 }}>
-                    Google Drive Integration noch nicht eingerichtet.
-                  </div>
+                  {driveEnabled ? (
+                    <>
+                      <label className="row gap-2" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+                        <input
+                          type="checkbox"
+                          checked={setupDrive}
+                          onChange={e => setSetupDrive(e.target.checked)}
+                          disabled={status === 'submitting'}
+                          style={{ accentColor: 'var(--brand)' }}
+                        />
+                        Ordner in Google Drive erstellen
+                      </label>
+                      {setupDrive && (
+                        <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 6 }}>
+                          Erstellt: Aufnahme · Schnitt · Thumbnail · Show Notes · Distribution
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                      Google Drive Integration noch nicht eingerichtet.
+                    </div>
+                  )}
                 </div>
 
                 {setupWarning && (
