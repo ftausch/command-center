@@ -90,7 +90,9 @@ export async function createProjectFolder(
       subfolders: subfolderResults,
     };
   } catch (e: any) {
-    console.error('[drive] createProjectFolder failed:', e?.message ?? e);
+    const status = e?.response?.status;
+    const detail = e?.response?.data?.error?.message ?? e?.message ?? String(e);
+    console.error(`[drive] createProjectFolder failed (${status ?? 'no status'}): ${detail}`);
     return null;
   }
 }
