@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
+import { applyEpisodeTemplate, EPISODE_TEMPLATE_PREVIEW } from '@/lib/actions/templates';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
 import { isDriveConfigured } from '@/lib/actions/workspace';
 
@@ -41,6 +42,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
 
   const [driveEnabled, setDriveEnabled] = useState(false);
   const [setupDrive,   setSetupDrive]   = useState(false);
+  const [applyTemplate, setApplyTemplate] = useState(false);
 
   useEffect(() => {
     isDriveConfigured().then(setDriveEnabled).catch(() => setDriveEnabled(false));
@@ -68,6 +70,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     setSetupWarning(null);
     submittingRef.current = false;
     idempotencyId.current = crypto.randomUUID();
+    setApplyTemplate(false);
   }, [open]);
 
   // Auto-generate channel name from project name
@@ -131,6 +134,17 @@ export function NewProjectModal({ open, onClose, onCreated }) {
         setupDrive,
       });
       if (setupResult.warning) setSetupWarning(setupResult.warning);
+    }
+
+    // Apply episode template tasks (best-effort, non-blocking for UX)
+    if (applyTemplate && result.data?.id) {
+      applyEpisodeTemplate({
+        projectId:   result.data.id,
+        workspaceId,
+        dueDate:     due || undefined,
+      }).then((r) => {
+        if (r.ok) console.log(`[template] ${r.data?.count} tasks created`);
+      });
     }
 
     onClose();
@@ -226,6 +240,47 @@ export function NewProjectModal({ open, onClose, onCreated }) {
             rows={3}
             style={{ resize: 'vertical', minHeight: 64, padding: '8px 12px', lineHeight: 1.4 }}
           />
+
+          {/* ── Episode Template ───────────────────────────────────── */}
+          {(type === 'Episode' || type === 'Recording') && (
+            <div style={{
+              borderTop: '1px solid var(--border-soft)',
+              paddingTop: 14, marginTop: 2,
+            }}>
+              <label className="row gap-2" style={{ cursor: 'pointer', alignItems: 'flex-start' }}>
+                <input
+                  type="checkbox"
+                  checked={applyTemplate}
+                  onChange={e => setApplyTemplate(e.target.checked)}
+                  disabled={status === 'submitting'}
+                  style={{ accentColor: 'var(--brand)', marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>📋 Episode-Tasks automatisch erstellen</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>
+                    {EPISODE_TEMPLATE_PREVIEW.length} Standard-Tasks werden angelegt und dem Team zugewiesen
+                  </div>
+                </div>
+              </label>
+              {applyTemplate && (
+                <div style={{
+                  marginTop: 10, padding: '8px 10px', background: 'var(--bg-sunk)',
+                  borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                  {EPISODE_TEMPLATE_PREVIEW.map((t, i) => (
+                    <div key={i} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                      <span style={{ color: 'var(--text-4)', minWidth: 16 }}>{i + 1}.</span>
+                      <span style={{ flex: 1 }}>{t.title}</span>
+                      <span style={{
+                        fontSize: 10.5, color: 'var(--brand)', fontWeight: 500,
+                        background: 'var(--brand-soft)', borderRadius: 4, padding: '1px 6px',
+                      }}>{t.specialty}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Workspace vorbereiten ──────────────────────────────── */}
           <div style={{
