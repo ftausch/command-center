@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
-import { applyEventTemplate, EVENT_TEMPLATE_LIST } from '@/lib/actions/templates';
+import { applyEventTemplate } from '@/lib/actions/templates';
+import { EVENT_TEMPLATE_LIST } from '@/lib/event-templates';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
 
 const EVENT_TYPES = ['Networking', 'Founder Dinner', 'Pickleball', 'Workshop', 'Sponsorship Event', 'Andere'];
