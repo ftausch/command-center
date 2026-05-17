@@ -94,7 +94,7 @@ function EventCard({ project, tasks, onOpen }) {
         )}
         {project.due && !project.eventMeta?.eventDate && (
           <span style={{ color: d !== null && d < 0 ? 'var(--danger)' : d !== null && d <= 7 ? 'var(--warning)' : 'var(--text-3)' }}>
-            ⏰ {dueLabel(project.due)}
+            ⏰ {dueLabel(project.due).text}
           </span>
         )}
       </div>

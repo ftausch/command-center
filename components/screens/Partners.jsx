@@ -38,7 +38,7 @@ function PartnerCard({ name, events, tasks, setRoute }) {
             {openTasks.length > 0 && <span>📋 {openTasks.length} offene Tasks</span>}
             {nextEvent?.due && (
               <span style={{ color: d !== null && d < 0 ? 'var(--danger)' : d !== null && d <= 7 ? 'var(--warning)' : 'var(--text-3)' }}>
-                📅 nächstes Event: {dueLabel(nextEvent.due)}
+                📅 nächstes Event: {dueLabel(nextEvent.due).text}
               </span>
             )}
           </div>
@@ -71,7 +71,7 @@ function PartnerCard({ name, events, tasks, setRoute }) {
                 </div>
                 <div className="row gap-2 items-center">
                   <StatusBadge status={e.status} />
-                  {e.due && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{dueLabel(e.due)}</span>}
+                  {e.due && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{dueLabel(e.due).text}</span>}
                   <I.arrowRight size={11} style={{ color: 'var(--text-4)' }} />
                 </div>
               </div>

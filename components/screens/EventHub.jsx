@@ -245,7 +245,7 @@ export function EventHubScreen({ setRoute }) {
                       <div className="row gap-3" style={{ fontSize: 12, color: 'var(--text-3)' }}>
                         {p.due && (
                           <span style={{ color: d < 0 ? 'var(--danger)' : d <= 7 ? 'var(--warning)' : 'var(--text-3)' }}>
-                            📅 {dueLabel(p.due)}
+                            📅 {dueLabel(p.due).text}
                           </span>
                         )}
                         <span>📋 {data.tasks.filter(t => t.projectId === p.id && t.status !== 'Done').length} offen</span>
@@ -294,7 +294,7 @@ export function EventHubScreen({ setRoute }) {
                         {proj && <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{proj.name}</div>}
                       </div>
                       <StatusBadge status={t.status} />
-                      {t.due && <span style={{ fontSize: 11, color: daysUntil(t.due) < 0 ? 'var(--danger)' : 'var(--text-3)', flexShrink: 0 }}>{dueLabel(t.due)}</span>}
+                      {t.due && <span style={{ fontSize: 11, color: daysUntil(t.due) < 0 ? 'var(--danger)' : 'var(--text-3)', flexShrink: 0 }}>{dueLabel(t.due).text}</span>}
                     </div>
                   );
                 })}
