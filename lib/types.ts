@@ -160,6 +160,16 @@ export interface UserView {
   specialty?: string | null;
 }
 
+export interface EventMeta {
+  location?: string;
+  eventDate?: string;      // ISO datetime
+  partnerSponsor?: string;
+  landingPageUrl?: string;
+  signupUrl?: string;
+  expectedAttendees?: number;
+  format?: string;         // e.g. 'Networking', 'Workshop', 'Dinner', 'Pickleball'
+}
+
 export interface ProjectView {
   id: string;
   workspace: string;
@@ -178,6 +188,7 @@ export interface ProjectView {
   slackConnected: boolean;
   links?: { label: string; url: string }[];
   blockedReason?: string;
+  eventMeta?: EventMeta;
 }
 
 export interface TaskView {

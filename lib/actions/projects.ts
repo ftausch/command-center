@@ -64,6 +64,7 @@ export async function createProject(input: {
   priority?: TaskPriority;
   status?: ProjectStatus;
   division?: import('@/lib/types').Division;
+  eventMeta?: import('@/lib/types').EventMeta;
   /** Client-generated UUID — prevents duplicate inserts on double-submit. */
   idempotencyId?: string;
 }): Promise<ActionResult<ProjectView>> {
@@ -122,6 +123,7 @@ export async function createProject(input: {
     priority: input.priority ?? 'Medium',
     due_date: input.due || null,
     owner_id: input.ownerId ?? userId,
+    ...(input.eventMeta ? { event_meta: input.eventMeta } : {}),
   };
   if (input.idempotencyId) insertRow.id = input.idempotencyId;
 
@@ -250,6 +252,7 @@ export async function updateProject(input: {
       | 'owner'
       | 'slackChannel'
       | 'slackConnected'
+      | 'eventMeta'
     >
   >;
 }): Promise<ActionResult<Partial<ProjectView> & { id: string }>> {
@@ -274,6 +277,7 @@ export async function updateProject(input: {
   if (input.patch.owner !== undefined) row.owner_id = input.patch.owner || null;
   if (input.patch.slackChannel !== undefined) row.slack_channel = input.patch.slackChannel || null;
   if (input.patch.slackConnected !== undefined) row.slack_connected = input.patch.slackConnected;
+  if (input.patch.eventMeta !== undefined) row.event_meta = input.patch.eventMeta;
 
   const { error } = await supabase
     .from('projects')

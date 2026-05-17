@@ -601,6 +601,55 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             )}
           </div>
 
+          {/* ── Event Details ────────────────────────────────────────────── */}
+          {project.division === 'events' && (
+            <div className="card card-pad">
+              <div className="row gap-2 mb-3">
+                <span style={{ fontSize: 16 }}>🎪</span>
+                <span className="h3">Event Details</span>
+              </div>
+              <div className="col gap-2" style={{ fontSize: 13 }}>
+                {project.eventMeta?.eventDate && (
+                  <div className="row between">
+                    <span style={{ color: 'var(--text-3)' }}>Datum</span>
+                    <span style={{ fontWeight: 500 }}>
+                      {new Date(project.eventMeta.eventDate).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                  </div>
+                )}
+                {project.eventMeta?.location && (
+                  <div className="row between">
+                    <span style={{ color: 'var(--text-3)' }}>📍 Location</span>
+                    <span style={{ fontWeight: 500 }}>{project.eventMeta.location}</span>
+                  </div>
+                )}
+                {project.eventMeta?.partnerSponsor && (
+                  <div className="row between">
+                    <span style={{ color: 'var(--text-3)' }}>🤝 Partner</span>
+                    <span style={{ fontWeight: 500 }}>{project.eventMeta.partnerSponsor}</span>
+                  </div>
+                )}
+                {project.eventMeta?.landingPageUrl && (
+                  <div className="row between">
+                    <span style={{ color: 'var(--text-3)' }}>🔗 Landing Page</span>
+                    <a href={project.eventMeta.landingPageUrl} target="_blank" rel="noopener noreferrer"
+                       style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
+                  </div>
+                )}
+                {project.eventMeta?.signupUrl && (
+                  <div className="row between">
+                    <span style={{ color: 'var(--text-3)' }}>📋 Signup</span>
+                    <a href={project.eventMeta.signupUrl} target="_blank" rel="noopener noreferrer"
+                       style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
+                  </div>
+                )}
+                {!project.eventMeta?.eventDate && !project.eventMeta?.location && (
+                  <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Noch keine Event-Details eingetragen.</div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="card card-pad">
             <div className="row between mb-3">
               <div className="row gap-2"><I.slack size={16} /><span className="h3">Slack Channel</span></div>

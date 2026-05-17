@@ -111,6 +111,7 @@ export function rowToProject(row: any, workspaceSlug: string): ProjectView {
     team: [],
     slackChannel: row.slack_channel ?? '',
     slackConnected: !!row.slack_connected,
+    eventMeta: row.event_meta ?? undefined,
   };
 }
 

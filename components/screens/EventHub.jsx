@@ -8,6 +8,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { I } from '@/components/icons';
 import { daysUntil, dueLabel, projectProgress } from '@/lib/utils';
+import { NewEventModal } from '@/components/NewEventModal';
 
 const EVENT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 
@@ -28,8 +29,9 @@ function StatCard({ label, value, sub, color }) {
 }
 
 export function EventHubScreen({ setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
-  const [filter, setFilter] = useState('all');
+  const { currentWorkspace: brand, data, addProject } = useWorkspace();
+  const [filter,         setFilter]         = useState('all');
+  const [newEventOpen,   setNewEventOpen]   = useState(false);
 
   const eventProjects = useMemo(() =>
     data.projects.filter((p) => p.division === 'events'),
@@ -78,15 +80,23 @@ export function EventHubScreen({ setRoute }) {
           <div>
             <div className="row gap-2 mb-2">
               <Badge kind="brand" dot>{brand?.name}</Badge>
-              <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500, padding: '2px 8px', borderRadius: 20, background: 'var(--bg-sunk)' }}>Events</span>
+              <span style={{ fontSize: 11, color: '#e8780a', fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: '#fff4e6' }}>Events</span>
             </div>
             <h1 className="h1">Event Hub</h1>
           </div>
+          <button className="btn btn-sm" style={{ background: '#e8780a', color: 'white', border: 'none' }} onClick={() => setNewEventOpen(true)}>
+            <I.plus size={13} /> Neues Event
+          </button>
         </div>
+        <NewEventModal
+          open={newEventOpen}
+          onClose={() => setNewEventOpen(false)}
+          onCreated={(p) => { setNewEventOpen(false); setRoute('project:' + p.id); }}
+        />
         <EmptyState
           icon={<I.calendar size={28} />}
           title="Noch keine Events"
-          desc='Erstelle dein erstes Event-Projekt über "+ New Project" und wähle den Typ "Event".'
+          desc="Erstelle dein erstes Event und wähle ein Template — Tasks werden automatisch angelegt."
         />
       </div>
     );
@@ -106,10 +116,25 @@ export function EventHubScreen({ setRoute }) {
             Überblick über alle Events, Tasks und Partner-Status.
           </p>
         </div>
-        <button className="btn btn-brand btn-sm" onClick={() => setRoute('eventpipeline')}>
-          <I.kanban size={13} /> Event Pipeline
-        </button>
+        <div className="row gap-2">
+          <button className="btn btn-ghost btn-sm" onClick={() => setRoute('eventpipeline')}>
+            <I.kanban size={13} /> Pipeline
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ background: '#e8780a', color: 'white', border: 'none' }}
+            onClick={() => setNewEventOpen(true)}
+          >
+            <I.plus size={13} /> Neues Event
+          </button>
+        </div>
       </div>
+
+      <NewEventModal
+        open={newEventOpen}
+        onClose={() => setNewEventOpen(false)}
+        onCreated={(p) => { setNewEventOpen(false); setRoute('project:' + p.id); }}
+      />
 
       {/* ── Stats ──────────────────────────────────────────────────────── */}
       <div className="row gap-3 mb-4 wrap">
