@@ -140,10 +140,72 @@ export function EventHubScreen({ setRoute }) {
       <div className="row gap-3 mb-4 wrap">
         <StatCard label="Aktive Events" value={eventProjects.filter(p => p.status !== 'Done').length} />
         <StatCard label="Offene Tasks" value={openTasks.length} />
+        <StatCard label="Partner/Sponsoren" value={[...new Set(eventProjects.map(p => p.eventMeta?.partnerSponsor).filter(Boolean))].length} color="#e8780a" />
         <StatCard label="Überfällig" value={overdue.length} color={overdue.length > 0 ? 'var(--danger)' : undefined} />
-        <StatCard label="In Review" value={inReview.length} color={inReview.length > 0 ? 'var(--warning)' : undefined} />
         <StatCard label="Blockiert" value={blocked.length} color={blocked.length > 0 ? 'var(--danger)' : undefined} />
       </div>
+
+      {/* ── Event Timeline ───────────────────────────────────────────────── */}
+      {(() => {
+        const eventsWithDate = eventProjects
+          .filter(p => p.eventMeta?.eventDate && p.status !== 'Done')
+          .sort((a, b) => a.eventMeta.eventDate > b.eventMeta.eventDate ? 1 : -1)
+          .slice(0, 5);
+        if (eventsWithDate.length === 0) return null;
+        return (
+          <div className="card card-pad mb-4">
+            <div className="h3 mb-3">📆 Event-Kalender</div>
+            <div className="col gap-0">
+              {eventsWithDate.map((p, i) => {
+                const date = new Date(p.eventMeta.eventDate);
+                const isToday = date.toDateString() === new Date().toDateString();
+                const isPast  = date < new Date();
+                const h = (date.getTime() - Date.now()) / 3_600_000;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setRoute('project:' + p.id)}
+                    style={{
+                      display: 'flex', gap: 14, alignItems: 'flex-start',
+                      paddingBottom: i < eventsWithDate.length - 1 ? 16 : 0,
+                      marginBottom: i < eventsWithDate.length - 1 ? 16 : 0,
+                      borderBottom: i < eventsWithDate.length - 1 ? '1px solid var(--border-soft)' : 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {/* Date column */}
+                    <div style={{
+                      minWidth: 52, textAlign: 'center', padding: '6px 8px',
+                      borderRadius: 8,
+                      background: isToday ? '#e8780a' : isPast ? 'var(--bg-sunk)' : '#fff4e6',
+                      color: isToday ? 'white' : isPast ? 'var(--text-4)' : '#e8780a',
+                    }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{date.getDate()}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600 }}>
+                        {date.toLocaleString('de-DE', { month: 'short' }).toUpperCase()}
+                      </div>
+                    </div>
+                    {/* Info */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                      <div className="row gap-3" style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>
+                        <span>{date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span>
+                        {p.eventMeta?.location && <span>📍 {p.eventMeta.location}</span>}
+                        {p.eventMeta?.partnerSponsor && <span>🤝 {p.eventMeta.partnerSponsor}</span>}
+                      </div>
+                      {h > 0 && h < 48 && (
+                        <div style={{ fontSize: 11.5, color: h < 2 ? 'var(--danger)' : '#e8780a', fontWeight: 600, marginTop: 3 }}>
+                          {h < 1 ? 'Jetzt!' : h < 24 ? `in ${Math.round(h)}h` : 'Morgen'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
         <div className="col gap-4">

@@ -552,3 +552,78 @@ export async function setupProjectWorkspace(input: {
   if (warnings.length) result.warning = warnings.join(' ');
   return result;
 }
+
+// ── Duplicate event project ────────────────────────────────────────────────
+// Creates a copy of an event project with "(Kopie)" suffix and copies all
+// its tasks (resetting status to "To Do" and clearing assignees).
+
+export async function duplicateEventProject(input: {
+  projectId: string;
+  workspaceId: string;
+  newName?: string;
+}): Promise<ActionResult<ProjectView>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden.' };
+  if (!canWriteAsRole(ctx.role, [...MANAGER_ROLES])) {
+    return { ok: false, error: 'Nur Manager+ können Events duplizieren.' };
+  }
+
+  const userId = await actor();
+
+  // Fetch source project
+  const { data: src, error: srcErr } = await supabase
+    .from('projects').select().eq('id', input.projectId).eq('workspace_id', ctx.uuid).single();
+  if (srcErr || !src) return { ok: false, error: 'Quell-Projekt nicht gefunden.' };
+
+  const newName = input.newName ?? `${src.name} (Kopie)`;
+
+  const { data: newProj, error: projErr } = await supabase
+    .from('projects')
+    .insert({
+      workspace_id: ctx.uuid,
+      name:         newName,
+      type:         src.type,
+      division:     src.division ?? 'events',
+      description:  src.description,
+      status:       'Planning',
+      priority:     src.priority,
+      due_date:     src.due_date,
+      owner_id:     userId,
+      event_meta:   src.event_meta,
+    })
+    .select().single();
+  if (projErr || !newProj) return { ok: false, error: projErr?.message ?? 'Duplizieren fehlgeschlagen.' };
+
+  // Copy tasks — reset status + assignee
+  const { data: srcTasks } = await supabase
+    .from('tasks').select().eq('project_id', input.projectId).eq('workspace_id', ctx.uuid);
+
+  if (srcTasks?.length) {
+    await supabase.from('tasks').insert(
+      srcTasks.map((t: any) => ({
+        workspace_id: ctx.uuid,
+        project_id:   newProj.id,
+        title:        t.title,
+        status:       'To Do',
+        priority:     t.priority,
+        due_date:     t.due_date,
+        assignee_id:  null,
+        tags:         t.tags ?? [],
+      }))
+    );
+  }
+
+  const project: ProjectView = {
+    id: newProj.id, workspace: input.workspaceId, name: newProj.name,
+    type: newProj.type ?? '', division: (newProj.division ?? 'events') as import('@/lib/types').Division,
+    desc: newProj.description ?? '', status: newProj.status, priority: newProj.priority,
+    progress: 0, phaseIdx: 0, due: newProj.due_date ?? '', owner: userId,
+    team: [], slackChannel: '', slackConnected: false,
+    eventMeta: newProj.event_meta ?? undefined,
+  };
+
+  return { ok: true, data: project };
+}

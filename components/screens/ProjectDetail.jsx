@@ -9,7 +9,7 @@ import {
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
-import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole } from '@/lib/actions/projects';
+import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
 import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
 import { CAN } from '@/lib/roles';
@@ -20,7 +20,7 @@ const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, currentWorkspaceId } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, addProject, currentWorkspaceId } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -64,6 +64,13 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   const [bulkError, setBulkError] = useState(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
+  // ── Budget tracker ────────────────────────────────────────────────────────
+  const [budgetItems, setBudgetItems] = useState([]);
+  const [budgetPending, setBudgetPending] = useState(false);
+
+  // ── Duplicate ─────────────────────────────────────────────────────────────
+  const [duplicating, setDuplicating] = useState(false);
+
   // ── Slack channel mapping ─────────────────────────────────────────────────
   const [editingSlack, setEditingSlack] = useState(false);
   const [slackChannelDraft, setSlackChannelDraft] = useState('');
@@ -72,6 +79,11 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
   useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
+
+  // Sync budget from eventMeta
+  useEffect(() => {
+    setBudgetItems(project?.eventMeta?.budget ?? []);
+  }, [project?.id]);
 
   // Load project members + resources whenever this project is opened
   useEffect(() => {
@@ -187,6 +199,26 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     if (!r.ok) { setFieldError(r.error ?? 'Projekt konnte nicht gelöscht werden'); setConfirmDelete(false); return; }
     removeProject(projectId);
     setRoute('projects');
+  };
+
+  const saveBudget = async (items) => {
+    setBudgetPending(true);
+    const newMeta = { ...(project.eventMeta ?? {}), budget: items };
+    const r = await updateProject({ projectId, workspaceId, patch: { eventMeta: newMeta } });
+    setBudgetPending(false);
+    if (r.ok) {
+      updateProjectInCache(projectId, { eventMeta: newMeta });
+      setBudgetItems(items);
+    }
+  };
+
+  const onDuplicate = async () => {
+    setDuplicating(true);
+    const r = await duplicateEventProject({ projectId, workspaceId });
+    setDuplicating(false);
+    if (!r.ok) { setFieldError(r.error ?? 'Duplizieren fehlgeschlagen'); return; }
+    addProject(r.data);
+    setRoute('project:' + r.data.id);
   };
 
   const phases = data.phases;
@@ -414,6 +446,50 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                   {bulkError && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{bulkError}</span>}
                 </div>
               )}
+              {/* Phase-grouped view for event projects */}
+              {project.division === 'events' && tasks.some((t) => t.tags?.length) ? (() => {
+                const phases = [...new Set(tasks.map((t) => t.tags?.[0] ?? 'Allgemein'))];
+                return (
+                  <div className="col gap-3">
+                    {phases.map((phase) => {
+                      const phaseTasks = tasks.filter((t) => (t.tags?.[0] ?? 'Allgemein') === phase);
+                      const done = phaseTasks.filter((t) => t.status === 'Done').length;
+                      const pct  = Math.round((done / phaseTasks.length) * 100);
+                      return (
+                        <div key={phase} className="card" style={{ overflow: 'hidden' }}>
+                          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#e8780a' }}>{phase}</span>
+                            <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{done}/{phaseTasks.length}</span>
+                            <div style={{ flex: 1, height: 4, background: 'var(--border-soft)', borderRadius: 2, maxWidth: 80 }}>
+                              <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? 'var(--success)' : '#e8780a', borderRadius: 2 }} />
+                            </div>
+                          </div>
+                          <table className="table">
+                            <tbody>
+                              {phaseTasks.map((t) => {
+                                const a  = data.members.find((u) => u.id === t.assignee);
+                                const td = dueLabel(t.due);
+                                return (
+                                  <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer', opacity: t.status === 'Done' ? 0.5 : 1 }}>
+                                    <td style={{ width: 24 }}><input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} onClick={(e) => e.stopPropagation()} /></td>
+                                    <td>
+                                      <div style={{ fontWeight: 500, textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.title}</div>
+                                    </td>
+                                    <td><StatusBadge status={t.status} /></td>
+                                    <td>{a ? <div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div> : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>}</td>
+                                    <td><PriorityBadge priority={t.priority} /></td>
+                                    <td><span className={`badge ${td.danger ? 'danger' : td.today ? 'warning' : 'ghost'}`}>{td.text}</span></td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (
               <div className="card" style={{ overflow: 'hidden' }}>
                 <table className="table">
                   <thead>
@@ -456,6 +532,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           )}
 
@@ -603,51 +680,150 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
           {/* ── Event Details ────────────────────────────────────────────── */}
           {project.division === 'events' && (
-            <div className="card card-pad">
-              <div className="row gap-2 mb-3">
-                <span style={{ fontSize: 16 }}>🎪</span>
-                <span className="h3">Event Details</span>
+            <>
+              <div className="card card-pad">
+                <div className="row between mb-3">
+                  <div className="row gap-2">
+                    <span style={{ fontSize: 16 }}>🎪</span>
+                    <span className="h3">Event Details</span>
+                  </div>
+                  {CAN.editProject(myRole) && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={onDuplicate}
+                      disabled={duplicating}
+                      title="Event als Vorlage duplizieren"
+                    >
+                      {duplicating ? '…' : '⧉ Duplizieren'}
+                    </button>
+                  )}
+                </div>
+                <div className="col gap-2" style={{ fontSize: 13 }}>
+                  {project.eventMeta?.eventDate && (
+                    <div className="row between">
+                      <span style={{ color: 'var(--text-3)' }}>📅 Datum</span>
+                      <span style={{ fontWeight: 500 }}>
+                        {new Date(project.eventMeta.eventDate).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                  )}
+                  {project.eventMeta?.location && (
+                    <div className="row between">
+                      <span style={{ color: 'var(--text-3)' }}>📍 Location</span>
+                      <span style={{ fontWeight: 500 }}>{project.eventMeta.location}</span>
+                    </div>
+                  )}
+                  {project.eventMeta?.partnerSponsor && (
+                    <div className="row between">
+                      <span style={{ color: 'var(--text-3)' }}>🤝 Partner</span>
+                      <span style={{ fontWeight: 500 }}>{project.eventMeta.partnerSponsor}</span>
+                    </div>
+                  )}
+                  {project.eventMeta?.landingPageUrl && (
+                    <div className="row between">
+                      <span style={{ color: 'var(--text-3)' }}>🔗 Landing Page</span>
+                      <a href={project.eventMeta.landingPageUrl} target="_blank" rel="noopener noreferrer"
+                         style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
+                    </div>
+                  )}
+                  {project.eventMeta?.signupUrl && (
+                    <div className="row between">
+                      <span style={{ color: 'var(--text-3)' }}>📋 Signup</span>
+                      <a href={project.eventMeta.signupUrl} target="_blank" rel="noopener noreferrer"
+                         style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
+                    </div>
+                  )}
+                  {!project.eventMeta?.eventDate && !project.eventMeta?.location && (
+                    <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Noch keine Event-Details eingetragen.</div>
+                  )}
+                </div>
               </div>
-              <div className="col gap-2" style={{ fontSize: 13 }}>
-                {project.eventMeta?.eventDate && (
-                  <div className="row between">
-                    <span style={{ color: 'var(--text-3)' }}>Datum</span>
-                    <span style={{ fontWeight: 500 }}>
-                      {new Date(project.eventMeta.eventDate).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </span>
+
+              {/* ── Budget Tracker ──────────────────────────────────────── */}
+              <div className="card card-pad">
+                <div className="row between mb-3">
+                  <div className="row gap-2">
+                    <span style={{ fontSize: 15 }}>💰</span>
+                    <span className="h3">Budget</span>
                   </div>
-                )}
-                {project.eventMeta?.location && (
-                  <div className="row between">
-                    <span style={{ color: 'var(--text-3)' }}>📍 Location</span>
-                    <span style={{ fontWeight: 500 }}>{project.eventMeta.location}</span>
+                  {CAN.editProject(myRole) && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        const newItems = [...budgetItems, { label: '', planned: 0, actual: 0 }];
+                        setBudgetItems(newItems);
+                      }}
+                    >
+                      <I.plus size={12} /> Position
+                    </button>
+                  )}
+                </div>
+                {budgetItems.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: 'var(--text-4)' }}>
+                    Noch kein Budget eingetragen. Klick "+ Position" um zu starten.
                   </div>
-                )}
-                {project.eventMeta?.partnerSponsor && (
-                  <div className="row between">
-                    <span style={{ color: 'var(--text-3)' }}>🤝 Partner</span>
-                    <span style={{ fontWeight: 500 }}>{project.eventMeta.partnerSponsor}</span>
+                ) : (
+                  <div className="col gap-0">
+                    <div className="row gap-2" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, padding: '0 0 6px', borderBottom: '1px solid var(--border-soft)', marginBottom: 6 }}>
+                      <span style={{ flex: 1 }}>Position</span>
+                      <span style={{ width: 80, textAlign: 'right' }}>Geplant</span>
+                      <span style={{ width: 80, textAlign: 'right' }}>Tatsächlich</span>
+                      <span style={{ width: 24 }} />
+                    </div>
+                    {budgetItems.map((item, i) => (
+                      <div key={i} className="row gap-2 items-center" style={{ marginBottom: 4 }}>
+                        <input
+                          className="input"
+                          style={{ flex: 1, height: 28, fontSize: 12.5 }}
+                          placeholder="z.B. Location-Miete"
+                          value={item.label}
+                          onChange={(e) => {
+                            const n = [...budgetItems]; n[i] = { ...n[i], label: e.target.value }; setBudgetItems(n);
+                          }}
+                          onBlur={() => saveBudget(budgetItems)}
+                        />
+                        <input
+                          className="input"
+                          type="number"
+                          style={{ width: 80, height: 28, fontSize: 12.5, textAlign: 'right' }}
+                          value={item.planned}
+                          onChange={(e) => {
+                            const n = [...budgetItems]; n[i] = { ...n[i], planned: +e.target.value }; setBudgetItems(n);
+                          }}
+                          onBlur={() => saveBudget(budgetItems)}
+                        />
+                        <input
+                          className="input"
+                          type="number"
+                          style={{ width: 80, height: 28, fontSize: 12.5, textAlign: 'right' }}
+                          value={item.actual ?? ''}
+                          placeholder="–"
+                          onChange={(e) => {
+                            const n = [...budgetItems]; n[i] = { ...n[i], actual: +e.target.value }; setBudgetItems(n);
+                          }}
+                          onBlur={() => saveBudget(budgetItems)}
+                        />
+                        <button
+                          className="btn btn-quiet btn-icon"
+                          style={{ width: 24, height: 24 }}
+                          onClick={() => { const n = budgetItems.filter((_, j) => j !== i); saveBudget(n); }}
+                        ><I.x size={11} /></button>
+                      </div>
+                    ))}
+                    <div className="row gap-2" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 8, marginTop: 4, fontSize: 12.5, fontWeight: 600 }}>
+                      <span style={{ flex: 1, color: 'var(--text-2)' }}>Gesamt</span>
+                      <span style={{ width: 80, textAlign: 'right', color: 'var(--text-1)' }}>
+                        {budgetItems.reduce((s, i) => s + (i.planned || 0), 0).toLocaleString('de-DE')} €
+                      </span>
+                      <span style={{ width: 80, textAlign: 'right', color: budgetItems.reduce((s, i) => s + (i.actual || 0), 0) > budgetItems.reduce((s, i) => s + (i.planned || 0), 0) ? 'var(--danger)' : 'var(--success)' }}>
+                        {budgetItems.reduce((s, i) => s + (i.actual || 0), 0).toLocaleString('de-DE')} €
+                      </span>
+                      <span style={{ width: 24 }} />
+                    </div>
                   </div>
-                )}
-                {project.eventMeta?.landingPageUrl && (
-                  <div className="row between">
-                    <span style={{ color: 'var(--text-3)' }}>🔗 Landing Page</span>
-                    <a href={project.eventMeta.landingPageUrl} target="_blank" rel="noopener noreferrer"
-                       style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
-                  </div>
-                )}
-                {project.eventMeta?.signupUrl && (
-                  <div className="row between">
-                    <span style={{ color: 'var(--text-3)' }}>📋 Signup</span>
-                    <a href={project.eventMeta.signupUrl} target="_blank" rel="noopener noreferrer"
-                       style={{ color: 'var(--brand)', fontSize: 12.5 }}>Öffnen →</a>
-                  </div>
-                )}
-                {!project.eventMeta?.eventDate && !project.eventMeta?.location && (
-                  <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Noch keine Event-Details eingetragen.</div>
                 )}
               </div>
-            </div>
+            </>
           )}
 
           <div className="card card-pad">

@@ -141,6 +141,10 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
               <I.kanban size={16} />
               <span>Event Pipeline</span>
             </div>
+            <div className={`nav-item ${route === 'partners' ? 'active' : ''}`} onClick={() => closeAndNav('partners')}>
+              <I.team size={16} />
+              <span>Partner & Sponsoren</span>
+            </div>
           </>
         )}
 

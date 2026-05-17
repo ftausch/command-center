@@ -28,6 +28,7 @@ import { PodcastHubScreen } from '@/components/screens/PodcastHub';
 import { EpisodePipelineScreen } from '@/components/screens/EpisodePipeline';
 import { EventHubScreen } from '@/components/screens/EventHub';
 import { EventPipelineScreen } from '@/components/screens/EventPipeline';
+import { PartnersScreen } from '@/components/screens/Partners';
 
 export function App() {
   const {
@@ -211,6 +212,10 @@ export function App() {
       case 'eventpipeline':
         screen = <EventPipelineScreen setRoute={setRoute} />;
         breadcrumb = 'Event Pipeline';
+        break;
+      case 'partners':
+        screen = <PartnersScreen setRoute={setRoute} />;
+        breadcrumb = 'Partner & Sponsoren';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

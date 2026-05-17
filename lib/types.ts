@@ -160,6 +160,12 @@ export interface UserView {
   specialty?: string | null;
 }
 
+export interface BudgetItem {
+  label: string;
+  planned: number;
+  actual?: number;
+}
+
 export interface EventMeta {
   location?: string;
   eventDate?: string;      // ISO datetime
@@ -167,7 +173,8 @@ export interface EventMeta {
   landingPageUrl?: string;
   signupUrl?: string;
   expectedAttendees?: number;
-  format?: string;         // e.g. 'Networking', 'Workshop', 'Dinner', 'Pickleball'
+  format?: string;
+  budget?: BudgetItem[];
 }
 
 export interface ProjectView {
