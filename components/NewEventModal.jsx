@@ -11,7 +11,7 @@ import { applyEventTemplate } from '@/lib/actions/templates';
 import { EVENT_TEMPLATE_LIST } from '@/lib/event-templates';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
 
-const EVENT_TYPES = ['Networking', 'Founder Dinner', 'Pickleball', 'Workshop', 'Sponsorship Event', 'Andere'];
+const EVENT_TYPES = ['Networking', 'Founder Dinner', 'Startup Pickleball', 'Workshop', 'Sponsorship Event', 'Andere'];
 const PRIORITIES  = ['High', 'Medium', 'Low'];
 
 export function NewEventModal({ open, onClose, onCreated }) {
@@ -267,9 +267,13 @@ export function NewEventModal({ open, onClose, onCreated }) {
             </div>
           </div>
 
-          {/* Slack */}
+          {/* Workspace Setup */}
           <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
-            <label className="row gap-2 items-start" style={{ cursor: 'pointer' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 10 }}>
+              Workspace einrichten
+            </div>
+            {/* Slack */}
+            <label className="row gap-2 items-start mb-3" style={{ cursor: 'pointer' }}>
               <input
                 type="checkbox" checked={setupSlack}
                 onChange={(e) => setSetupSlack(e.target.checked)}
@@ -278,12 +282,14 @@ export function NewEventModal({ open, onClose, onCreated }) {
               />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>💬 Slack-Channel erstellen</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Erstellt automatisch einen Channel in Slack</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>
+                  Erstellt automatisch einen Channel in Slack. Falls die Erstellung fehlschlägt, wird das Event trotzdem angelegt.
+                </div>
               </div>
             </label>
             {setupSlack && (
               <input
-                className="input mt-2"
+                className="input mb-3"
                 value={channelName}
                 onChange={(e) => setChannelName(e.target.value)}
                 placeholder="channel-name"
@@ -291,6 +297,16 @@ export function NewEventModal({ open, onClose, onCreated }) {
                 style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}
               />
             )}
+            {/* Drive — coming soon */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', opacity: 0.5 }}>
+              <div style={{ marginTop: 2, width: 16, height: 16, border: '1.5px solid var(--border)', borderRadius: 3, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>📁 Google Drive Ordner erstellen</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>
+                  Beim Anlegen des Events direkt einen Drive-Ordner erstellen. (Wird über Projekt-Einstellungen eingerichtet)
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Submit */}

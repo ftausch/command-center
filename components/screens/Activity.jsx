@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { DivisionSwitcher } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { ActivityTimeline } from '@/components/screens/ProjectDetail';
@@ -55,8 +56,26 @@ function useRecentStats(items) {
 }
 
 export function ActivityScreen() {
-  const { currentWorkspace: brand, data } = useWorkspace();
-  const items = data.activity;
+  const { currentWorkspace: brand, data, division } = useWorkspace();
+  // Filter activity by division: look up the project's division for each entry
+  const projectDivisionMap = useMemo(() => {
+    const m = {};
+    data.projects.forEach((p) => { m[p.id] = p.division ?? 'general'; });
+    return m;
+  }, [data.projects]);
+
+  const allItems = useMemo(() => {
+    if (division === 'all') return data.activity;
+    return data.activity.filter((a) => {
+      if (a.target) {
+        const div = projectDivisionMap[a.target] ?? 'general';
+        return div === division || div === 'general';
+      }
+      return true;
+    });
+  }, [data.activity, division, projectDivisionMap]);
+
+  const items = allItems;
   const stats = useRecentStats(items);
   const [activeFilter, setActiveFilter] = useState('all');
   const [drawerTask, setDrawerTask] = useState(null);
@@ -76,7 +95,10 @@ export function ActivityScreen() {
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
-          <h1 className="h1">Activity</h1>
+          <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
+            <h1 className="h1" style={{ margin: 0 }}>Activity</h1>
+            <DivisionSwitcher />
+          </div>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Chronologischer Verlauf aller wichtigen Änderungen in diesem Workspace.
           </p>

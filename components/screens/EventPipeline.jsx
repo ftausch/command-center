@@ -19,28 +19,20 @@ const PIPELINE_COLS = [
   { id: 'Recap',           label: 'Recap',             color: '#6b7280' },
 ];
 
-// Map project status to pipeline column
-function statusToCol(status) {
-  switch (status) {
+// Map project status to pipeline column.
+// Projects have a custom pipelineStage stored in eventMeta or fall back to status.
+function statusToCol(project) {
+  // Explicit pipeline stage takes priority
+  const stage = project?.eventMeta?.pipelineStage;
+  if (stage) return stage;
+  // Fall back to status-based mapping
+  switch (project?.status) {
     case 'Planning':    return 'Planning';
     case 'In Progress': return 'Promotion';
     case 'Review':      return 'Ready';
     case 'Blocked':     return 'Partner';
     case 'Done':        return 'Recap';
     default:            return 'Idea';
-  }
-}
-
-function colToStatus(colId) {
-  switch (colId) {
-    case 'Idea':      return 'Planning';
-    case 'Planning':  return 'Planning';
-    case 'Partner':   return 'Blocked';
-    case 'Promotion': return 'In Progress';
-    case 'Ready':     return 'Review';
-    case 'Live':      return 'In Progress';
-    case 'Recap':     return 'Done';
-    default:          return 'Planning';
   }
 }
 
@@ -76,14 +68,33 @@ function EventCard({ project, tasks, onOpen }) {
         )}
       </div>
 
+      {/* Event date from eventMeta */}
+      {project.eventMeta?.eventDate && (
+        <div style={{ fontSize: 12, color: '#e8780a', fontWeight: 600, marginBottom: 4 }}>
+          📅 {new Date(project.eventMeta.eventDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+          {' '}
+          {new Date(project.eventMeta.eventDate).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+        </div>
+      )}
+
+      {/* Location & partner */}
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginBottom: 6 }}>
+        {project.eventMeta?.location && (
+          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>📍 {project.eventMeta.location}</span>
+        )}
+        {project.eventMeta?.partnerSponsor && (
+          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>🤝 {project.eventMeta.partnerSponsor}</span>
+        )}
+      </div>
+
       {/* Stats */}
       <div className="row gap-3" style={{ fontSize: 11.5, color: 'var(--text-3)', marginBottom: 6 }}>
         {openTasks.length > 0 && (
           <span>📋 {openTasks.length} offen</span>
         )}
-        {project.due && (
+        {project.due && !project.eventMeta?.eventDate && (
           <span style={{ color: d !== null && d < 0 ? 'var(--danger)' : d !== null && d <= 7 ? 'var(--warning)' : 'var(--text-3)' }}>
-            📅 {dueLabel(project.due)}
+            ⏰ {dueLabel(project.due)}
           </span>
         )}
       </div>
@@ -116,7 +127,7 @@ export function EventPipelineScreen({ setRoute }) {
   const columns = useMemo(() =>
     PIPELINE_COLS.map((col) => ({
       ...col,
-      projects: eventProjects.filter((p) => statusToCol(p.status) === col.id),
+      projects: eventProjects.filter((p) => statusToCol(p) === col.id),
     })),
   [eventProjects]);
 

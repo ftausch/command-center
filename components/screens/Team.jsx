@@ -1,7 +1,7 @@
 'use client';
 // Team View
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge } from '@/components/ui';
@@ -22,9 +22,28 @@ const SPECIALTY_LABEL = {
 };
 
 export function TeamScreen({ setRoute }) {
-  const { currentWorkspace: brand, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole, currentWorkspace } = useWorkspace();
   const users = data.members;
   const tasks = data.tasks;
+
+  // Division-aware workload per user
+  const workloadByUser = useMemo(() => {
+    const m = {};
+    for (const u of users) {
+      const myTasks = tasks.filter((t) => t.assignee === u.id && t.status !== 'Done');
+      const projMap = {};
+      data.projects.forEach((p) => { projMap[p.id] = p.division ?? 'general'; });
+      m[u.id] = {
+        total: myTasks.length,
+        podcast: myTasks.filter((t) => projMap[t.projectId] === 'podcast').length,
+        events:  myTasks.filter((t) => projMap[t.projectId] === 'events').length,
+        general: myTasks.filter((t) => (projMap[t.projectId] ?? 'general') === 'general').length,
+      };
+    }
+    return m;
+  }, [users, tasks, data.projects]);
+
+  const hasEvents = currentWorkspace?.capabilities?.events;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [manageMember, setManageMember] = useState(null);
 
@@ -119,6 +138,22 @@ export function TeamScreen({ setRoute }) {
                 <SmallStat label="In Progress" value={inProgress.length} />
                 <SmallStat label="Überfällig" value={overdue.length} tone={overdue.length > 0 ? 'bad' : ''} />
               </div>
+
+              {/* Division workload breakdown — only show when workspace has events */}
+              {hasEvents && workloadByUser[u.id] && (workloadByUser[u.id].podcast > 0 || workloadByUser[u.id].events > 0) && (
+                <div className="row gap-2 mb-3" style={{ flexWrap: 'wrap' }}>
+                  {workloadByUser[u.id].podcast > 0 && (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'var(--brand-soft)', color: 'var(--brand)', fontWeight: 600 }}>
+                      🎙 {workloadByUser[u.id].podcast} Podcast
+                    </span>
+                  )}
+                  {workloadByUser[u.id].events > 0 && (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#fff4e6', color: '#e8780a', fontWeight: 600 }}>
+                      🎪 {workloadByUser[u.id].events} Events
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="mb-3">
                 <div className="row between" style={{ marginBottom: 6 }}>

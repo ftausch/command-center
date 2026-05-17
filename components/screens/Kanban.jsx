@@ -19,6 +19,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import { Avatar, Badge, PriorityBadge } from '@/components/ui';
 import { dueLabel, kColColor } from '@/lib/utils';
@@ -37,6 +38,7 @@ export function KanbanScreen({ setRoute }) {
     updateTaskInCache,
     pushActivity,
   } = useWorkspace();
+  const filterByDivision = useDivisionFilter();
 
   const [projectFilter, setProjectFilter] = useState('all');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -95,8 +97,13 @@ export function KanbanScreen({ setRoute }) {
     });
   };
 
+  const divisionProjects = useMemo(() =>
+    filterByDivision(data.projects),
+  [data.projects, filterByDivision]);
+
   const tasks = useMemo(() => {
-    let r = data.tasks;
+    const projectIds = new Set(divisionProjects.map((p) => p.id));
+    let r = data.tasks.filter((t) => projectIds.has(t.projectId));
     if (projectFilter !== 'all') r = r.filter((t) => t.projectId === projectFilter);
     if (activeFilters.has('high')) r = r.filter((t) => t.priority === 'High');
     if (activeFilters.has('me'))   r = r.filter((t) => t.assignee === me?.id);
@@ -127,15 +134,18 @@ export function KanbanScreen({ setRoute }) {
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
-          <h1 className="h1">Board</h1>
+          <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
+            <h1 className="h1" style={{ margin: 0 }}>Board</h1>
+            <DivisionSwitcher />
+          </div>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             Status-Spalten über alle Projekte. Karte ziehen um Status zu wechseln.
           </p>
         </div>
         <div className="row gap-2">
           <select className="input" style={{ width: 220, height: 32 }} value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-            <option value="all">Alle Projekte ({data.projects.length})</option>
-            {data.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <option value="all">Alle Projekte ({divisionProjects.length})</option>
+            {divisionProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>

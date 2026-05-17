@@ -39,7 +39,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
     ...t,
     division: data.projects.find(p => p.id === t.projectId)?.division ?? 'general',
   })));
-  const projects  = data.projects;
+  const projects  = filterByDivision(data.projects);
   const open      = allTasks.filter((t) => t.status !== 'Done');
   const dueToday  = open.filter((t) => daysUntil(t.due) === 0);
   const overdue   = open.filter((t) => daysUntil(t.due) < 0);

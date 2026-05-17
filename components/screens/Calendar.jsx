@@ -7,6 +7,7 @@
 
 import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { TaskDrawer } from '@/components/TaskDrawer';
@@ -29,6 +30,7 @@ function nextMonth(m) {
 
 export function CalendarScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
+  const filterByDivision = useDivisionFilter();
   const [month, setMonth] = useState({ year: TODAY.getFullYear(), mo: TODAY.getMonth() });
   const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
 
@@ -45,9 +47,20 @@ export function CalendarScreen({ setRoute }) {
 
   // ── Derive events from tasks + projects + episodes ───────────────────────
   const allEvents = useMemo(() => {
+    const filteredProjects = filterByDivision(data.projects);
+    const filteredProjectIds = new Set(filteredProjects.map((p) => p.id));
+    const filteredTasks = filterByDivision(
+      data.tasks.map((t) => ({
+        ...t,
+        division: data.projects.find((p) => p.id === t.projectId)?.division ?? 'general',
+      }))
+    );
+
     const evs = [];
-    data.tasks.forEach((t) => {
+
+    filteredTasks.forEach((t) => {
       if (!t.due) return;
+      const proj = data.projects.find((p) => p.id === t.projectId);
       evs.push({
         date: t.due,
         type: t.status === 'Review' ? 'review' : 'deadline',
@@ -55,32 +68,58 @@ export function CalendarScreen({ setRoute }) {
         projectId: t.projectId,
         taskId: t.id,
         episodeId: null,
+        division: proj?.division ?? 'general',
       });
     });
-    data.projects.forEach((p) => {
-      if (!p.due) return;
-      evs.push({
-        date: p.due,
-        type: p.status === 'Review' ? 'review' : 'deadline',
-        title: p.name,
-        projectId: p.id,
-        taskId: null,
-        episodeId: null,
-      });
+
+    filteredProjects.forEach((p) => {
+      // Add project due date
+      if (p.due) {
+        evs.push({
+          date: p.due,
+          type: p.division === 'events' ? 'event-deadline' : p.status === 'Review' ? 'review' : 'deadline',
+          title: p.name,
+          projectId: p.id,
+          taskId: null,
+          episodeId: null,
+          division: p.division,
+        });
+      }
+      // Add actual event date from eventMeta if available
+      if (p.division === 'events' && p.eventMeta?.eventDate) {
+        const eventDateStr = p.eventMeta.eventDate.slice(0, 10);
+        evs.push({
+          date: eventDateStr,
+          type: 'event-live',
+          title: `🎪 ${p.name}`,
+          projectId: p.id,
+          taskId: null,
+          episodeId: null,
+          division: 'events',
+          location: p.eventMeta.location,
+        });
+      }
     });
-    (data.episodes ?? []).forEach((ep) => {
-      if (!ep.date) return;
-      evs.push({
-        date: ep.date,
-        type: 'publish',
-        title: ep.num ? `Ep. ${ep.num} · ${ep.title}` : ep.title,
-        projectId: null,
-        taskId: null,
-        episodeId: ep.id,
+
+    // Only show episodes if division filter includes podcast
+    const showPodcast = filterByDivision([{ division: 'podcast', id: '_' }]).length > 0;
+    if (showPodcast) {
+      (data.episodes ?? []).forEach((ep) => {
+        if (!ep.date) return;
+        evs.push({
+          date: ep.date,
+          type: 'publish',
+          title: ep.num ? `Ep. ${ep.num} · ${ep.title}` : ep.title,
+          projectId: null,
+          taskId: null,
+          episodeId: ep.id,
+          division: 'podcast',
+        });
       });
-    });
+    }
+
     return evs.sort((a, b) => a.date.localeCompare(b.date));
-  }, [data.tasks, data.projects, data.episodes]);
+  }, [data.tasks, data.projects, data.episodes, filterByDivision]);
 
   // ── Events bucketed by day-of-month for current month ────────────────────
   const evByDay = useMemo(() => {
@@ -121,9 +160,12 @@ export function CalendarScreen({ setRoute }) {
       <div className="page-head">
         <div>
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand?.name}</Badge></div>
-          <h1 className="h1">Calendar</h1>
+          <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
+            <h1 className="h1" style={{ margin: 0 }}>Calendar</h1>
+            <DivisionSwitcher />
+          </div>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Task-Deadlines und Projekt-Deadlines — alle in einer Ansicht.
+            Task-Deadlines, Projekt-Deadlines und Event-Termine — alle in einer Ansicht.
           </p>
         </div>
         <div className="row gap-2">
@@ -142,9 +184,10 @@ export function CalendarScreen({ setRoute }) {
 
       <div className="row gap-3 mb-4 wrap">
         {[
-          { t: 'deadline', label: 'Deadline / Task' },
-          { t: 'review',   label: 'Review' },
-          { t: 'publish',  label: 'Episode' },
+          { t: 'event-live',    label: 'Event' },
+          { t: 'deadline',      label: 'Deadline / Task' },
+          { t: 'review',        label: 'Review' },
+          { t: 'publish',       label: 'Episode' },
         ].map((l) => (
           <div key={l.t} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
             <span className="dot-indicator" style={{ background: eventColor(l.t) }} />

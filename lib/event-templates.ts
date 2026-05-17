@@ -5,7 +5,8 @@ export type EventTemplateId =
   | 'networking'
   | 'founder_dinner'
   | 'pickleball'
-  | 'sponsorship';
+  | 'sponsorship'
+  | 'workshop';
 
 export interface EventTemplateTask {
   title: string;
@@ -77,6 +78,23 @@ export const EVENT_TEMPLATES: Record<EventTemplateId, { name: string; desc: stri
       { title: 'Nachbereitung & Danke',                  phase: 'Nachbereitung',     daysBeforeDue: -3, priority: 'Medium' },
       { title: 'Content Recap veröffentlichen',          phase: 'Content Recap',     daysBeforeDue: -7, priority: 'Medium' },
       { title: 'Sponsor Report & KPI-Auswertung',        phase: 'Sponsor Report',    daysBeforeDue: -14, priority: 'High'  },
+    ],
+  },
+  workshop: {
+    name: 'Workshop',
+    desc: 'Praxisorientierter Workshop mit Vorbereitung, Durchführung und Nachbereitung.',
+    tasks: [
+      { title: 'Thema & Zielgruppe definieren',           phase: 'Konzept',           daysBeforeDue: 28, priority: 'High'   },
+      { title: 'Speaker / Trainer bestätigen',            phase: 'Konzept',           daysBeforeDue: 21, priority: 'High'   },
+      { title: 'Location oder virtuellen Raum buchen',   phase: 'Location',          daysBeforeDue: 21, priority: 'High'   },
+      { title: 'Sponsor ansprechen (optional)',           phase: 'Partner/Sponsor',   daysBeforeDue: 14, priority: 'Low'    },
+      { title: 'Landingpage & Anmeldeformular',           phase: 'Landingpage',       daysBeforeDue: 14, priority: 'High'   },
+      { title: 'Einladungen & Social Posts',              phase: 'Kommunikation',     daysBeforeDue: 10, priority: 'Medium' },
+      { title: 'Teilnehmer bestätigen & Material senden',phase: 'Teilnehmer',        daysBeforeDue: 5,  priority: 'High'   },
+      { title: 'Ablaufplan & Slides fertigstellen',       phase: 'Ablaufplan',        daysBeforeDue: 2,  priority: 'High'   },
+      { title: 'Workshop durchführen',                   phase: 'Produktion vor Ort',daysBeforeDue: 0,  priority: 'High'   },
+      { title: 'Feedback-Formular auswerten',            phase: 'Nachbereitung',     daysBeforeDue: -3, priority: 'Medium' },
+      { title: 'Workshop-Recap & Learnings teilen',      phase: 'Content Recap',     daysBeforeDue: -7, priority: 'Medium' },
     ],
   },
 };
