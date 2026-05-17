@@ -657,31 +657,42 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           {/* ── External Resources ──────────────────────────────────────── */}
           {projectResources.length > 0 && (
             <div className="card card-pad">
-              <div className="label mb-3">Externe Ressourcen</div>
+              <div className="label mb-3">Workspace</div>
               <div className="col gap-2">
-                {projectResources.map((r) => (
-                  <div key={r.id} className="row between items-center" style={{ padding: '8px 10px', background: 'var(--bg-sunk)', borderRadius: 8 }}>
-                    <div className="row gap-2 items-center">
-                      <span style={{ fontSize: 15 }}>{r.provider === 'slack' ? '💬' : '📁'}</span>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'capitalize' }}>{r.provider} · {r.type.replace('_', ' ')}</div>
+                {projectResources.map((r) => {
+                  const isSlack = r.provider === 'slack';
+                  const isDrive = r.provider === 'google_drive';
+                  return (
+                    <div key={r.id} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 12px', borderRadius: 8,
+                      background: isDrive ? '#f0f7ff' : isSlack ? '#f5f0ff' : 'var(--bg-sunk)',
+                      border: `1px solid ${isDrive ? '#c8ddf5' : isSlack ? '#d9ccf5' : 'transparent'}`,
+                    }}>
+                      <div className="row gap-2 items-center">
+                        <span style={{ fontSize: 18 }}>{isDrive ? '📂' : isSlack ? '💬' : '🔗'}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                            {isDrive ? 'Google Drive' : isSlack ? 'Slack' : r.provider}
+                          </div>
+                        </div>
                       </div>
+                      {r.url && (
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 11.5, flexShrink: 0 }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          Öffnen <I.arrowRight size={11} />
+                        </a>
+                      )}
                     </div>
-                    {r.url && (
-                      <a
-                        href={r.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontSize: 11.5 }}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        Öffnen <I.arrowRight size={11} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -54,7 +54,9 @@ export async function createProjectFolder(
 
   try {
     // Create the main project folder.
+    // supportsAllDrives: true is required for Google Workspace Shared Drives.
     const folderRes = await drive.files.create({
+      supportsAllDrives: true,
       requestBody: {
         name:     projectName,
         mimeType: 'application/vnd.google-apps.folder',
@@ -71,6 +73,7 @@ export async function createProjectFolder(
     const subfolderResults = await Promise.all(
       PROJECT_SUBFOLDERS.map((name) =>
         drive.files.create({
+          supportsAllDrives: true,
           requestBody: {
             name,
             mimeType: 'application/vnd.google-apps.folder',
