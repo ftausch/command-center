@@ -37,7 +37,7 @@ function useActivityUnread(workspaceId, route) {
 }
 
 export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, division, setDivision } = useWorkspace();
   const canCreateTask = myRole === 'owner' || myRole === 'admin' || myRole === 'manager' || myRole === 'member';
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const unreadActivity = useActivityUnread(currentWorkspaceId, route);
@@ -102,18 +102,52 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
       />
 
       {/* Main nav */}
-      <nav style={{ flex: 1 }}>
+      <nav style={{ flex: 1, overflowY: 'auto' }}>
+
+        {/* ── Work ─────────────────────────────────────────────── */}
+        <div className="nav-section">Work</div>
         {navMain.map(n => (
-          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => setRoute(n.id)}>
+          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
             {n.icon}
             <span>{n.label}</span>
             {n.count != null && <span className="nav-count">{n.count}</span>}
           </div>
         ))}
 
-        <div className="nav-section">Workspace</div>
+        {/* ── Podcast ───────────────────────────────────────────── */}
+        {brand.capabilities?.podcast !== false && (
+          <>
+            <div className="nav-section">Podcast</div>
+            <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => closeAndNav('podcast')}>
+              <I.mic size={16} />
+              <span>Podcast Hub</span>
+            </div>
+            <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
+              <I.kanban size={16} />
+              <span>Episode Pipeline</span>
+            </div>
+          </>
+        )}
+
+        {/* ── Events ────────────────────────────────────────────── */}
+        {brand.capabilities?.events && (
+          <>
+            <div className="nav-section">Events</div>
+            <div className={`nav-item ${route === 'eventhub' ? 'active' : ''}`} onClick={() => closeAndNav('eventhub')}>
+              <I.calendar size={16} />
+              <span>Event Hub</span>
+            </div>
+            <div className={`nav-item ${route === 'eventpipeline' ? 'active' : ''}`} onClick={() => closeAndNav('eventpipeline')}>
+              <I.kanban size={16} />
+              <span>Event Pipeline</span>
+            </div>
+          </>
+        )}
+
+        {/* ── Team ──────────────────────────────────────────────── */}
+        <div className="nav-section">Team</div>
         {navWork.map(n => (
-          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => setRoute(n.id)}>
+          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
             {n.icon}
             <span>{n.label}</span>
             {n.id === 'activity' && unreadActivity > 0 && (
@@ -124,19 +158,26 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           </div>
         ))}
 
-        <div className="nav-section">Content</div>
-        <div className={`nav-item ${route === 'podcast' || route === 'pipeline' ? 'active' : ''}`} onClick={() => setRoute('podcast')} style={{ position: 'relative' }}>
-          <I.mic size={16} />
-          <span>Podcast Hub</span>
-        </div>
-
-        <div className="nav-section">Pinned Projects</div>
-        {data.projects.slice(0, 3).map(p => (
-          <div key={p.id} className={`nav-item ${route === 'project:'+p.id ? 'active' : ''}`} onClick={() => setRoute('project:'+p.id)} style={{ paddingLeft: 12 }}>
-            <span className="dot-indicator" style={{ background: 'var(--brand)', opacity: 0.6 }} />
-            <span className="truncate" style={{ fontSize: 13 }}>{p.name}</span>
-          </div>
-        ))}
+        {/* ── Pinned Projects ───────────────────────────────────── */}
+        {data.projects.filter(p => p.status !== 'Done').slice(0, 3).length > 0 && (
+          <>
+            <div className="nav-section">Pinned</div>
+            {data.projects.filter(p => p.status !== 'Done').slice(0, 3).map(p => (
+              <div key={p.id} className={`nav-item ${route === 'project:'+p.id ? 'active' : ''}`} onClick={() => closeAndNav('project:'+p.id)} style={{ paddingLeft: 12 }}>
+                <span className="dot-indicator" style={{
+                  background: p.division === 'events' ? '#e8780a' : p.division === 'podcast' ? 'var(--brand)' : 'var(--text-3)',
+                  opacity: 0.7,
+                }} />
+                <span className="truncate" style={{ fontSize: 13 }}>{p.name}</span>
+                {p.division !== 'general' && (
+                  <span style={{ fontSize: 9.5, color: 'var(--text-4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                    {p.division === 'podcast' ? 'POD' : 'EVT'}
+                  </span>
+                )}
+              </div>
+            ))}
+          </>
+        )}
       </nav>
 
       <div style={{ padding: 8, borderTop: '1px solid var(--border)' }}>

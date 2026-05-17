@@ -3,6 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import {
   Avatar, AvatarStack, Badge, EmptyState,
@@ -32,8 +33,12 @@ function greeting(name) {
 
 export function DashboardScreen({ setRoute, onOpenTask }) {
   const { currentWorkspace: brand, data, me } = useWorkspace();
+  const filterByDivision = useDivisionFilter();
 
-  const allTasks  = data.tasks;
+  const allTasks  = filterByDivision(data.tasks.map(t => ({
+    ...t,
+    division: data.projects.find(p => p.id === t.projectId)?.division ?? 'general',
+  })));
   const projects  = data.projects;
   const open      = allTasks.filter((t) => t.status !== 'Done');
   const dueToday  = open.filter((t) => daysUntil(t.due) === 0);
@@ -91,7 +96,10 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
       <div className="page-head" style={{ paddingBottom: 20, marginBottom: 24 }}>
         <div>
           <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>
-          <h1 className="h1" style={{ fontSize: 28 }} suppressHydrationWarning>{greeting(firstName)}</h1>
+          <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
+            <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>
+            <DivisionSwitcher />
+          </div>
           <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
               Das ist dein Überblick für heute.

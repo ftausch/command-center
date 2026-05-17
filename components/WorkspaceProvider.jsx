@@ -95,6 +95,8 @@ export function WorkspaceProvider({ children }) {
   const [mode, setMode] = useState(isSupabaseConfigured() ? 'supabase' : 'mock');
   // 'off' | 'connecting' | 'live' | 'error'
   const [realtimeStatus, setRealtimeStatus] = useState('off');
+  // Division filter: 'all' | 'podcast' | 'events'
+  const [division, setDivision] = useState('all');
 
   // Load the "me" identity once on mount. Works in both modes:
   //   - mock: returns D.users[0] (Fabian)
@@ -198,6 +200,7 @@ export function WorkspaceProvider({ children }) {
 
   useEffect(() => {
     loadData(currentWorkspaceId);
+    setDivision('all'); // reset filter on workspace change
   }, [currentWorkspaceId, loadData]);
 
   // ── Supabase Realtime subscription ────────────────────────────────────────
@@ -424,6 +427,8 @@ export function WorkspaceProvider({ children }) {
       mode,
       myRole,
       realtimeStatus,
+      division,
+      setDivision,
       addTask,
       updateTaskInCache,
       removeTask,
@@ -463,6 +468,8 @@ export function WorkspaceProvider({ children }) {
       addEpisode,
       updateEpisodeInCache,
       pushActivity,
+      division,
+      setDivision,
     ],
   );
 

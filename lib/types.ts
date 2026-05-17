@@ -3,6 +3,8 @@
 // adapters in lib/db convert between mock data and these shapes.
 
 export type Role = 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
+export type Division = 'podcast' | 'events' | 'general';
+export type WorkspaceCapabilities = { podcast: boolean; events: boolean };
 
 export type TaskStatus = 'Backlog' | 'To Do' | 'In Progress' | 'Review' | 'Blocked' | 'Done';
 export type TaskPriority = 'High' | 'Medium' | 'Low';
@@ -33,6 +35,7 @@ export interface Workspace {
   name: string;
   color: string | null;
   tagline: string | null;
+  capabilities: WorkspaceCapabilities;
   created_at: string;
 }
 
@@ -144,6 +147,7 @@ export interface BrandView {
   initials: string;
   color: string;
   tagline: string;
+  capabilities: WorkspaceCapabilities;
 }
 
 export interface UserView {
@@ -161,6 +165,7 @@ export interface ProjectView {
   workspace: string;
   name: string;
   type: string;
+  division: Division;
   desc: string;
   status: ProjectStatus;
   priority: TaskPriority;

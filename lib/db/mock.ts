@@ -43,10 +43,16 @@ export async function listMembers(workspaceId: string): Promise<UserView[]> {
   ) as UserView[];
 }
 
+function inferDivision(type: string): import('@/lib/types').Division {
+  if (['Episode', 'Recording', 'Clips', 'Newsletter'].includes(type)) return 'podcast';
+  if (['Event', 'Workshop', 'Shoot'].includes(type)) return 'events';
+  return 'general';
+}
+
 export async function listProjects(workspaceId: string): Promise<ProjectView[]> {
-  return Dx.projects.filter(
-    (p: ProjectView) => p.workspace === workspaceId,
-  ) as ProjectView[];
+  return Dx.projects
+    .filter((p: ProjectView) => p.workspace === workspaceId)
+    .map((p: any) => ({ ...p, division: p.division ?? inferDivision(p.type ?? '') })) as ProjectView[];
 }
 
 export async function getProject(

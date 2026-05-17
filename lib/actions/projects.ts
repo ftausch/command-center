@@ -47,6 +47,13 @@ function synthActivity(p: {
   };
 }
 
+function inferDivision(type?: string): import('@/lib/types').Division {
+  if (!type) return 'general';
+  if (['Episode', 'Recording', 'Clips', 'Newsletter'].includes(type)) return 'podcast';
+  if (['Event', 'Workshop', 'Shoot'].includes(type)) return 'events';
+  return 'general';
+}
+
 export async function createProject(input: {
   workspaceId: string;
   name: string;
@@ -56,6 +63,7 @@ export async function createProject(input: {
   due?: string;
   priority?: TaskPriority;
   status?: ProjectStatus;
+  division?: import('@/lib/types').Division;
   /** Client-generated UUID — prevents duplicate inserts on double-submit. */
   idempotencyId?: string;
 }): Promise<ActionResult<ProjectView>> {
@@ -71,6 +79,7 @@ export async function createProject(input: {
       workspace: input.workspaceId,
       name,
       type: input.type ?? 'Episode',
+      division: input.division ?? inferDivision(input.type),
       desc: input.description ?? '',
       status: input.status ?? 'Planning',
       priority: input.priority ?? 'Medium',
@@ -102,10 +111,12 @@ export async function createProject(input: {
     return { ok: false, error: 'Only managers+ can create projects' };
   }
 
+  const division = input.division ?? inferDivision(input.type);
   const insertRow: Record<string, unknown> = {
     workspace_id: ctx.uuid,
     name,
     type: input.type ?? 'Episode',
+    division,
     description: input.description ?? null,
     status: input.status ?? 'Planning',
     priority: input.priority ?? 'Medium',
@@ -132,7 +143,8 @@ export async function createProject(input: {
           status: existing.status, priority: existing.priority,
           progress: existing.progress ?? 0, phaseIdx: existing.phase_idx ?? 0,
           due: existing.due_date ?? '', owner: existing.owner_id ?? '',
-          team: [], slackChannel: existing.slack_channel ?? '',
+          team: [], division: (existing.division ?? 'general') as any,
+          slackChannel: existing.slack_channel ?? '',
           slackConnected: !!existing.slack_connected,
         },
       };
@@ -170,6 +182,7 @@ export async function createProject(input: {
     workspace: input.workspaceId,
     name: data.name,
     type: data.type ?? '',
+    division: (data.division ?? division) as import('@/lib/types').Division,
     desc: data.description ?? '',
     status: data.status,
     priority: data.priority,

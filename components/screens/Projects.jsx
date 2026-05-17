@@ -3,19 +3,23 @@
 
 import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
+import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
 import { dueLabel, projectProgress, statusColor } from '@/lib/utils';
 import { NewProjectModal } from '@/components/NewProjectModal';
 import { CAN } from '@/lib/roles';
 
+const DIVISION_DOT = { podcast: 'var(--brand)', events: '#e8780a', general: 'var(--text-4)' };
+
 export function ProjectsScreen({ setRoute }) {
   const { currentWorkspace: brand, data, myRole } = useWorkspace();
+  const filterByDivision = useDivisionFilter();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  const all = data.projects;
+  const all = filterByDivision(data.projects);
   const allTasks = data.tasks;
   const filtered = useMemo(() => {
     let r = all;
@@ -40,9 +44,12 @@ export function ProjectsScreen({ setRoute }) {
           <div className="row gap-2 mb-2">
             <Badge kind="brand" dot>{brand?.name}</Badge>
           </div>
-          <h1 className="h1">Projects</h1>
+          <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
+            <h1 className="h1" style={{ margin: 0 }}>Projects</h1>
+            <DivisionSwitcher />
+          </div>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Alle Projekte dieses Workspace. Episoden, Newsletter, Design, Clips.
+            Alle Projekte dieses Workspace. Episoden, Newsletter, Events.
           </p>
         </div>
         <div className="row gap-2">
@@ -111,7 +118,17 @@ export function ProjectsScreen({ setRoute }) {
               return (
                 <tr key={p.id} onClick={() => setRoute('project:' + p.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ minWidth: 240 }}>
-                    <div style={{ fontWeight: 600 }}>{p.name}</div>
+                    <div className="row gap-2 items-center">
+                      <div style={{ fontWeight: 600 }}>{p.name}</div>
+                      {p.division && p.division !== 'general' && (
+                        <span style={{
+                          fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em',
+                          textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4,
+                          background: p.division === 'events' ? '#fff4e6' : 'var(--brand-soft)',
+                          color: p.division === 'events' ? '#e8780a' : 'var(--brand)',
+                        }}>{p.division === 'events' ? 'Event' : 'Podcast'}</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>{p.type}</div>
                   </td>
                   <td><StatusBadge status={p.status} /></td>

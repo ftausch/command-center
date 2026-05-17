@@ -40,8 +40,9 @@ function client() {
 }
 
 function mapWorkspace(row: any): BrandView {
+  const caps = row.capabilities ?? { podcast: true, events: false };
   return {
-    id: row.slug, // UI keys by slug — same value as legacy mock workspace id
+    id: row.slug,
     name: row.name,
     sub: row.tagline ?? '',
     initials: row.name
@@ -52,6 +53,7 @@ function mapWorkspace(row: any): BrandView {
       .toUpperCase(),
     color: row.color ?? '#1a3d5c',
     tagline: row.tagline ?? '',
+    capabilities: { podcast: caps.podcast !== false, events: !!caps.events },
   };
 }
 
@@ -98,6 +100,7 @@ export function rowToProject(row: any, workspaceSlug: string): ProjectView {
     workspace: workspaceSlug,
     name: row.name,
     type: row.type ?? '',
+    division: (row.division ?? 'general') as import('@/lib/types').Division,
     desc: row.description ?? '',
     status: row.status,
     priority: row.priority,
@@ -183,7 +186,7 @@ export async function getCurrentUser(): Promise<UserView | null> {
 export async function listWorkspaces(): Promise<BrandView[]> {
   const { data, error } = await client()
     .from('workspaces')
-    .select('id, slug, name, color, tagline')
+    .select('id, slug, name, color, tagline, capabilities')
     .order('name');
   if (error) throw error;
   return (data ?? []).map(mapWorkspace);
@@ -192,7 +195,7 @@ export async function listWorkspaces(): Promise<BrandView[]> {
 export async function getWorkspace(slug: string): Promise<BrandView | null> {
   const { data, error } = await client()
     .from('workspaces')
-    .select('id, slug, name, color, tagline')
+    .select('id, slug, name, color, tagline, capabilities')
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw error;
