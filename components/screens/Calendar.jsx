@@ -11,6 +11,7 @@ import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitch
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { TaskDrawer } from '@/components/TaskDrawer';
+import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 import { TODAY, dueLabel, eventColor, formatDate, parseDate } from '@/lib/utils';
 
 const TODAY_STR = [
@@ -32,7 +33,8 @@ export function CalendarScreen({ setRoute }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const filterByDivision = useDivisionFilter();
   const [month, setMonth] = useState({ year: TODAY.getFullYear(), mo: TODAY.getMonth() });
-  const [drawerTask, setDrawerTask] = useState(null); // { taskId, projectId } | null
+  const [drawerTask, setDrawerTask] = useState(null);
+  const [drawerEpId, setDrawerEpId] = useState(null);
 
   const monthLabel = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][month.mo];
 
@@ -149,7 +151,7 @@ export function CalendarScreen({ setRoute }) {
     if (ev.taskId) {
       setDrawerTask({ taskId: ev.taskId, projectId: ev.projectId });
     } else if (ev.episodeId) {
-      setRoute('podcast');
+      setDrawerEpId(ev.episodeId);
     } else {
       setRoute('project:' + ev.projectId);
     }
@@ -181,6 +183,7 @@ export function CalendarScreen({ setRoute }) {
         projectId={drawerTask?.projectId ?? null}
         onClose={() => setDrawerTask(null)}
       />
+      <EpisodeDrawer episodeId={drawerEpId} onClose={() => setDrawerEpId(null)} />
 
       <div className="row gap-3 mb-4 wrap">
         {[

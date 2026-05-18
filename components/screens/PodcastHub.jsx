@@ -6,7 +6,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { generateMarketingPackage } from '@/lib/actions/podcast';
-import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
+import { createEpisode, updateEpisode, duplicateEpisode } from '\@/lib/actions/episodes';
 import { createTask } from '@/lib/actions/tasks';
 import { listGuests, createGuest, updateGuest, deleteGuest } from '@/lib/actions/guests';
 import { listNewsletterIssues, createNewsletterIssue, updateNewsletterIssue, deleteNewsletterIssue } from '@/lib/actions/newsletter';
@@ -595,6 +595,11 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
                                 <button className="btn btn-quiet btn-sm" onClick={() => setTab('transcripts')}><I.doc size={12} /> Transkript</button>
                                 <button className="btn btn-quiet btn-sm" onClick={() => setTab('analytics')}><I.trend size={12} /> Analytics</button>
                                 <button className="btn btn-quiet btn-sm" onClick={(e) => { e.stopPropagation(); startEdit(ep); }}><I.more size={12} /> Bearbeiten</button>
+                                <button className="btn btn-quiet btn-sm" onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const r = await duplicateEpisode({ episodeId: ep.id, workspaceId });
+                                  if (r.ok && r.data) { addEpisode(r.data); }
+                                }}>⧉ Duplizieren</button>
                               </div>
 
                               {/* Linked tasks */}

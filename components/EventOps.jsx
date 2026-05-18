@@ -124,11 +124,18 @@ export function RunOfShow({ projectId, workspaceId, canEdit }) {
     <div>
       <div className="row between mb-3">
         <div className="h3">Ablaufplan</div>
-        {canEdit && !adding && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
-            <I.plus size={13} /> Punkt hinzufügen
-          </button>
-        )}
+        <div className="row gap-2">
+          {items.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => window.print()} title="Drucken">
+              🖨️ Drucken
+            </button>
+          )}
+          {canEdit && !adding && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+              <I.plus size={13} /> Punkt hinzufügen
+            </button>
+          )}
+        </div>
       </div>
 
       {items.length === 0 && !adding && (
@@ -352,11 +359,25 @@ export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
             </div>
           )}
         </div>
-        {canEdit && !adding && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
-            <I.plus size={13} /> Gast hinzufügen
-          </button>
-        )}
+        <div className="row gap-2">
+          {attendees.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => {
+              const rows = [['Name','Email','Unternehmen','Rolle','Status'],
+                ...attendees.map(a => [a.name, a.email??'', a.company??'', a.role, a.status])];
+              const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+              a.download = 'gaesteliste.csv'; a.click();
+            }}>
+              ⬇️ CSV
+            </button>
+          )}
+          {canEdit && !adding && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+              <I.plus size={13} /> Gast hinzufügen
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Luma sync */}

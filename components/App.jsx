@@ -136,8 +136,15 @@ export function App() {
     return () => { window.removeEventListener('keydown', onKey); clearTimeout(gTimer.current); };
   }, [setCmdkOpen, cmdkOpen, setRoute, showOnboarding]);
 
-  // Reflect workspace as a data-brand on <body> so the brand CSS variables
-  // in styles.css (which key off [data-brand]) light up the right palette.
+  // Restore dark mode preference on mount
+  useEffect(() => {
+    try {
+      const surface = localStorage.getItem('cc.surface');
+      if (surface) document.body.dataset.ccSurface = surface;
+    } catch {}
+  }, []);
+
+  // Reflect workspace as a data-brand on <body>
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (workspace) document.body.dataset.brand = workspace;

@@ -20,12 +20,13 @@ export function SettingsScreen() {
   const [section, setSection] = useState('profile');
 
   const sections = [
-    { id: 'profile',   label: 'Mein Profil',  icon: <I.user size={14} /> },
-    { id: 'workspace', label: 'Workspace',     icon: <I.folder size={14} /> },
-    { id: 'members',   label: 'Team & Roles',  icon: <I.team size={14} /> },
-    { id: 'slack',     label: 'Slack',         icon: <I.slack size={14} /> },
-    { id: 'notifs',    label: 'Notifications', icon: <I.bell size={14} /> },
-    { id: 'brand',     label: 'Brand Colors',  icon: <I.flag size={14} /> },
+    { id: 'profile',    label: 'Mein Profil',   icon: <I.user size={14} /> },
+    { id: 'appearance', label: 'Darstellung',   icon: <I.zap size={14} /> },
+    { id: 'workspace',  label: 'Workspace',     icon: <I.folder size={14} /> },
+    { id: 'members',    label: 'Team & Roles',  icon: <I.team size={14} /> },
+    { id: 'slack',      label: 'Slack',         icon: <I.slack size={14} /> },
+    { id: 'notifs',     label: 'Notifications', icon: <I.bell size={14} /> },
+    { id: 'brand',      label: 'Brand Colors',  icon: <I.flag size={14} /> },
   ];
 
   if (!brand) return null;
@@ -52,8 +53,9 @@ export function SettingsScreen() {
         </nav>
 
         <div>
-          {section === 'profile'   && <ProfileSection me={me} />}
-          {section === 'slack'     && <SlackSection />}
+          {section === 'profile'    && <ProfileSection me={me} />}
+          {section === 'appearance' && <AppearanceSection />}
+          {section === 'slack'      && <SlackSection />}
           {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
           {section === 'members'   && <MembersSection myRole={myRole} />}
           {section === 'notifs'    && <NotifsSection />}
@@ -590,6 +592,90 @@ function ProfileSection({ me }) {
         >
           {status === 'saving' ? 'Wird gespeichert…' : 'Profil speichern'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Darstellung ───────────────────────────────────────────────────────────
+
+const SURFACES = [
+  { value: '',       label: 'Light',  desc: 'Helles, klassisches Interface', preview: '#f5f5f0' },
+  { value: 'carbon', label: 'Dark',   desc: 'Dunkles Interface für Low-Light', preview: '#0e1014' },
+];
+
+const DENSITIES = [
+  { value: '',        label: 'Normal',   desc: 'Standard-Abstände' },
+  { value: 'compact', label: 'Kompakt',  desc: 'Dichtere Ansicht für mehr Inhalt' },
+];
+
+function AppearanceSection() {
+  const [surface,  setSurface]  = useState(() => { try { return localStorage.getItem('cc.surface') ?? ''; } catch { return ''; } });
+  const [density,  setDensity]  = useState(() => { try { return localStorage.getItem('cc.density') ?? ''; } catch { return ''; } });
+
+  const applySurface = (val) => {
+    setSurface(val);
+    try { localStorage.setItem('cc.surface', val); } catch {}
+    if (val) document.body.dataset.ccSurface = val;
+    else delete document.body.dataset.ccSurface;
+  };
+
+  const applyDensity = (val) => {
+    setDensity(val);
+    try { localStorage.setItem('cc.density', val); } catch {}
+    if (val) document.body.dataset.ccDensity = val;
+    else delete document.body.dataset.ccDensity;
+  };
+
+  return (
+    <div className="col gap-6">
+      <div>
+        <div className="h3 mb-1">Darstellung</div>
+        <div className="meta">Persönliche Präferenzen — nur für dich, nicht workspace-weit.</div>
+      </div>
+
+      {/* Theme */}
+      <div>
+        <div className="label mb-3">Farbschema</div>
+        <div className="row gap-3">
+          {SURFACES.map(s => (
+            <div key={s.value}
+              onClick={() => applySurface(s.value)}
+              style={{
+                flex: 1, padding: '14px', borderRadius: 10, cursor: 'pointer',
+                border: `2px solid ${surface === s.value ? 'var(--brand)' : 'var(--border-soft)'}`,
+                background: surface === s.value ? 'var(--brand-soft)' : 'var(--bg-sunk)',
+                transition: 'border-color 0.1s',
+              }}>
+              <div style={{ width: '100%', height: 48, borderRadius: 8, background: s.preview, marginBottom: 10, border: '1px solid var(--border-soft)' }} />
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Density */}
+      <div>
+        <div className="label mb-3">Dichte</div>
+        <div className="row gap-3">
+          {DENSITIES.map(d => (
+            <div key={d.value}
+              onClick={() => applyDensity(d.value)}
+              style={{
+                flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                border: `2px solid ${density === d.value ? 'var(--brand)' : 'var(--border-soft)'}`,
+                background: density === d.value ? 'var(--brand-soft)' : 'var(--bg-sunk)',
+              }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{d.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{d.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="meta" style={{ background: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12 }}>
+        💡 Änderungen werden sofort übernommen und beim nächsten Öffnen wiederhergestellt.
       </div>
     </div>
   );

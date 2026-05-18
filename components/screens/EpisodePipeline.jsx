@@ -40,7 +40,7 @@ const STATUS_LABEL = {
 
 // ── Droppable column ──────────────────────────────────────────────────────
 
-function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange, onOpenEpisode }) {
+function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange, onOpenEpisode, selectedIds, onToggleSelect }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
 
   return (
@@ -92,6 +92,8 @@ function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange, o
             isDragging={ep.id === activeId}
             colAccent={col.accent}
             onOpen={onOpenEpisode ? () => onOpenEpisode(ep.id) : null}
+            selected={selectedIds?.has(ep.id)}
+            onToggleSelect={onToggleSelect}
           />
         ))}
         {episodes.length === 0 && (
@@ -106,15 +108,15 @@ function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange, o
 
 // ── Draggable episode card ────────────────────────────────────────────────
 
-function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false, onOpen }) {
+function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false, onOpen, selected, onToggleSelect }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: ep.id });
 
   const style = {
     transform: transform ? `translate(${transform.x}px,${transform.y}px)` : undefined,
     opacity: isDragging && !overlay ? 0.35 : 1,
     cursor: overlay ? 'grabbing' : 'grab',
-    background: 'var(--bg)',
-    border: `1px solid ${overlay ? colAccent : 'var(--border)'}`,
+    background: selected ? 'var(--brand-soft)' : 'var(--bg)',
+    border: `1px solid ${selected ? 'var(--brand)' : overlay ? colAccent : 'var(--border)'}`,
     borderRadius: 7,
     padding: '9px 11px',
     fontSize: 13,
@@ -124,6 +126,14 @@ function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false, onOp
 
   const inner = (
     <>
+      {onToggleSelect && !overlay && (
+        <div style={{ marginBottom: 4 }}>
+          <input type="checkbox" checked={!!selected}
+            onChange={(e) => { e.stopPropagation(); onToggleSelect(ep.id); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ accentColor: 'var(--brand)' }} />
+        </div>
+      )}
       <div className="row gap-2 mb-1" style={{ justifyContent: 'space-between' }}>
         {ep.num != null
           ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', background: 'var(--bg-sunk)', borderRadius: 4, padding: '1px 6px' }}>Ep. {ep.num}</span>
@@ -215,8 +225,24 @@ export function EpisodePipelineScreen({ setRoute, embedded = false, onOpenEpisod
     updateEpisodeInCache,
   } = useWorkspace();
 
-  const [activeEp, setActiveEp] = useState(null);   // episode being dragged
-  const [addingTo, setAddingTo] = useState(null);    // column id for new episode form
+  const [activeEp,    setActiveEp]    = useState(null);
+  const [addingTo,    setAddingTo]    = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
+
+  const toggleSelect = (id) => setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const bulkMove = async (toStatus) => {
+    setBulkPending(true);
+    await Promise.all([...selectedIds].map(id => {
+      const ep = (data.episodes ?? []).find(e => e.id === id);
+      if (!ep || ep.status === toStatus) return Promise.resolve();
+      updateEpisodeInCache(id, { status: toStatus });
+      return updateEpisode({ episodeId: id, workspaceId, patch: { status: toStatus } });
+    }));
+    setBulkPending(false);
+    setSelectedIds(new Set());
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -304,6 +330,8 @@ export function EpisodePipelineScreen({ setRoute, embedded = false, onOpenEpisod
                 workspaceId={workspaceId}
                 onStatusChange={() => {}}
                 onOpenEpisode={onOpenEpisode}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
               />
               {addingTo === col.id && (
                 <div style={{ background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
@@ -326,6 +354,28 @@ export function EpisodePipelineScreen({ setRoute, embedded = false, onOpenEpisod
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-elev)', border: '1px solid var(--border)',
+          borderRadius: 12, padding: '10px 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          display: 'flex', alignItems: 'center', gap: 10, zIndex: 200,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedIds.size} ausgewählt</span>
+          {COLS.map(c => (
+            <button key={c.id} className="btn btn-ghost btn-sm"
+              onClick={() => bulkMove(c.id)} disabled={bulkPending}
+              style={{ fontSize: 12 }}>
+              {c.icon} → {c.label}
+            </button>
+          ))}
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
+            <I.x size={11} />
+          </button>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="row gap-4 mt-2" style={{ flexWrap: 'wrap' }}>

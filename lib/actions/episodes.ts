@@ -123,3 +123,44 @@ export async function updateEpisode(input: {
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: { id: input.episodeId } };
 }
+
+export async function duplicateEpisode(input: {
+  episodeId: string;
+  workspaceId: string;
+}): Promise<ActionResult<EpisodeView>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MEMBER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+
+  const { data: src } = await supabase
+    .from('podcast_episodes').select('*').eq('id', input.episodeId).single();
+  if (!src) return { ok: false, error: 'Episode nicht gefunden.' };
+
+  const { data, error } = await supabase
+    .from('podcast_episodes')
+    .insert({
+      workspace_id:   src.workspace_id,
+      title:          `${src.title} (Kopie)`,
+      episode_number: null,
+      guest:          src.guest,
+      status:         'idea',
+      has_video:      src.has_video,
+      description:    src.description,
+      show_notes:     src.show_notes,
+      episode_meta:   src.episode_meta,
+    })
+    .select().single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  return {
+    ok: true,
+    data: {
+      id: data.id, workspace: input.workspaceId,
+      num: null, title: data.title, guest: data.guest ?? '',
+      date: '', duration: '—', downloads: 0, status: data.status,
+      hasVideo: !!data.has_video, description: data.description ?? undefined,
+    },
+  };
+}
