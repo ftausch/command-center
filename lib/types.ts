@@ -172,6 +172,8 @@ export interface EventMeta {
   partnerSponsor?: string;
   landingPageUrl?: string;
   signupUrl?: string;
+  lumaUrl?: string;        // canonical lu.ma event URL
+  lumaEventId?: string;    // Luma API event ID (api_id)
   expectedAttendees?: number;
   format?: string;
   budget?: BudgetItem[];

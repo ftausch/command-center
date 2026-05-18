@@ -9,7 +9,7 @@ import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { I } from '@/components/icons';
 import { daysUntil, dueLabel, projectProgress, eventHealthScore, eventHealthColor } from '@/lib/utils';
 import { NewEventModal } from '@/components/NewEventModal';
-import { HealthBadge } from '@/components/EventOps';
+import { HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
 
 const EVENT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 
@@ -256,6 +256,9 @@ export function EventHubScreen({ setRoute }) {
                         )}
                         <span>📋 {data.tasks.filter(t => t.projectId === p.id && t.status !== 'Done').length} offen</span>
                         {p.slackChannel && <span>💬 {p.slackChannel}</span>}
+                        {(p.eventMeta?.lumaUrl || p.eventMeta?.signupUrl?.includes('lu.ma')) && (
+                          <LumaRsvpBadge lumaUrl={p.eventMeta.lumaUrl ?? p.eventMeta.signupUrl} />
+                        )}
                       </div>
                       {progress > 0 && (
                         <div style={{ marginTop: 8, height: 3, background: 'var(--border-soft)', borderRadius: 2 }}>

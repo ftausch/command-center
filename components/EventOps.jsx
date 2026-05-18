@@ -13,6 +13,7 @@ import {
   listApprovals, createApproval, updateApproval, deleteApproval,
   listDecisions, createDecision, deleteDecision,
 } from '@/lib/actions/event-ops';
+import { syncLumaGuests, getLumaRsvpCount } from '@/lib/actions/luma';
 import { updateProject } from '@/lib/actions/projects';
 import { CAN } from '@/lib/roles';
 
@@ -269,12 +270,15 @@ const ATTENDEE_ROLES = ['attendee','speaker','vip','partner_guest','team'];
 const ATTENDEE_STATUSES = ['invited','confirmed','checked_in','no_show','cancelled'];
 const ROLE_LABELS = { attendee: 'Teilnehmer', speaker: 'Speaker', vip: 'VIP', partner_guest: 'Partner-Gast', team: 'Team' };
 
-export function AttendeeList({ projectId, workspaceId, canEdit }) {
+export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
   const [attendees, setAttendees] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [adding, setAdding]       = useState(false);
   const [pending, setPending]     = useState(null);
   const [draft, setDraft]         = useState({ name: '', email: '', company: '', role: 'attendee', status: 'invited' });
+  const [lumaInput, setLumaInput] = useState(lumaUrl ?? '');
+  const [lumaSyncing, setLumaSyncing] = useState(false);
+  const [lumaResult, setLumaResult]   = useState(null);
 
   useEffect(() => {
     listAttendees(workspaceId, projectId).then((d) => { setAttendees(d); setLoading(false); });
@@ -298,6 +302,19 @@ export function AttendeeList({ projectId, workspaceId, canEdit }) {
     const r = await deleteAttendee({ workspaceId, attendeeId: id });
     setPending(null);
     if (r.ok) setAttendees((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  const onLumaSync = async () => {
+    const url = lumaInput.trim();
+    if (!url) return;
+    setLumaSyncing(true);
+    setLumaResult(null);
+    const r = await syncLumaGuests({ workspaceId, projectId, lumaUrl: url });
+    setLumaSyncing(false);
+    if (!r.ok) { setLumaResult({ ok: false, text: r.error }); return; }
+    setLumaResult({ ok: true, text: `${r.data.imported} importiert, ${r.data.skipped} bereits vorhanden` });
+    // Refresh list
+    listAttendees(workspaceId, projectId).then(setAttendees);
   };
 
   const counts = {
@@ -329,6 +346,44 @@ export function AttendeeList({ projectId, workspaceId, canEdit }) {
           </button>
         )}
       </div>
+
+      {/* Luma sync */}
+      {canEdit && (
+        <div style={{ background: 'var(--bg-sunk)', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#e8780a', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Von Luma importieren
+          </div>
+          <div className="row gap-2">
+            <input
+              className="input"
+              placeholder="https://lu.ma/dein-event"
+              value={lumaInput}
+              onChange={(e) => { setLumaInput(e.target.value); setLumaResult(null); }}
+              onKeyDown={(e) => e.key === 'Enter' && onLumaSync()}
+              disabled={lumaSyncing}
+              style={{ flex: 1, fontSize: 12.5 }}
+            />
+            <button
+              className="btn btn-sm"
+              type="button"
+              onClick={onLumaSync}
+              disabled={!lumaInput.trim() || lumaSyncing}
+              style={{ background: '#e8780a', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
+            >
+              {lumaSyncing ? '…' : 'Sync'}
+            </button>
+          </div>
+          {lumaResult && (
+            <div style={{
+              marginTop: 6, fontSize: 12, padding: '4px 8px', borderRadius: 5,
+              color: lumaResult.ok ? 'var(--success)' : 'var(--danger)',
+              background: lumaResult.ok ? '#f0fdf4' : 'var(--danger-bg)',
+            }}>
+              {lumaResult.ok ? '✓ ' : '✗ '}{lumaResult.text}
+            </div>
+          )}
+        </div>
+      )}
 
       {attendees.length === 0 && !adding && (
         <EmptyOps
@@ -1070,7 +1125,45 @@ export function DecisionLog({ projectId, workspaceId, canEdit, members = [] }) {
   );
 }
 
-// ── G) Event Health Badge ──────────────────────────────────────────────────
+// ── G) Luma RSVP Badge ────────────────────────────────────────────────────
+
+export function LumaRsvpBadge({ lumaUrl }) {
+  const [count, setCount]     = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!lumaUrl) { setLoading(false); return; }
+    getLumaRsvpCount(lumaUrl).then((r) => {
+      setLoading(false);
+      if (r.ok) setCount(r.data.count);
+    });
+  }, [lumaUrl]);
+
+  if (!lumaUrl) return null;
+
+  return (
+    <a
+      href={lumaUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        fontSize: 12.5, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+        background: '#fff4e6', color: '#e8780a',
+        textDecoration: 'none', border: '1px solid #fed7aa',
+        transition: 'opacity 0.1s',
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+    >
+      <span>🎟</span>
+      {loading ? '…' : count !== null ? `${count} Anmeldungen` : 'Auf Luma öffnen'}
+      <span style={{ fontSize: 10, opacity: 0.7 }}>↗</span>
+    </a>
+  );
+}
+
+// ── H) Event Health Badge ──────────────────────────────────────────────────
 
 export function HealthBadge({ score, reasons = [], size = 'md' }) {
   const [showTip, setShowTip] = useState(false);

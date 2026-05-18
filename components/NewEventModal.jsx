@@ -8,6 +8,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
 import { applyEventTemplate } from '@/lib/actions/templates';
+import { fetchLumaEventPreview } from '@/lib/actions/luma';
 import { EVENT_TEMPLATE_LIST } from '@/lib/event-templates';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
 
@@ -35,6 +36,10 @@ export function NewEventModal({ open, onClose, onCreated }) {
   const [channelName,   setChannelName]   = useState('');
   const [status,        setStatus]        = useState('idle');
   const [errorMsg,      setErrorMsg]      = useState(null);
+  const [lumaUrl,       setLumaUrl]       = useState('');
+  const [lumaEventId,   setLumaEventId]   = useState('');
+  const [lumaImporting, setLumaImporting] = useState(false);
+  const [lumaMsg,       setLumaMsg]       = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -43,6 +48,7 @@ export function NewEventModal({ open, onClose, onCreated }) {
     setLandingPage(''); setSignupUrl(''); setPriority('Medium');
     setDescription(''); setTemplateId(''); setSetupSlack(false);
     setChannelName(''); setStatus('idle'); setErrorMsg(null);
+    setLumaUrl(''); setLumaEventId(''); setLumaImporting(false); setLumaMsg(null);
     submittingRef.current = false;
     idempotencyId.current = crypto.randomUUID();
   }, [open]);
@@ -61,6 +67,23 @@ export function NewEventModal({ open, onClose, onCreated }) {
   }, [open, status, onClose]);
 
   if (!open) return null;
+
+  const onLumaImport = async () => {
+    if (!lumaUrl.trim()) return;
+    setLumaImporting(true);
+    setLumaMsg(null);
+    const r = await fetchLumaEventPreview(lumaUrl.trim());
+    setLumaImporting(false);
+    if (!r.ok) { setLumaMsg({ type: 'error', text: r.error }); return; }
+    const d = r.data;
+    if (d.name)       setName(d.name);
+    if (d.location)   setLocation(d.location);
+    if (d.eventDate)  setEventDate(d.eventDate.slice(0, 16)); // datetime-local format
+    if (lumaUrl.trim()) setLandingPage(lumaUrl.trim());
+    if (lumaUrl.trim()) setSignupUrl(lumaUrl.trim());
+    if (d.lumaEventId) setLumaEventId(d.lumaEventId);
+    setLumaMsg({ type: 'success', text: `✓ ${d.name} importiert${d.guestCount ? ` · ${d.guestCount} Anmeldungen` : ''}` });
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -85,6 +108,8 @@ export function NewEventModal({ open, onClose, onCreated }) {
         partnerSponsor:   partner.trim() || undefined,
         landingPageUrl:   landingPage.trim() || undefined,
         signupUrl:        signupUrl.trim() || undefined,
+        lumaUrl:          lumaUrl.trim() || undefined,
+        lumaEventId:      lumaEventId || undefined,
         format:           eventType,
       },
     });
@@ -156,6 +181,44 @@ export function NewEventModal({ open, onClose, onCreated }) {
         </div>
 
         <form onSubmit={onSubmit} className="col gap-3">
+
+          {/* Luma Import */}
+          <div style={{ background: 'var(--bg-sunk)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#e8780a', marginBottom: 8 }}>
+              Von Luma importieren
+            </div>
+            <div className="row gap-2">
+              <input
+                className="input"
+                type="url"
+                placeholder="https://lu.ma/dein-event"
+                value={lumaUrl}
+                onChange={(e) => { setLumaUrl(e.target.value); setLumaMsg(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onLumaImport())}
+                disabled={lumaImporting || status === 'submitting'}
+                style={{ flex: 1, fontSize: 13 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={onLumaImport}
+                disabled={!lumaUrl.trim() || lumaImporting || status === 'submitting'}
+                style={{ background: '#e8780a', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
+              >
+                {lumaImporting ? '…' : 'Importieren'}
+              </button>
+            </div>
+            {lumaMsg && (
+              <div style={{
+                marginTop: 8, fontSize: 12.5, borderRadius: 6, padding: '5px 8px',
+                color: lumaMsg.type === 'error' ? 'var(--danger)' : 'var(--success)',
+                background: lumaMsg.type === 'error' ? 'var(--danger-bg)' : '#f0fdf4',
+              }}>
+                {lumaMsg.text}
+              </div>
+            )}
+          </div>
+
           {/* Name */}
           <input
             className="input" type="text"

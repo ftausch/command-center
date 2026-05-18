@@ -16,7 +16,7 @@ import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
-import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, HealthBadge } from '@/components/EventOps';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -625,6 +625,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 projectId={projectId}
                 workspaceId={workspaceId}
                 canEdit={CAN.editProject(myRole)}
+                lumaUrl={project.eventMeta?.lumaUrl ?? project.eventMeta?.signupUrl ?? ''}
               />
             </div>
           )}
@@ -821,6 +822,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                   )}
                   {!project.eventMeta?.eventDate && !project.eventMeta?.location && (
                     <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Noch keine Event-Details eingetragen.</div>
+                  )}
+                  {/* Luma RSVP counter */}
+                  {(project.eventMeta?.lumaUrl || project.eventMeta?.signupUrl?.includes('lu.ma')) && (
+                    <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-soft)', marginTop: 4 }}>
+                      <LumaRsvpBadge lumaUrl={project.eventMeta.lumaUrl ?? project.eventMeta.signupUrl} />
+                    </div>
                   )}
                 </div>
               </div>
