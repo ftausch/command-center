@@ -30,6 +30,7 @@ import { EventHubScreen } from '@/components/screens/EventHub';
 import { EventPipelineScreen } from '@/components/screens/EventPipeline';
 import { PartnersScreen } from '@/components/screens/Partners';
 import { AssistantHubScreen } from '@/components/screens/AssistantHub';
+import { ShortcutOverlay } from '@/components/ShortcutOverlay';
 import { OpsHealthScreen } from '@/components/screens/OpsHealth';
 import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
 import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
@@ -52,6 +53,7 @@ export function App() {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const gPending = useRef(false);
   const gTimer = useRef(null);
@@ -100,6 +102,9 @@ export function App() {
 
       // 'h' — health dashboard
       if (e.key === 'h') { e.preventDefault(); setRoute('ops-health'); return; }
+
+      // '?' — shortcuts overlay
+      if (e.key === '?') { e.preventDefault(); setShortcutsOpen(true); return; }
 
       // 'p' — podcast hub
       if (e.key === 'P' && e.shiftKey) { e.preventDefault(); setRoute('podcast'); return; }
@@ -316,6 +321,7 @@ export function App() {
         projectId={drawerTask?.projectId ?? null}
         onClose={() => setDrawerTask(null)}
       />
+      {shortcutsOpen && <ShortcutOverlay onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }

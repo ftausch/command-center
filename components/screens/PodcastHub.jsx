@@ -9,6 +9,7 @@ import { generateMarketingPackage } from '@/lib/actions/podcast';
 import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
 import { createTask } from '@/lib/actions/tasks';
 import { listGuests, createGuest, updateGuest, deleteGuest } from '@/lib/actions/guests';
+import { listNewsletterIssues, createNewsletterIssue, updateNewsletterIssue, deleteNewsletterIssue } from '@/lib/actions/newsletter';
 import { EpisodePipelineScreen } from '@/components/screens/EpisodePipeline';
 import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 
@@ -96,7 +97,8 @@ export function PodcastHubScreen({ setRoute }) {
     { id: 'episodes',     label: 'Episoden',        icon: <I.mic size={12} />    },
     { id: 'pipeline',     label: 'Pipeline',        icon: <I.kanban size={12} /> },
     { id: 'guests',       label: 'Gäste-CRM',       icon: <I.user size={12} />   },
-    { id: 'publishing',   label: 'Publishing',      icon: <I.send size={12} />   },
+    { id: 'newsletter',   label: 'Newsletter',      icon: <I.send size={12} />   },
+    { id: 'publishing',   label: 'Publishing',      icon: <I.radio size={12} />  },
     { id: 'analytics',    label: 'Analytics',       icon: <I.trend size={12} />  },
     { id: 'transcripts',  label: 'Transkript · KI', icon: <I.doc size={12} />    },
     { id: 'distribution', label: 'Distribution',    icon: <I.radio size={12} />  },
@@ -149,6 +151,7 @@ export function PodcastHubScreen({ setRoute }) {
       {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} setTab={setTab} onOpenEpisode={setDrawerEpId} />}
       {tab === 'pipeline'     && <EpisodePipelineScreen setRoute={setRoute} embedded onOpenEpisode={setDrawerEpId} />}
       {tab === 'guests'       && <GuestCRMTab workspaceId={currentWorkspaceId} />}
+      {tab === 'newsletter'   && <NewsletterTab workspaceId={currentWorkspaceId} />}
       {tab === 'publishing'   && <PublishingDashboardTab episodes={episodes} workspaceId={currentWorkspaceId} onOpenEpisode={setDrawerEpId} />}
 
       <EpisodeDrawer episodeId={drawerEpId} onClose={() => setDrawerEpId(null)} />
@@ -1964,6 +1967,176 @@ function PublishingDashboardTab({ episodes, workspaceId, onOpenEpisode }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab — Newsletter
+// ═══════════════════════════════════════════════════════════════════════════
+
+const NL_STATUS = {
+  idea:      { label:'Idee',       color:'var(--text-3)',  icon:'💡' },
+  draft:     { label:'Entwurf',    color:'var(--info)',    icon:'✏️' },
+  review:    { label:'Review',     color:'var(--warning)', icon:'👀' },
+  scheduled: { label:'Geplant',    color:'var(--brand)',   icon:'📅' },
+  sent:      { label:'Versendet',  color:'var(--success)', icon:'✅' },
+};
+
+function NewsletterTab({ workspaceId }) {
+  const [issues, setIssues]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding]   = useState(false);
+  const [pending, setPending] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [draft, setDraft] = useState({ subject:'', issueNumber:'', audience:'', sendDate:'', description:'' });
+
+  useEffect(() => {
+    listNewsletterIssues(workspaceId).then(d => { setIssues(d); setLoading(false); });
+  }, [workspaceId]);
+
+  const onAdd = async (e) => {
+    e.preventDefault();
+    if (!draft.subject.trim()) return;
+    setPending('add');
+    const r = await createNewsletterIssue({
+      workspaceId, subject:draft.subject.trim(),
+      issueNumber: draft.issueNumber ? parseInt(draft.issueNumber) : undefined,
+      audience: draft.audience || undefined,
+      sendDate: draft.sendDate || undefined,
+      description: draft.description || undefined,
+    });
+    setPending(null);
+    if (r.ok && r.data) {
+      setIssues(p => [r.data, ...p]);
+      setDraft({ subject:'', issueNumber:'', audience:'', sendDate:'', description:'' });
+      setAdding(false);
+    }
+  };
+
+  const onStatus = async (issue, status) => {
+    const r = await updateNewsletterIssue({ workspaceId, issueId: issue.id, patch: { status } });
+    if (r.ok && r.data) setIssues(p => p.map(i => i.id === issue.id ? r.data : i));
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteNewsletterIssue({ workspaceId, issueId: id });
+    setPending(null);
+    if (r.ok) setIssues(p => p.filter(i => i.id !== id));
+  };
+
+  const counts = Object.keys(NL_STATUS).reduce((acc, s) => ({ ...acc, [s]: issues.filter(i=>i.status===s).length }), {});
+
+  if (loading) return <div style={{padding:24,color:'var(--text-3)',fontSize:13}}>Wird geladen…</div>;
+
+  return (
+    <div className="col gap-4">
+      {/* Stats */}
+      <div className="row gap-3 wrap">
+        {Object.entries(NL_STATUS).map(([k,v]) => counts[k] > 0 && (
+          <div key={k} className="card card-pad" style={{flex:'1 1 100px'}}>
+            <div style={{fontSize:22,fontWeight:700,color:v.color}}>{counts[k]}</div>
+            <div style={{fontSize:12,color:'var(--text-2)',marginTop:2}}>{v.icon} {v.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="row between items-center">
+        <div className="h3">Newsletter-Ausgaben</div>
+        <button className="btn btn-brand btn-sm" onClick={()=>setAdding(true)}><I.plus size={13}/> Neue Ausgabe</button>
+      </div>
+
+      {adding && (
+        <form onSubmit={onAdd} className="card card-pad col gap-3" style={{border:'1px solid var(--brand)'}}>
+          <div className="h3">Neue Ausgabe</div>
+          <input className="input" placeholder="Betreff *" value={draft.subject}
+            onChange={e=>setDraft({...draft,subject:e.target.value})} autoFocus style={{fontSize:13}}/>
+          <div className="grid gap-2" style={{gridTemplateColumns:'1fr 1fr 1fr'}}>
+            <input className="input" type="number" placeholder="Ausgabe Nr." value={draft.issueNumber}
+              onChange={e=>setDraft({...draft,issueNumber:e.target.value})} style={{fontSize:13}}/>
+            <input className="input" placeholder="Zielgruppe" value={draft.audience}
+              onChange={e=>setDraft({...draft,audience:e.target.value})} style={{fontSize:13}}/>
+            <input type="date" className="input" value={draft.sendDate}
+              onChange={e=>setDraft({...draft,sendDate:e.target.value})} style={{fontSize:13}}/>
+          </div>
+          <textarea className="input" rows={2} placeholder="Notizen (optional)" value={draft.description}
+            onChange={e=>setDraft({...draft,description:e.target.value})} style={{fontSize:13,resize:'vertical'}}/>
+          <div className="row gap-2">
+            <button type="submit" className="btn btn-brand btn-sm" disabled={!draft.subject.trim()||pending==='add'}>{pending==='add'?'…':'Anlegen'}</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setAdding(false)}>Abbrechen</button>
+          </div>
+        </form>
+      )}
+
+      {issues.length === 0 && !adding && (
+        <div style={{textAlign:'center',padding:'40px 0',color:'var(--text-4)',fontSize:13}}>
+          <div style={{fontSize:32,marginBottom:8}}>📧</div>
+          Noch keine Newsletter-Ausgaben. Erstelle die erste Ausgabe um die Produktion zu tracken.
+        </div>
+      )}
+
+      <div className="col gap-2">
+        {issues.map(issue => {
+          const s = NL_STATUS[issue.status] ?? NL_STATUS.idea;
+          const expanded = expandedId === issue.id;
+          return (
+            <div key={issue.id} className="card" style={{overflow:'hidden'}}>
+              <div className="row between items-center" style={{padding:'12px 14px',cursor:'pointer'}}
+                onClick={()=>setExpandedId(expanded?null:issue.id)}>
+                <div className="row gap-3 items-center">
+                  <span style={{fontSize:16,flexShrink:0}}>{s.icon}</span>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:13.5}}>
+                      {issue.issueNumber ? `#${issue.issueNumber} · ` : ''}{issue.subject}
+                    </div>
+                    <div className="row gap-3" style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>
+                      {issue.audience && <span>{issue.audience}</span>}
+                      {issue.sendDate && <span>📅 {issue.sendDate}</span>}
+                      {issue.status==='sent' && issue.openRate && <span style={{color:'var(--success)'}}>📊 {issue.openRate}% Open Rate</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="row gap-2 items-center" onClick={e=>e.stopPropagation()}>
+                  <select className="input" value={issue.status}
+                    onChange={e=>onStatus(issue,e.target.value)}
+                    style={{height:26,fontSize:12,padding:'0 4px',width:120,color:s.color}}>
+                    {Object.entries(NL_STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                  <I.chevronDown size={12} style={{color:'var(--text-3)',transform:expanded?'rotate(180deg)':'',transition:'0.15s'}}/>
+                </div>
+              </div>
+              {expanded && (
+                <div style={{borderTop:'1px solid var(--border-soft)',padding:'10px 14px'}} onClick={e=>e.stopPropagation()}>
+                  {issue.description && <div style={{fontSize:13,color:'var(--text-2)',marginBottom:10}}>{issue.description}</div>}
+                  {issue.status === 'sent' && (
+                    <div className="grid gap-3 mb-3" style={{gridTemplateColumns:'1fr 1fr'}}>
+                      <div>
+                        <div className="label mb-1">Open Rate (%)</div>
+                        <input type="number" className="input" step="0.1" placeholder="z.B. 42.5"
+                          defaultValue={issue.openRate ?? ''}
+                          onBlur={e => updateNewsletterIssue({workspaceId, issueId:issue.id, patch:{openRate:parseFloat(e.target.value)||undefined}}).then(r=>r.ok&&r.data&&setIssues(p=>p.map(i=>i.id===issue.id?r.data:i)))}
+                          style={{height:28,fontSize:12.5}}/>
+                      </div>
+                      <div>
+                        <div className="label mb-1">Click Rate (%)</div>
+                        <input type="number" className="input" step="0.1" placeholder="z.B. 8.3"
+                          defaultValue={issue.clickRate ?? ''}
+                          onBlur={e => updateNewsletterIssue({workspaceId, issueId:issue.id, patch:{clickRate:parseFloat(e.target.value)||undefined}}).then(r=>r.ok&&r.data&&setIssues(p=>p.map(i=>i.id===issue.id?r.data:i)))}
+                          style={{height:28,fontSize:12.5}}/>
+                      </div>
+                    </div>
+                  )}
+                  <button className="btn btn-ghost btn-sm" style={{color:'var(--danger)',fontSize:12}}
+                    onClick={()=>onDelete(issue.id)} disabled={pending===issue.id}>
+                    <I.x size={11}/> Löschen
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

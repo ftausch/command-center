@@ -72,12 +72,48 @@ export function TeamScreen({ setRoute }) {
         onClose={() => setManageMember(null)}
       />
 
-      <div className="grid grid-4 gap-3 mb-6">
+      <div className="grid grid-4 gap-3 mb-4">
         <KPI label="Teammitglieder" value={users.length} trend={`${users.filter((u) => u.online).length} online`} />
-        <KPI label="Offene Tasks" value={tasks.filter((t) => t.status !== 'Done').length} trend="Gesamtauslastung 78%" />
-        <KPI label="Überfällig" value={tasks.filter((t) => t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="auf 2 Personen verteilt" tone="bad" />
-        <KPI label="Ø Tasks pro Person" value={users.length ? Math.round((tasks.filter((t) => t.status !== 'Done').length / users.length) * 10) / 10 : 0} trend="Balance gut" tone="ok" />
+        <KPI label="Offene Tasks" value={tasks.filter((t) => t.status !== 'Done').length} trend="Gesamtauslastung" />
+        <KPI label="Überfällig" value={tasks.filter((t) => t.status !== 'Done' && daysUntil(t.due) < 0).length} trend="braucht Aufmerksamkeit" tone="bad" />
+        <KPI label="Ø Tasks pro Person" value={users.length ? Math.round((tasks.filter((t) => t.status !== 'Done').length / users.length) * 10) / 10 : 0} trend="Verteilung" tone="ok" />
       </div>
+
+      {/* Capacity overview bar */}
+      {users.length > 0 && (
+        <div className="card card-pad mb-5">
+          <div className="h3 mb-3">📊 Team-Kapazität</div>
+          <div className="col gap-3">
+            {users.map((u) => {
+              const w = workloadByUser[u.id] ?? { total: 0, podcast: 0, events: 0, general: 0 };
+              const pct = Math.min(100, w.total * 10);
+              const color = pct > 80 ? 'var(--danger)' : pct > 60 ? 'var(--warning)' : 'var(--success)';
+              return (
+                <div key={u.id} className="row gap-3 items-center">
+                  <div style={{ width: 120, fontSize: 13, fontWeight: 500, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u.name.split(' ')[0]}
+                  </div>
+                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border-soft)', overflow: 'hidden', display: 'flex' }}>
+                    {w.podcast > 0 && <div style={{ width: Math.min(100, w.podcast * 10) + '%', background: 'var(--brand)' }} />}
+                    {w.events  > 0 && <div style={{ width: Math.min(100, w.events  * 10) + '%', background: '#e8780a' }} />}
+                    {w.general > 0 && <div style={{ width: Math.min(100, w.general * 10) + '%', background: 'var(--info)' }} />}
+                  </div>
+                  <div className="row gap-2 items-center" style={{ minWidth: 90, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color }}>{w.total} Tasks</span>
+                    {pct > 80 && <span style={{ fontSize: 10, color: 'var(--danger)' }}>ausgelastet</span>}
+                    {w.total === 0 && <span style={{ fontSize: 10, color: 'var(--success)' }}>frei</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="row gap-3 mt-3" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+            <span><span style={{ display:'inline-block',width:10,height:10,borderRadius:2,background:'var(--brand)',marginRight:4 }}/>Podcast</span>
+            <span><span style={{ display:'inline-block',width:10,height:10,borderRadius:2,background:'#e8780a',marginRight:4 }}/>Events</span>
+            <span><span style={{ display:'inline-block',width:10,height:10,borderRadius:2,background:'var(--info)',marginRight:4 }}/>Allgemein</span>
+          </div>
+        </div>
+      )}
 
       {users.length === 0 && (
         <div className="card" style={{ padding: '40px 24px', textAlign: 'center' }}>
@@ -156,12 +192,41 @@ export function TeamScreen({ setRoute }) {
               )}
 
               <div className="mb-3">
-                <div className="row between" style={{ marginBottom: 6 }}>
-                  <span className="label">Workload</span>
-                  <span className="mono" style={{ fontSize: 11.5, color: overLoaded ? 'var(--danger)' : 'var(--text-3)' }}>{load}%</span>
+                <div className="row between items-center" style={{ marginBottom: 6 }}>
+                  <span className="label">Kapazität</span>
+                  <div className="row gap-2 items-center">
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 10,
+                      background: overLoaded ? 'var(--danger-bg)' : load > 60 ? '#fffbeb' : '#f0fdf4',
+                      color: overLoaded ? 'var(--danger)' : load > 60 ? 'var(--warning)' : 'var(--success)',
+                    }}>
+                      {overLoaded ? '🔴 Ausgelastet' : load > 60 ? '🟡 Hoch' : '🟢 OK'}
+                    </span>
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-4)' }}>{open.length} Tasks</span>
+                  </div>
                 </div>
-                <div className="progress" style={{ height: 5 }}>
-                  <div className="progress-bar" style={{ width: load + '%', background: overLoaded ? 'var(--danger)' : load > 60 ? 'var(--warning)' : 'var(--brand)' }} />
+                {/* Stacked workload bar */}
+                <div style={{ height: 8, borderRadius: 4, background: 'var(--border-soft)', overflow: 'hidden', display: 'flex' }}>
+                  {(() => {
+                    const w = workloadByUser[u.id] ?? {};
+                    const total = Math.max(w.total || open.length, 1);
+                    const maxDisplay = 10; // 10 tasks = 100%
+                    const pPod = Math.min(100, (w.podcast / maxDisplay) * 100);
+                    const pEvt = Math.min(100, (w.events  / maxDisplay) * 100);
+                    const pGen = Math.min(100, (w.general / maxDisplay) * 100);
+                    return (
+                      <>
+                        {pPod > 0 && <div style={{ width: pPod + '%', background: 'var(--brand)', transition: 'width 0.3s' }} />}
+                        {pEvt > 0 && <div style={{ width: pEvt + '%', background: '#e8780a', transition: 'width 0.3s' }} />}
+                        {pGen > 0 && <div style={{ width: pGen + '%', background: 'var(--info)', transition: 'width 0.3s' }} />}
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="row gap-3 mt-1" style={{ fontSize: 10.5, color: 'var(--text-4)' }}>
+                  {workloadByUser[u.id]?.podcast > 0 && <span style={{ color: 'var(--brand)' }}>🎙 {workloadByUser[u.id].podcast}</span>}
+                  {workloadByUser[u.id]?.events  > 0 && <span style={{ color: '#e8780a' }}>🎪 {workloadByUser[u.id].events}</span>}
+                  {workloadByUser[u.id]?.general > 0 && <span style={{ color: 'var(--info)' }}>📋 {workloadByUser[u.id].general}</span>}
                 </div>
               </div>
 
