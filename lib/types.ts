@@ -175,6 +175,63 @@ export interface EventMeta {
   expectedAttendees?: number;
   format?: string;
   budget?: BudgetItem[];
+  pipelineStage?: string;
+  recapChecklist?: Record<string, boolean>;
+}
+
+// ── Event Operations ─────────────────────────────────────────────────────
+
+export type AgendaStatus = 'planned' | 'active' | 'done' | 'skipped';
+export type AttendeeRole = 'attendee' | 'speaker' | 'vip' | 'partner_guest' | 'team';
+export type AttendeeStatus = 'invited' | 'confirmed' | 'checked_in' | 'no_show' | 'cancelled';
+export type PartnerStatus =
+  | 'lead' | 'contacted' | 'call_scheduled' | 'offer_sent'
+  | 'confirmed' | 'active' | 'recap_sent' | 'closed';
+export type InvoiceStatus = 'pending' | 'sent' | 'paid' | 'cancelled';
+export type EventHealthScore = 'green' | 'yellow' | 'red';
+
+export interface EventAgendaItem {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  sortOrder: number;
+  timeLabel: string;
+  title: string;
+  description?: string;
+  ownerId?: string;
+  location?: string;
+  status: AgendaStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface EventAttendee {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  name: string;
+  email?: string;
+  company?: string;
+  role: AttendeeRole;
+  status: AttendeeStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface EventPartner {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  status: PartnerStatus;
+  package?: string;
+  deliverables?: string;
+  logoReceived: boolean;
+  invoiceStatus: InvoiceStatus;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface ProjectView {

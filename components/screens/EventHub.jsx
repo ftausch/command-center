@@ -7,8 +7,9 @@ import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { I } from '@/components/icons';
-import { daysUntil, dueLabel, projectProgress } from '@/lib/utils';
+import { daysUntil, dueLabel, projectProgress, eventHealthScore } from '@/lib/utils';
 import { NewEventModal } from '@/components/NewEventModal';
+import { HealthBadge } from '@/components/EventOps';
 
 const EVENT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 
@@ -223,7 +224,9 @@ export function EventHubScreen({ setRoute }) {
             ) : (
               <div className="col gap-2">
                 {upcoming.map((p) => {
-                  const progress = projectProgress(data.tasks.filter(t => t.projectId === p.id));
+                  const projTasks = data.tasks.filter(t => t.projectId === p.id);
+                  const progress  = projectProgress(projTasks);
+                  const health    = eventHealthScore(p, projTasks);
                   const d = daysUntil(p.due);
                   return (
                     <div
@@ -240,7 +243,10 @@ export function EventHubScreen({ setRoute }) {
                     >
                       <div className="row between mb-1">
                         <span style={{ fontSize: 13.5, fontWeight: 600 }}>{p.name}</span>
-                        <StatusBadge status={p.status} />
+                        <div className="row gap-2">
+                          <HealthBadge score={health.score} reasons={health.reasons} size="sm" />
+                          <StatusBadge status={p.status} />
+                        </div>
                       </div>
                       <div className="row gap-3" style={{ fontSize: 12, color: 'var(--text-3)' }}>
                         {p.due && (

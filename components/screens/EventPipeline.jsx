@@ -6,7 +6,8 @@ import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Badge, PriorityBadge, StatusBadge } from '@/components/ui';
 import { I } from '@/components/icons';
-import { daysUntil, dueLabel, projectProgress } from '@/lib/utils';
+import { daysUntil, dueLabel, projectProgress, eventHealthScore } from '@/lib/utils';
+import { HealthBadge } from '@/components/EventOps';
 import { changeProjectStatus } from '@/lib/actions/projects';
 
 const PIPELINE_COLS = [
@@ -37,9 +38,11 @@ function statusToCol(project) {
 }
 
 function EventCard({ project, tasks, onOpen }) {
-  const openTasks  = tasks.filter((t) => t.projectId === project.id && t.status !== 'Done');
-  const progress   = projectProgress(tasks.filter((t) => t.projectId === project.id));
+  const projTasks  = tasks.filter((t) => t.projectId === project.id);
+  const openTasks  = projTasks.filter((t) => t.status !== 'Done');
+  const progress   = projectProgress(projTasks);
   const d          = project.due ? daysUntil(project.due) : null;
+  const health     = eventHealthScore(project, projTasks);
 
   return (
     <div
@@ -55,8 +58,11 @@ function EventCard({ project, tasks, onOpen }) {
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; }}
     >
-      {/* Name */}
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, lineHeight: 1.3 }}>{project.name}</div>
+      {/* Name + health */}
+      <div className="row between items-start" style={{ marginBottom: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, flex: 1, marginRight: 6 }}>{project.name}</div>
+        <HealthBadge score={health.score} reasons={health.reasons} size="sm" />
+      </div>
 
       {/* Meta row */}
       <div className="row gap-2" style={{ flexWrap: 'wrap', marginBottom: 8 }}>

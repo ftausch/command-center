@@ -8,13 +8,15 @@ import {
   Avatar, AvatarStack, Badge, BrandBadge,
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
-import { dueLabel, formatDateLong, projectProgress, timeAgo } from '@/lib/utils';
+import { dueLabel, formatDateLong, projectProgress, timeAgo, eventHealthScore } from '@/lib/utils';
 import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
 import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
+import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, HealthBadge } from '@/components/EventOps';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -58,6 +60,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   // ── Project Resources ─────────────────────────────────────────────────────
   const [projectResources, setProjectResources] = useState([]);
 
+  // ── Event operations ──────────────────────────────────────────────────────
+  const [eventPartners, setEventPartners] = useState([]);
+  const health = project?.division === 'events'
+    ? eventHealthScore(project, data.tasks.filter((t) => t.projectId === projectId), eventPartners)
+    : null;
+
   // ── Bulk task selection ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkPending, setBulkPending] = useState(false);
@@ -92,14 +100,17 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     let cancelled = false;
     setPmLoading(true);
     setPmError(null);
+    const isEvent = project?.division === 'events';
     Promise.all([
       listProjectMembers(wsId, projectId),
       listProjectResources(wsId, projectId),
+      isEvent ? listEventPartners(wsId, projectId) : Promise.resolve([]),
     ])
-      .then(([members, resources]) => {
+      .then(([members, resources, partners]) => {
         if (!cancelled) {
           setProjectMembers(members);
           setProjectResources(resources);
+          setEventPartners(partners);
           setPmLoading(false);
         }
       })
@@ -275,10 +286,13 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
       <div className="page-head">
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="row gap-3 mb-2">
+          <div className="row gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
             <StatusBadge status={project.status} />
             <PriorityBadge priority={project.priority} />
             <span className={`badge ${due.danger ? 'danger' : 'ghost'}`}><I.calendar size={11} /> Deadline {due.text}</span>
+            {project.division === 'events' && health && (
+              <HealthBadge score={health.score} reasons={health.reasons} />
+            )}
           </div>
           {editingName ? (
             <div className="row gap-2 items-center mb-1">
@@ -416,6 +430,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
         <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
         <div className={`tab ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')}>Files <span className="count">{project.links?.length ?? 0}</span></div>
+        {project.division === 'events' && (<>
+          <div className={`tab ${tab === 'agenda' ? 'active' : ''}`} onClick={() => setTab('agenda')}>Ablaufplan</div>
+          <div className={`tab ${tab === 'attendees' ? 'active' : ''}`} onClick={() => setTab('attendees')}>Gäste</div>
+          <div className={`tab ${tab === 'partners' ? 'active' : ''}`} onClick={() => setTab('partners')}>Partner</div>
+          <div className={`tab ${tab === 'recap' ? 'active' : ''}`} onClick={() => setTab('recap')}>Recap</div>
+        </>)}
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
@@ -583,6 +603,48 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 ))}
                 <button className="btn btn-ghost btn-sm mt-2" style={{ alignSelf: 'flex-start' }} disabled title="Noch nicht verfügbar"><I.plus size={13} /> Link hinzufügen</button>
               </div>
+            </div>
+          )}
+
+          {/* ── Event Operation Tabs ─────────────────────────────────── */}
+          {tab === 'agenda' && project.division === 'events' && (
+            <div className="card card-pad">
+              <RunOfShow
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+              />
+            </div>
+          )}
+
+          {tab === 'attendees' && project.division === 'events' && (
+            <div className="card card-pad">
+              <AttendeeList
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+              />
+            </div>
+          )}
+
+          {tab === 'partners' && project.division === 'events' && (
+            <div className="card card-pad">
+              <PartnerSponsorList
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+              />
+            </div>
+          )}
+
+          {tab === 'recap' && project.division === 'events' && (
+            <div className="card card-pad">
+              <RecapChecklist
+                project={project}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+                onUpdate={(patch) => updateProjectInCache(projectId, patch)}
+              />
             </div>
           )}
         </div>

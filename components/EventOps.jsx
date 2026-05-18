@@ -1,0 +1,754 @@
+'use client';
+// Event Operations UI — Run-of-Show, Attendees, Partners/Sponsors, Resources, Recap.
+// Used as tabs inside ProjectDetailScreen for division=events projects.
+
+import { useEffect, useState } from 'react';
+import { useWorkspace } from '@/components/WorkspaceProvider';
+import { Avatar, Badge, StatusBadge } from '@/components/ui';
+import { I } from '@/components/icons';
+import {
+  listAgendaItems, createAgendaItem, updateAgendaItem, deleteAgendaItem,
+  listAttendees, createAttendee, updateAttendee, deleteAttendee,
+  listEventPartners, createEventPartner, updateEventPartner, deleteEventPartner,
+} from '@/lib/actions/event-ops';
+import { updateProject } from '@/lib/actions/projects';
+import { CAN } from '@/lib/roles';
+
+// ── Shared helpers ────────────────────────────────────────────────────────
+
+function EmptyOps({ icon, title, desc, onAdd, canEdit, addLabel }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '32px 24px', color: 'var(--text-3)' }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 13, marginBottom: canEdit ? 16 : 0 }}>{desc}</div>
+      {canEdit && onAdd && (
+        <button className="btn btn-brand btn-sm" onClick={onAdd} style={{ margin: '0 auto' }}>
+          <I.plus size={13} /> {addLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+const STATUS_COLORS = {
+  // agenda
+  planned: 'var(--text-3)', active: '#e8780a', done: 'var(--success)', skipped: 'var(--text-4)',
+  // attendee
+  invited: 'var(--info)', confirmed: 'var(--success)', checked_in: '#10b981',
+  no_show: 'var(--danger)', cancelled: 'var(--text-4)',
+  // partner
+  lead: 'var(--text-3)', contacted: 'var(--info)', call_scheduled: 'var(--info)',
+  offer_sent: '#f59e0b', 'confirmed': 'var(--success)', active: 'var(--success)',
+  recap_sent: '#712edd', closed: 'var(--text-4)',
+};
+
+const STATUS_LABEL = {
+  planned: 'Geplant', active: 'Aktiv', done: 'Erledigt', skipped: 'Übersprungen',
+  invited: 'Eingeladen', confirmed: 'Bestätigt', checked_in: 'Eingecheckt',
+  no_show: 'Nicht erschienen', cancelled: 'Abgesagt',
+  lead: 'Lead', contacted: 'Kontaktiert', call_scheduled: 'Call geplant',
+  offer_sent: 'Angebot gesendet', active: 'Aktiv', recap_sent: 'Recap gesendet', closed: 'Abgeschlossen',
+};
+
+function StatusPill({ status }) {
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+      background: 'var(--bg-sunk)', color: STATUS_COLORS[status] ?? 'var(--text-3)',
+    }}>
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+// ── A) Run-of-Show ─────────────────────────────────────────────────────────
+
+export function RunOfShow({ projectId, workspaceId, canEdit }) {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding]   = useState(false);
+  const [pending, setPending] = useState(null);
+  const [draft, setDraft]     = useState({ timeLabel: '', title: '', description: '', location: '' });
+  const [editId, setEditId]   = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+
+  useEffect(() => {
+    listAgendaItems(workspaceId, projectId).then((d) => { setItems(d); setLoading(false); });
+  }, [projectId, workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.title.trim()) return;
+    setPending('add');
+    const r = await createAgendaItem({
+      workspaceId, projectId,
+      timeLabel: draft.timeLabel,
+      title: draft.title.trim(),
+      description: draft.description || undefined,
+      location: draft.location || undefined,
+      sortOrder: items.length,
+    });
+    setPending(null);
+    if (r.ok && r.data) {
+      setItems((prev) => [...prev, r.data]);
+      setDraft({ timeLabel: '', title: '', description: '', location: '' });
+      setAdding(false);
+    }
+  };
+
+  const onStatusChange = async (item, status) => {
+    const r = await updateAgendaItem({ workspaceId, itemId: item.id, patch: { status } });
+    if (r.ok && r.data) setItems((prev) => prev.map((i) => i.id === item.id ? r.data : i));
+  };
+
+  const onDelete = async (itemId) => {
+    setPending(itemId);
+    const r = await deleteAgendaItem({ workspaceId, itemId });
+    setPending(null);
+    if (r.ok) setItems((prev) => prev.filter((i) => i.id !== itemId));
+  };
+
+  const onEditSave = async (item) => {
+    setPending(item.id + '-save');
+    const r = await updateAgendaItem({ workspaceId, itemId: item.id, patch: editDraft });
+    setPending(null);
+    if (r.ok && r.data) { setItems((prev) => prev.map((i) => i.id === item.id ? r.data : i)); setEditId(null); }
+  };
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div className="h3">Ablaufplan</div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Punkt hinzufügen
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 && !adding && (
+        <EmptyOps
+          icon="📋"
+          title="Noch kein Ablaufplan"
+          desc="Füge Zeitslots und Programmpunkte hinzu — z.B. Einlass, Begrüßung, Panel, Networking."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Ersten Punkt hinzufügen"
+        />
+      )}
+
+      {/* Add form */}
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: '100px 1fr', marginBottom: 8 }}>
+            <input className="input" placeholder="18:00" value={draft.timeLabel}
+              onChange={(e) => setDraft({ ...draft, timeLabel: e.target.value })}
+              style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}
+            />
+            <input className="input" placeholder="Titel des Programmpunkts *" value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+              autoFocus style={{ fontSize: 13 }}
+            />
+          </div>
+          <input className="input mb-2" placeholder="Beschreibung (optional)" value={draft.description}
+            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            style={{ fontSize: 12.5 }}
+          />
+          <input className="input mb-3" placeholder="Ort / Stage (optional)" value={draft.location}
+            onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+            style={{ fontSize: 12.5 }}
+          />
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.title.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Hinzufügen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      <div className="col gap-0">
+        {items.map((item, idx) => (
+          <div key={item.id} style={{
+            display: 'flex', gap: 12, alignItems: 'flex-start',
+            padding: '10px 0',
+            borderBottom: idx < items.length - 1 ? '1px solid var(--border-soft)' : 'none',
+          }}>
+            {/* Time */}
+            <div style={{
+              minWidth: 52, fontFamily: 'var(--font-mono)', fontSize: 13,
+              fontWeight: 700, color: item.status === 'done' ? 'var(--text-4)' : '#e8780a',
+              marginTop: 2,
+            }}>
+              {item.timeLabel || '—'}
+            </div>
+
+            {/* Content */}
+            {editId === item.id ? (
+              <div style={{ flex: 1 }} className="col gap-2">
+                <div className="grid gap-2" style={{ gridTemplateColumns: '100px 1fr' }}>
+                  <input className="input" value={editDraft.timeLabel ?? item.timeLabel}
+                    onChange={(e) => setEditDraft({ ...editDraft, timeLabel: e.target.value })}
+                    style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}
+                  />
+                  <input className="input" value={editDraft.title ?? item.title}
+                    onChange={(e) => setEditDraft({ ...editDraft, title: e.target.value })}
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
+                <input className="input" placeholder="Beschreibung" value={editDraft.description ?? item.description ?? ''}
+                  onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })}
+                  style={{ fontSize: 12.5 }}
+                />
+                <div className="row gap-2">
+                  <button className="btn btn-brand btn-sm" onClick={() => onEditSave(item)} disabled={pending === item.id + '-save'}>
+                    {pending === item.id + '-save' ? '…' : 'Speichern'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditId(null)}>Abbrechen</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ flex: 1 }}>
+                <div className="row gap-2 items-center mb-1">
+                  <span style={{
+                    fontSize: 13.5, fontWeight: 600,
+                    textDecoration: item.status === 'done' ? 'line-through' : 'none',
+                    color: item.status === 'done' ? 'var(--text-4)' : 'var(--text-1)',
+                  }}>
+                    {item.title}
+                  </span>
+                  <StatusPill status={item.status} />
+                </div>
+                {item.description && <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 2 }}>{item.description}</div>}
+                {item.location && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>📍 {item.location}</div>}
+              </div>
+            )}
+
+            {/* Actions */}
+            {canEdit && editId !== item.id && (
+              <div className="row gap-1">
+                {item.status !== 'done' && (
+                  <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26 }}
+                    onClick={() => onStatusChange(item, item.status === 'active' ? 'done' : 'active')}
+                    title={item.status === 'active' ? 'Als erledigt markieren' : 'Aktivieren'}
+                  >
+                    <I.check size={12} />
+                  </button>
+                )}
+                <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26 }}
+                  onClick={() => { setEditId(item.id); setEditDraft({}); }}
+                  title="Bearbeiten"
+                >
+                  <I.edit size={12} />
+                </button>
+                <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26, color: 'var(--text-4)' }}
+                  onClick={() => onDelete(item.id)}
+                  disabled={pending === item.id}
+                  title="Löschen"
+                >
+                  <I.x size={11} />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── B) Attendees ──────────────────────────────────────────────────────────
+
+const ATTENDEE_ROLES = ['attendee','speaker','vip','partner_guest','team'];
+const ATTENDEE_STATUSES = ['invited','confirmed','checked_in','no_show','cancelled'];
+const ROLE_LABELS = { attendee: 'Teilnehmer', speaker: 'Speaker', vip: 'VIP', partner_guest: 'Partner-Gast', team: 'Team' };
+
+export function AttendeeList({ projectId, workspaceId, canEdit }) {
+  const [attendees, setAttendees] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [adding, setAdding]       = useState(false);
+  const [pending, setPending]     = useState(null);
+  const [draft, setDraft]         = useState({ name: '', email: '', company: '', role: 'attendee', status: 'invited' });
+
+  useEffect(() => {
+    listAttendees(workspaceId, projectId).then((d) => { setAttendees(d); setLoading(false); });
+  }, [projectId, workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.name.trim()) return;
+    setPending('add');
+    const r = await createAttendee({ workspaceId, projectId, ...draft, name: draft.name.trim() });
+    setPending(null);
+    if (r.ok && r.data) { setAttendees((prev) => [...prev, r.data]); setDraft({ name: '', email: '', company: '', role: 'attendee', status: 'invited' }); setAdding(false); }
+  };
+
+  const onStatusChange = async (a, status) => {
+    const r = await updateAttendee({ workspaceId, attendeeId: a.id, patch: { status } });
+    if (r.ok && r.data) setAttendees((prev) => prev.map((x) => x.id === a.id ? r.data : x));
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteAttendee({ workspaceId, attendeeId: id });
+    setPending(null);
+    if (r.ok) setAttendees((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  const counts = {
+    invited:    attendees.filter((a) => a.status === 'invited').length,
+    confirmed:  attendees.filter((a) => a.status === 'confirmed').length,
+    checked_in: attendees.filter((a) => a.status === 'checked_in').length,
+    no_show:    attendees.filter((a) => a.status === 'no_show').length,
+  };
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div>
+          <div className="h3">Gästeliste</div>
+          {attendees.length > 0 && (
+            <div className="row gap-3 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              <span>📩 {counts.invited} eingeladen</span>
+              <span style={{ color: 'var(--success)' }}>✓ {counts.confirmed} bestätigt</span>
+              <span style={{ color: '#10b981' }}>✅ {counts.checked_in} eingecheckt</span>
+              {counts.no_show > 0 && <span style={{ color: 'var(--danger)' }}>✗ {counts.no_show} no-show</span>}
+            </div>
+          )}
+        </div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Gast hinzufügen
+          </button>
+        )}
+      </div>
+
+      {attendees.length === 0 && !adding && (
+        <EmptyOps
+          icon="👥"
+          title="Noch keine Gäste eingetragen"
+          desc="Füge Speaker, VIPs, Partner-Gäste und Teilnehmer hinzu um den Überblick zu behalten."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Ersten Gast hinzufügen"
+        />
+      )}
+
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <input className="input" placeholder="Name *" value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              autoFocus style={{ fontSize: 13 }}
+            />
+            <input className="input" placeholder="Email" value={draft.email}
+              onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+          </div>
+          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <input className="input" placeholder="Unternehmen" value={draft.company}
+              onChange={(e) => setDraft({ ...draft, company: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+            <select className="input" value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })} style={{ fontSize: 13 }}>
+              {ATTENDEE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+            </select>
+            <select className="input" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} style={{ fontSize: 13 }}>
+              {ATTENDEE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+            </select>
+          </div>
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.name.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Hinzufügen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {attendees.length > 0 && (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <table className="table">
+            <thead>
+              <tr><th>Name</th><th>Unternehmen</th><th>Rolle</th><th>Status</th>{canEdit && <th />}</tr>
+            </thead>
+            <tbody>
+              {attendees.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>{a.name}</div>
+                    {a.email && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{a.email}</div>}
+                  </td>
+                  <td style={{ color: 'var(--text-2)', fontSize: 13 }}>{a.company || '—'}</td>
+                  <td><span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{ROLE_LABELS[a.role] ?? a.role}</span></td>
+                  <td>
+                    {canEdit ? (
+                      <select
+                        className="input"
+                        value={a.status}
+                        onChange={(e) => onStatusChange(a, e.target.value)}
+                        style={{ height: 26, fontSize: 12, padding: '0 6px', width: 130 }}
+                      >
+                        {ATTENDEE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                      </select>
+                    ) : (
+                      <StatusPill status={a.status} />
+                    )}
+                  </td>
+                  {canEdit && (
+                    <td>
+                      <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26 }}
+                        onClick={() => onDelete(a.id)} disabled={pending === a.id}
+                      ><I.x size={11} /></button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── C) Partners / Sponsors ────────────────────────────────────────────────
+
+const PARTNER_STATUSES = ['lead','contacted','call_scheduled','offer_sent','confirmed','active','recap_sent','closed'];
+const INVOICE_STATUSES = ['pending','sent','paid','cancelled'];
+const PARTNER_STATUS_LABEL = {
+  lead: 'Lead', contacted: 'Kontaktiert', call_scheduled: 'Call geplant',
+  offer_sent: 'Angebot', confirmed: 'Bestätigt', active: 'Aktiv',
+  recap_sent: 'Recap gesendet', closed: 'Abgeschlossen',
+};
+
+export function PartnerSponsorList({ projectId, workspaceId, canEdit }) {
+  const [partners, setPartners]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [adding, setAdding]       = useState(false);
+  const [pending, setPending]     = useState(null);
+  const [draft, setDraft]         = useState({ name: '', contactPerson: '', email: '', status: 'lead', package: '' });
+  const [expandedId, setExpandedId] = useState(null);
+
+  useEffect(() => {
+    listEventPartners(workspaceId, projectId).then((d) => { setPartners(d); setLoading(false); });
+  }, [projectId, workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.name.trim()) return;
+    setPending('add');
+    const r = await createEventPartner({ workspaceId, projectId, ...draft, name: draft.name.trim() });
+    setPending(null);
+    if (r.ok && r.data) { setPartners((prev) => [...prev, r.data]); setDraft({ name: '', contactPerson: '', email: '', status: 'lead', package: '' }); setAdding(false); }
+  };
+
+  const onPatch = async (partner, patch) => {
+    const r = await updateEventPartner({ workspaceId, partnerId: partner.id, patch });
+    if (r.ok && r.data) setPartners((prev) => prev.map((x) => x.id === partner.id ? r.data : x));
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteEventPartner({ workspaceId, partnerId: id });
+    setPending(null);
+    if (r.ok) setPartners((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div className="h3">Partner & Sponsoren</div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Partner hinzufügen
+          </button>
+        )}
+      </div>
+
+      {partners.length === 0 && !adding && (
+        <EmptyOps
+          icon="🤝"
+          title="Noch keine Partner eingetragen"
+          desc="Verfolge Sponsoren, Speaker-Partner und Kooperationspartner — von der ersten Anfrage bis zum Recap-Report."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Ersten Partner hinzufügen"
+        />
+      )}
+
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <input className="input" placeholder="Partner / Sponsor Name *" value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              autoFocus style={{ fontSize: 13 }}
+            />
+            <input className="input" placeholder="Ansprechpartner" value={draft.contactPerson}
+              onChange={(e) => setDraft({ ...draft, contactPerson: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+          </div>
+          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <input className="input" placeholder="Email" value={draft.email}
+              onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+            <select className="input" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} style={{ fontSize: 13 }}>
+              {PARTNER_STATUSES.map((s) => <option key={s} value={s}>{PARTNER_STATUS_LABEL[s]}</option>)}
+            </select>
+            <input className="input" placeholder="Paket (z.B. Gold)" value={draft.package}
+              onChange={(e) => setDraft({ ...draft, package: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+          </div>
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.name.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Hinzufügen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      <div className="col gap-2">
+        {partners.map((p) => (
+          <div key={p.id} className="card" style={{ overflow: 'hidden' }}>
+            <div
+              className="row between"
+              style={{ padding: '12px 14px', cursor: 'pointer' }}
+              onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+            >
+              <div className="row gap-3 items-center">
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                  background: 'linear-gradient(135deg, #e8780a 0%, #f59e0b 100%)',
+                  color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 700,
+                }}>
+                  {p.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                  <div className="row gap-2" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {p.contactPerson && <span>{p.contactPerson}</span>}
+                    {p.package && <span>· {p.package}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="row gap-2 items-center">
+                {canEdit ? (
+                  <select
+                    className="input"
+                    value={p.status}
+                    onChange={(e) => { e.stopPropagation(); onPatch(p, { status: e.target.value }); }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ height: 26, fontSize: 12, padding: '0 6px', width: 130 }}
+                  >
+                    {PARTNER_STATUSES.map((s) => <option key={s} value={s}>{PARTNER_STATUS_LABEL[s]}</option>)}
+                  </select>
+                ) : (
+                  <StatusPill status={p.status} />
+                )}
+                <I.chevronDown size={14} style={{ color: 'var(--text-3)', transform: expandedId === p.id ? 'rotate(180deg)' : '', transition: '0.15s' }} />
+              </div>
+            </div>
+
+            {expandedId === p.id && (
+              <div style={{ borderTop: '1px solid var(--border-soft)', padding: '12px 14px' }}>
+                <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, marginBottom: 4 }}>DELIVERABLES</div>
+                    {canEdit ? (
+                      <textarea className="input" value={p.deliverables ?? ''} rows={2}
+                        onChange={(e) => onPatch(p, { deliverables: e.target.value })}
+                        style={{ fontSize: 12.5, resize: 'vertical' }}
+                        placeholder="z.B. Logo auf Website, Social Media Mention, …"
+                      />
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{p.deliverables || '—'}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, marginBottom: 4 }}>RECHNUNG</div>
+                    {canEdit ? (
+                      <select className="input" value={p.invoiceStatus}
+                        onChange={(e) => onPatch(p, { invoiceStatus: e.target.value })}
+                        style={{ fontSize: 13 }}
+                      >
+                        {INVOICE_STATUSES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                      </select>
+                    ) : (
+                      <StatusPill status={p.invoiceStatus} />
+                    )}
+                  </div>
+                </div>
+
+                <div className="row between items-center">
+                  {canEdit ? (
+                    <label className="row gap-2" style={{ cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={p.logoReceived}
+                        onChange={(e) => onPatch(p, { logoReceived: e.target.checked })}
+                        style={{ accentColor: 'var(--brand)' }}
+                      />
+                      Logo erhalten
+                    </label>
+                  ) : (
+                    <span style={{ fontSize: 13, color: p.logoReceived ? 'var(--success)' : 'var(--text-3)' }}>
+                      {p.logoReceived ? '✓ Logo erhalten' : '✗ Logo noch ausstehend'}
+                    </span>
+                  )}
+                  {canEdit && (
+                    <button className="btn btn-quiet btn-sm" style={{ color: 'var(--text-3)', fontSize: 12 }}
+                      onClick={() => onDelete(p.id)} disabled={pending === p.id}
+                    >
+                      <I.x size={11} /> Entfernen
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── D) Event Recap Checklist ───────────────────────────────────────────────
+
+const RECAP_ITEMS = [
+  { id: 'photos',     label: 'Fotos & Videos sichern' },
+  { id: 'clips',      label: 'Best-of Clips markieren' },
+  { id: 'linkedin',   label: 'LinkedIn Recap erstellen' },
+  { id: 'newsletter', label: 'Newsletter Recap schreiben' },
+  { id: 'sponsor',    label: 'Sponsor Report erstellen' },
+  { id: 'followup',   label: 'Teilnehmer Follow-up senden' },
+  { id: 'thanks',     label: 'Danke-Mail an Team & Partner' },
+];
+
+export function RecapChecklist({ project, workspaceId, canEdit, onUpdate }) {
+  const checklist = project?.eventMeta?.recapChecklist ?? {};
+  const done      = RECAP_ITEMS.filter((i) => checklist[i.id]).length;
+  const [pending, setPending] = useState(null);
+
+  const toggle = async (id) => {
+    if (!canEdit) return;
+    setPending(id);
+    const newChecklist = { ...checklist, [id]: !checklist[id] };
+    const newMeta = { ...(project.eventMeta ?? {}), recapChecklist: newChecklist };
+    const r = await updateProject({ projectId: project.id, workspaceId, patch: { eventMeta: newMeta } });
+    setPending(null);
+    if (r.ok) onUpdate?.({ eventMeta: newMeta });
+  };
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div>
+          <div className="h3">Event Recap</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            {done}/{RECAP_ITEMS.length} Punkte abgeschlossen
+          </div>
+        </div>
+      </div>
+
+      <div style={{ height: 4, background: 'var(--border-soft)', borderRadius: 2, marginBottom: 16 }}>
+        <div style={{
+          width: `${Math.round((done / RECAP_ITEMS.length) * 100)}%`,
+          height: '100%', background: done === RECAP_ITEMS.length ? 'var(--success)' : '#e8780a',
+          borderRadius: 2, transition: 'width 0.3s',
+        }} />
+      </div>
+
+      <div className="col gap-2">
+        {RECAP_ITEMS.map((item) => {
+          const checked = !!checklist[item.id];
+          return (
+            <label key={item.id} className="row gap-3 items-center"
+              style={{ cursor: canEdit ? 'pointer' : 'default', padding: '8px 10px', borderRadius: 8, background: checked ? 'var(--bg-sunk)' : 'transparent' }}
+            >
+              <input type="checkbox" checked={checked}
+                onChange={() => toggle(item.id)}
+                disabled={!canEdit || pending === item.id}
+                style={{ accentColor: 'var(--success)', width: 16, height: 16, flexShrink: 0 }}
+              />
+              <span style={{
+                fontSize: 13.5, fontWeight: 500,
+                textDecoration: checked ? 'line-through' : 'none',
+                color: checked ? 'var(--text-3)' : 'var(--text-1)',
+              }}>
+                {item.label}
+              </span>
+              {checked && <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--success)' }}>✓</span>}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── E) Event Health Badge ──────────────────────────────────────────────────
+
+export function HealthBadge({ score, reasons = [], size = 'md' }) {
+  const [showTip, setShowTip] = useState(false);
+  const label = score === 'red' ? 'Kritisch' : score === 'yellow' ? 'Risiko' : 'OK';
+  const color = score === 'red' ? 'var(--danger)' : score === 'yellow' ? 'var(--warning)' : 'var(--success)';
+  const bg    = score === 'red' ? 'var(--danger-bg)' : score === 'yellow' ? '#fffbeb' : '#f0fdf4';
+
+  if (size === 'sm') {
+    return (
+      <div style={{ position: 'relative', display: 'inline-block' }}
+        onMouseEnter={() => reasons.length && setShowTip(true)}
+        onMouseLeave={() => setShowTip(false)}
+      >
+        <span style={{
+          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+          background: color, cursor: reasons.length ? 'help' : 'default',
+        }} />
+        {showTip && reasons.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+            background: '#1b1b1d', color: 'white', borderRadius: 6, padding: '6px 10px',
+            fontSize: 11.5, whiteSpace: 'nowrap', zIndex: 100, maxWidth: 240,
+          }}>
+            {reasons.map((r, i) => <div key={i}>{r}</div>)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'relative' }}
+      onMouseEnter={() => reasons.length && setShowTip(true)}
+      onMouseLeave={() => setShowTip(false)}
+    >
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+        background: bg, color, cursor: reasons.length ? 'help' : 'default',
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block' }} />
+        {label}
+      </span>
+      {showTip && reasons.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+          background: '#1b1b1d', color: 'white', borderRadius: 8, padding: '8px 12px',
+          fontSize: 11.5, zIndex: 100, minWidth: 200, maxWidth: 280,
+        }}>
+          {reasons.map((r, i) => <div key={i} style={{ marginBottom: i < reasons.length - 1 ? 4 : 0 }}>• {r}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
