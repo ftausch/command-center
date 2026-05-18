@@ -31,7 +31,7 @@ import {
 } from 'react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { db } from '@/lib/db';
-import { rowToTask, rowToProject, rowToActivity } from '@/lib/db/supabase';
+import { rowToTask, rowToProject, rowToActivity, rowToEpisode } from '@/lib/db/supabase';
 import { D } from '@/lib/data';
 import { isAtLeast } from '@/lib/roles';
 
@@ -270,6 +270,22 @@ export function WorkspaceProvider({ children }) {
             projects: d.projects.filter((p) => p.id !== id),
             tasks: d.tasks.filter((t) => t.projectId !== id),
           }));
+        })
+        // ── Episodes ───────────────────────────────────────────────────────
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'podcast_episodes', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const ep = rowToEpisode(payload.new, slug);
+          setData((d) => {
+            if (d.episodes.some((e) => e.id === ep.id)) return d;
+            return { ...d, episodes: [ep, ...d.episodes] };
+          });
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'podcast_episodes', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const ep = rowToEpisode(payload.new, slug);
+          setData((d) => ({ ...d, episodes: d.episodes.map((e) => e.id === ep.id ? ep : e) }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'podcast_episodes', filter: `workspace_id=eq.${uuid}` }, (payload) => {
+          const id = payload.old?.id;
+          if (id) setData((d) => ({ ...d, episodes: d.episodes.filter((e) => e.id !== id) }));
         })
         // ── Activity logs ──────────────────────────────────────────────────
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs', filter: `workspace_id=eq.${uuid}` }, (payload) => {

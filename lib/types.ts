@@ -391,6 +391,25 @@ export interface ProjectResource {
   createdAt: string;
 }
 
+export type GuestStatus = 'prospect' | 'contacted' | 'confirmed' | 'recorded' | 'published' | 'recurring';
+
+export interface PodcastGuest {
+  id: string;
+  workspaceId: string;
+  name: string;
+  email?: string;
+  company?: string;
+  role?: string;
+  linkedinUrl?: string;
+  twitterHandle?: string;
+  bio?: string;
+  status: GuestStatus;
+  notes?: string;
+  lastContacted?: string;
+  episodeCount: number;
+  createdAt: string;
+}
+
 export interface WorkspaceStats {
   projects: number;
   tasks: number; // open tasks

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui';
 import { generateMarketingPackage } from '@/lib/actions/podcast';
 import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
 import { createTask } from '@/lib/actions/tasks';
+import { listGuests, createGuest, updateGuest, deleteGuest } from '@/lib/actions/guests';
 import { EpisodePipelineScreen } from '@/components/screens/EpisodePipeline';
 import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 
@@ -94,6 +95,8 @@ export function PodcastHubScreen({ setRoute }) {
     { id: 'overview',     label: 'Übersicht',      icon: <I.home size={12} />   },
     { id: 'episodes',     label: 'Episoden',        icon: <I.mic size={12} />    },
     { id: 'pipeline',     label: 'Pipeline',        icon: <I.kanban size={12} /> },
+    { id: 'guests',       label: 'Gäste-CRM',       icon: <I.user size={12} />   },
+    { id: 'publishing',   label: 'Publishing',      icon: <I.send size={12} />   },
     { id: 'analytics',    label: 'Analytics',       icon: <I.trend size={12} />  },
     { id: 'transcripts',  label: 'Transkript · KI', icon: <I.doc size={12} />    },
     { id: 'distribution', label: 'Distribution',    icon: <I.radio size={12} />  },
@@ -145,6 +148,8 @@ export function PodcastHubScreen({ setRoute }) {
       {tab === 'overview'     && <OverviewTab episodes={episodes} onOpenEpisode={setDrawerEpId} />}
       {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} setTab={setTab} onOpenEpisode={setDrawerEpId} />}
       {tab === 'pipeline'     && <EpisodePipelineScreen setRoute={setRoute} embedded onOpenEpisode={setDrawerEpId} />}
+      {tab === 'guests'       && <GuestCRMTab workspaceId={currentWorkspaceId} />}
+      {tab === 'publishing'   && <PublishingDashboardTab episodes={episodes} workspaceId={currentWorkspaceId} onOpenEpisode={setDrawerEpId} />}
 
       <EpisodeDrawer episodeId={drawerEpId} onClose={() => setDrawerEpId(null)} />
       {tab === 'analytics'    && <AnalyticsTab />}
@@ -304,6 +309,7 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
   const [newDate, setNewDate] = useState('');
   const [newStatus, setNewStatus] = useState('draft');
   const [withWorkflow, setWithWorkflow] = useState(true);
+  const [withNotesTpl, setWithNotesTpl] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [workflowCreated, setWorkflowCreated] = useState(null); // count of created tasks
@@ -329,6 +335,13 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
     if (!epR.ok) { setSaving(false); setSaveError(epR.error); return; }
     const newEpisode = epR.data;
     if (newEpisode) addEpisode(newEpisode);
+
+    // Pre-fill show notes template
+    if (withNotesTpl && newEpisode) {
+      const guestName = newGuest.trim() || 'Gast';
+      const tpl = `## Über ${guestName}\n\n\n## Kapitel\n00:00 Intro\n\n\n## Links\n- \n\n## Über Unicorn Bakery\nhttps://www.unicornbakery.de`;
+      updateEpisode({ episodeId: newEpisode.id, workspaceId, patch: { showNotes: tpl } });
+    }
 
     // Create standard workflow tasks linked to this episode
     if (withWorkflow && newEpisode) {
@@ -405,6 +418,15 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
               <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
                 {EPISODE_WORKFLOW.map((t) => t.title).join(' · ')}
               </div>
+            </div>
+          </label>
+
+          {/* Show Notes template toggle */}
+          <label className="row gap-2 items-center" style={{ cursor: 'pointer', padding: '8px 10px', background: withNotesTpl ? 'var(--brand-soft)' : 'var(--bg-sunk)', borderRadius: 6, border: `1px solid ${withNotesTpl ? 'var(--brand)' : 'var(--border)'}`, transition: 'all 0.15s' }}>
+            <input type="checkbox" checked={withNotesTpl} onChange={(e) => setWithNotesTpl(e.target.checked)} disabled={saving} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Show Notes Vorlage einfügen</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Kapitel · Links · Gast-Bio Abschnitte vorausfüllen</div>
             </div>
           </label>
 
@@ -1693,3 +1715,256 @@ function StudioCard({ icon, title, desc, tools, eta, badge }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Shared helpers
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab — Gäste-CRM
+// ═══════════════════════════════════════════════════════════════════════════
+
+const GUEST_STATUSES = ['prospect','contacted','confirmed','recorded','published','recurring'];
+const GUEST_STATUS_LABEL = { prospect:'Prospect', contacted:'Kontaktiert', confirmed:'Bestätigt', recorded:'Aufgenommen', published:'Veröffentlicht', recurring:'Stammgast' };
+const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'#712edd' };
+
+function GuestCRMTab({ workspaceId }) {
+  const [guests, setGuests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [pending, setPending] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [draft, setDraft] = useState({ name:'', email:'', company:'', role:'', status:'prospect', notes:'' });
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    listGuests(workspaceId).then((d) => { setGuests(d); setLoading(false); });
+  }, [workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.name.trim()) return;
+    setPending('add');
+    const r = await createGuest({ workspaceId, ...draft, name: draft.name.trim() });
+    setPending(null);
+    if (r.ok && r.data) { setGuests((g) => [r.data, ...g]); setDraft({ name:'', email:'', company:'', role:'', status:'prospect', notes:'' }); setAdding(false); }
+  };
+
+  const onStatusChange = async (guest, status) => {
+    const r = await updateGuest({ workspaceId, guestId: guest.id, patch: { status } });
+    if (r.ok && r.data) setGuests((g) => g.map((x) => x.id === guest.id ? r.data : x));
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteGuest({ workspaceId, guestId: id });
+    setPending(null);
+    if (r.ok) setGuests((g) => g.filter((x) => x.id !== id));
+  };
+
+  const filtered = guests.filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase()) ||
+    (g.company ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const counts = GUEST_STATUSES.reduce((acc, s) => ({ ...acc, [s]: guests.filter(g => g.status === s).length }), {});
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div className="col gap-4">
+      {/* Stats row */}
+      <div className="row gap-3 wrap">
+        {GUEST_STATUSES.filter(s => counts[s] > 0).map(s => (
+          <div key={s} className="card card-pad" style={{ flex: '1 1 120px', minWidth: 100 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: GUEST_STATUS_COLOR[s] }}>{counts[s]}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{GUEST_STATUS_LABEL[s]}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div className="row gap-3 items-center">
+        <input className="input" placeholder="Gast suchen…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
+        <span className="meta">{filtered.length} Gäste</span>
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-brand btn-sm" onClick={() => setAdding(true)}><I.plus size={13} /> Gast hinzufügen</button>
+      </div>
+
+      {/* Add form */}
+      {adding && (
+        <div className="card card-pad col gap-3" style={{ border: '1px solid var(--brand)' }}>
+          <div className="h3">Neuer Gast</div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <input className="input" placeholder="Name *" value={draft.name} onChange={(e) => setDraft({...draft, name: e.target.value})} autoFocus style={{ fontSize: 13 }} />
+            <input className="input" placeholder="Email" value={draft.email} onChange={(e) => setDraft({...draft, email: e.target.value})} style={{ fontSize: 13 }} />
+            <input className="input" placeholder="Unternehmen" value={draft.company} onChange={(e) => setDraft({...draft, company: e.target.value})} style={{ fontSize: 13 }} />
+            <input className="input" placeholder="Rolle / Titel" value={draft.role} onChange={(e) => setDraft({...draft, role: e.target.value})} style={{ fontSize: 13 }} />
+          </div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: '160px 1fr' }}>
+            <select className="input" value={draft.status} onChange={(e) => setDraft({...draft, status: e.target.value})} style={{ fontSize: 13 }}>
+              {GUEST_STATUSES.map(s => <option key={s} value={s}>{GUEST_STATUS_LABEL[s]}</option>)}
+            </select>
+            <input className="input" placeholder="Notizen" value={draft.notes} onChange={(e) => setDraft({...draft, notes: e.target.value})} style={{ fontSize: 13 }} />
+          </div>
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.name.trim() || pending === 'add'}>{pending === 'add' ? '…' : 'Hinzufügen'}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && !adding && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-3)', fontSize: 13 }}>
+          {guests.length === 0 ? 'Noch keine Gäste. Füge deinen ersten potenziellen Podcast-Gast hinzu.' : 'Keine Treffer.'}
+        </div>
+      )}
+
+      {/* Guest list */}
+      <div className="col gap-2">
+        {filtered.map((g) => (
+          <div key={g.id} className="card" style={{ overflow: 'hidden' }}>
+            <div className="row between items-center" style={{ padding: '12px 14px', cursor: 'pointer' }}
+              onClick={() => setExpandedId(expandedId === g.id ? null : g.id)}>
+              <div className="row gap-3 items-center">
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: 'var(--brand-soft)', color: 'var(--brand)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: 14,
+                }}>
+                  {g.name.split(' ').map(n => n[0]).slice(0,2).join('')}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{g.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {[g.role, g.company].filter(Boolean).join(' · ')}
+                    {g.episodeCount > 0 && <span style={{ marginLeft: 8, color: 'var(--brand)' }}>🎙 {g.episodeCount} Ep.</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="row gap-2 items-center">
+                <select
+                  className="input"
+                  value={g.status}
+                  onChange={(e) => { e.stopPropagation(); onStatusChange(g, e.target.value); }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ height: 26, fontSize: 12, padding: '0 6px', width: 130, color: GUEST_STATUS_COLOR[g.status] }}
+                >
+                  {GUEST_STATUSES.map(s => <option key={s} value={s}>{GUEST_STATUS_LABEL[s]}</option>)}
+                </select>
+                <I.chevronDown size={13} style={{ color: 'var(--text-3)', transform: expandedId === g.id ? 'rotate(180deg)' : '', transition: '0.15s' }} />
+              </div>
+            </div>
+            {expandedId === g.id && (
+              <div style={{ borderTop: '1px solid var(--border-soft)', padding: '12px 14px' }}>
+                <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                  {g.email && <div><div className="label mb-1">Email</div><a href={`mailto:${g.email}`} style={{ fontSize: 13, color: 'var(--brand)' }}>{g.email}</a></div>}
+                  {g.linkedinUrl && <div><div className="label mb-1">LinkedIn</div><a href={g.linkedinUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--brand)' }}>Profil öffnen →</a></div>}
+                </div>
+                {g.notes && <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>{g.notes}</div>}
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', fontSize: 12 }}
+                  onClick={() => onDelete(g.id)} disabled={pending === g.id}>
+                  <I.x size={11} /> Entfernen
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab — Publishing Dashboard
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PLATFORMS = [
+  { id: 'apple',     label: 'Apple',    icon: '🎵' },
+  { id: 'spotify',   label: 'Spotify',  icon: '💚' },
+  { id: 'youtube',   label: 'YouTube',  icon: '▶️'  },
+  { id: 'linkedin',  label: 'LinkedIn', icon: '💼' },
+  { id: 'instagram', label: 'Insta',    icon: '📸' },
+  { id: 'newsletter',label: 'Newsletter',icon:'📧' },
+];
+
+const PUB_STATUS_COLOR = { done: 'var(--success)', pending: 'var(--warning)', skip: 'var(--text-4)' };
+
+function PublishingDashboardTab({ episodes, workspaceId, onOpenEpisode }) {
+  const { updateEpisodeInCache } = useWorkspace();
+  const [pending, setPending] = useState(null);
+
+  const recent = episodes
+    .filter(e => e.status !== 'idea')
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 20);
+
+  const togglePlatform = async (ep, platformId) => {
+    const key = `${ep.id}-${platformId}`;
+    setPending(key);
+    const platforms = ep.episodeMeta?.platforms ?? {};
+    const current = platforms[platformId] ?? 'pending';
+    const next = current === 'done' ? 'pending' : current === 'pending' ? 'skip' : 'done';
+    const newMeta = { ...(ep.episodeMeta ?? {}), platforms: { ...platforms, [platformId]: next } };
+    const r = await updateEpisode({ episodeId: ep.id, workspaceId, patch: { episodeMeta: newMeta } });
+    setPending(null);
+    if (r.ok) updateEpisodeInCache(ep.id, { episodeMeta: newMeta });
+  };
+
+  return (
+    <div className="col gap-3">
+      <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+        Klicke auf einen Plattform-Punkt um den Status zu wechseln: ● Ausstehend → ✓ Erledigt → ✗ Überspringen
+      </div>
+      <div className="card" style={{ overflow: 'auto' }}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th style={{ minWidth: 220 }}>Episode</th>
+              <th>Status</th>
+              {PLATFORMS.map(p => <th key={p.id} style={{ textAlign: 'center', minWidth: 70 }}>{p.icon} {p.label}</th>)}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.map((ep) => {
+              const platforms = ep.episodeMeta?.platforms ?? {};
+              return (
+                <tr key={ep.id}>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>{ep.num ? `Ep. ${ep.num} · ` : ''}{ep.title}</div>
+                    {ep.date && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{ep.date}</div>}
+                  </td>
+                  <td><EpStatusBadge status={ep.status} /></td>
+                  {PLATFORMS.map(p => {
+                    const s = platforms[p.id] ?? 'pending';
+                    const key = `${ep.id}-${p.id}`;
+                    return (
+                      <td key={p.id} style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => togglePlatform(ep, p.id)}
+                          disabled={pending === key}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: 16, opacity: pending === key ? 0.4 : 1,
+                          }}
+                          title={s === 'done' ? 'Erledigt' : s === 'skip' ? 'Übersprungen' : 'Ausstehend'}
+                        >
+                          {s === 'done' ? '✅' : s === 'skip' ? '⬜' : '⏳'}
+                        </button>
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <button className="btn btn-quiet btn-sm" onClick={() => onOpenEpisode?.(ep.id)} style={{ fontSize: 12 }}>
+                      Detail →
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {recent.length === 0 && (
+              <tr><td colSpan={PLATFORMS.length + 3} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Noch keine Episoden.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
