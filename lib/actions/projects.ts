@@ -279,12 +279,51 @@ export async function updateProject(input: {
   if (input.patch.slackConnected !== undefined) row.slack_connected = input.patch.slackConnected;
   if (input.patch.eventMeta !== undefined) row.event_meta = input.patch.eventMeta;
 
+  // Fetch division + current status + name for event notifications
+  const { data: existing } = await supabase
+    .from('projects').select('division, status, name').eq('id', input.projectId).single();
+
   const { error } = await supabase
     .from('projects')
     .update(row)
     .eq('id', input.projectId)
     .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
+
+  // Notify event Slack channel on key status transitions
+  if (
+    existing?.division === 'events' &&
+    input.patch.status &&
+    input.patch.status !== existing.status
+  ) {
+    const newStatus  = input.patch.status;
+    const eventName  = existing.name as string;
+    let text: string | null = null;
+
+    if (newStatus === 'In Progress') {
+      text = `🚀 *${eventName}* ist jetzt in Vorbereitung — alle Systeme go!`;
+    } else if (newStatus === 'Done') {
+      text = `🎉 *${eventName}* ist abgeschlossen. Zeit für den Recap!`;
+    } else if (newStatus === 'Blocked') {
+      text = `⚠️ *${eventName}* ist blockiert. Bitte prüfen!`;
+    }
+
+    if (text) {
+      const { postMessageToChannel, postSlackNotification } = await import('@/lib/integrations/slack');
+      const { data: res } = await supabase
+        .from('project_resources')
+        .select('external_id')
+        .eq('workspace_id', ctx.uuid)
+        .eq('project_id', input.projectId)
+        .eq('type', 'slack_channel')
+        .maybeSingle();
+      if (res?.external_id) {
+        postMessageToChannel(res.external_id, text).catch(() => {});
+      } else {
+        postSlackNotification({ workspaceUuid: ctx.uuid, text }).catch(() => {});
+      }
+    }
+  }
 
   return { ok: true, data: { id: input.projectId, ...input.patch } };
 }

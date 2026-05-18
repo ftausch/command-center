@@ -1,6 +1,7 @@
 'use server';
 // Event Operations — CRUD for Run-of-Show, Attendees, Partners/Sponsors.
 // All writes require manager+ role via has_workspace_role RLS.
+// Slack notifications fire best-effort on key status changes.
 
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContext, canWriteAsRole, currentUser } from '@/lib/auth';
@@ -17,6 +18,44 @@ import type {
 } from '@/lib/types';
 
 const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
+
+// ── Slack helper ──────────────────────────────────────────────────────────
+// Looks up the Slack channel ID stored in project_resources, then posts
+// directly to it via the bot token. Falls back to the webhook if no channel
+// ID is found. Always best-effort — never blocks the main action.
+
+async function notifyEventSlack(
+  workspaceUuid: string,
+  projectId: string,
+  text: string,
+): Promise<void> {
+  try {
+    const supabase = createClient();
+    if (!supabase) return;
+
+    // Look up Slack channel ID from project_resources
+    const { data: res } = await supabase
+      .from('project_resources')
+      .select('external_id, url')
+      .eq('workspace_id', workspaceUuid)
+      .eq('project_id', projectId)
+      .eq('type', 'slack_channel')
+      .maybeSingle();
+
+    const { postMessageToChannel, postSlackNotification } = await import('@/lib/integrations/slack');
+
+    if (res?.external_id) {
+      await postMessageToChannel(res.external_id, text);
+    } else {
+      // Fallback: post via incoming webhook
+      await postSlackNotification({ workspaceUuid, text, channelLabel: 'event-ops' });
+    }
+  } catch (e: any) {
+    console.error('[event-ops] Slack notify failed (non-blocking):', e?.message ?? e);
+  }
+}
+
+const ATTENDEE_MILESTONES = [10, 25, 50, 100, 150, 200, 300, 500];
 
 async function actor() {
   const u = await currentUser();
@@ -147,6 +186,10 @@ export async function updateAgendaItem(input: {
   if (input.patch.notes       !== undefined) row.notes        = input.patch.notes || null;
   if (input.patch.sortOrder   !== undefined) row.sort_order   = input.patch.sortOrder;
 
+  // Fetch before-state to detect done transition
+  const { data: before } = await supabase
+    .from('event_agenda_items').select('status, title, project_id').eq('id', input.itemId).single();
+
   const { data, error } = await supabase
     .from('event_agenda_items')
     .update(row)
@@ -154,6 +197,20 @@ export async function updateAgendaItem(input: {
     .eq('workspace_id', ctx.uuid)
     .select().single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  // Notify team when an agenda item goes live or is marked done during the event
+  if (input.patch.status && before && input.patch.status !== before.status) {
+    const pid       = before.project_id as string;
+    const timeStr   = data.time_label ? `${data.time_label} — ` : '';
+    if (input.patch.status === 'active') {
+      notifyEventSlack(ctx.uuid, pid,
+        `▶️ *${timeStr}${data.title}* hat begonnen.`);
+    } else if (input.patch.status === 'done') {
+      notifyEventSlack(ctx.uuid, pid,
+        `✅ *${timeStr}${data.title}* ist abgeschlossen.`);
+    }
+  }
+
   return { ok: true, data: rowToAgenda(data) };
 }
 
@@ -221,6 +278,24 @@ export async function createAttendee(input: {
     })
     .select().single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  // Check attendee milestone — fire-and-forget
+  const { count } = await supabase
+    .from('event_attendees')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', input.projectId)
+    .neq('status', 'cancelled');
+  const total = count ?? 0;
+  if (ATTENDEE_MILESTONES.includes(total)) {
+    // Fetch project name for the message
+    const { data: proj } = await supabase
+      .from('projects').select('name').eq('id', input.projectId).single();
+    notifyEventSlack(
+      ctx.uuid, input.projectId,
+      `🎉 *${proj?.name ?? 'Event'}* hat ${total} Anmeldungen erreicht!`,
+    );
+  }
+
   return { ok: true, data: rowToAttendee(data) };
 }
 
@@ -346,6 +421,10 @@ export async function updateEventPartner(input: {
   if (input.patch.invoiceStatus  !== undefined) row.invoice_status = input.patch.invoiceStatus;
   if (input.patch.notes          !== undefined) row.notes          = input.patch.notes || null;
 
+  // Fetch current status to detect transition
+  const { data: before } = await supabase
+    .from('event_partners').select('status, name, project_id').eq('id', input.partnerId).single();
+
   const { data, error } = await supabase
     .from('event_partners')
     .update(row)
@@ -353,6 +432,34 @@ export async function updateEventPartner(input: {
     .eq('workspace_id', ctx.uuid)
     .select().single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  // Notify on partner status transitions
+  if (input.patch.status && before && input.patch.status !== before.status) {
+    const newStatus = input.patch.status;
+    const pid       = before.project_id as string;
+    const pname     = before.name as string;
+    const { data: proj } = await supabase.from('projects').select('name').eq('id', pid).single();
+    const eventName = proj?.name ?? 'Event';
+
+    if (newStatus === 'confirmed') {
+      notifyEventSlack(ctx.uuid, pid,
+        `🤝 *${pname}* ist jetzt bestätigter Sponsor/Partner bei *${eventName}*!`);
+    } else if (newStatus === 'active') {
+      notifyEventSlack(ctx.uuid, pid,
+        `✅ Partner *${pname}* ist aktiv bei *${eventName}*.`);
+    } else if (newStatus === 'recap_sent') {
+      notifyEventSlack(ctx.uuid, pid,
+        `📊 Sponsor Report an *${pname}* versendet. *${eventName}* ist abgeschlossen.`);
+    }
+  }
+
+  // Notify when logo is received
+  if (input.patch.logoReceived === true && before && !before.status) {
+    const pid = before.project_id as string;
+    notifyEventSlack(ctx.uuid, pid,
+      `🖼️ Logo von *${before.name}* erhalten.`);
+  }
+
   return { ok: true, data: rowToPartner(data) };
 }
 
