@@ -15,8 +15,16 @@ function lumaHeaders() {
 }
 
 export function extractLumaSlug(url: string): string | null {
-  const m = url.trim().match(/lu\.ma\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : null;
+  const s = url.trim();
+  // Manage URL: luma.com/event/manage/evt-xxx  → use evt-xxx
+  const manage = s.match(/luma\.com\/event\/manage\/(evt-[a-zA-Z0-9]+)/);
+  if (manage) return manage[1];
+  // Direct evt-xxx ID in any URL
+  const evt = s.match(/(evt-[a-zA-Z0-9]+)/);
+  if (evt) return evt[1];
+  // Public slug: lu.ma/slug
+  const slug = s.match(/lu\.ma\/([a-zA-Z0-9_-]+)/);
+  return slug ? slug[1] : null;
 }
 
 export interface LumaEventData {
