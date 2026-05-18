@@ -37,7 +37,7 @@ function useActivityUnread(workspaceId, route) {
 }
 
 export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, division, setDivision } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, division, setDivision, me } = useWorkspace();
   const canCreateTask = myRole === 'owner' || myRole === 'admin' || myRole === 'manager' || myRole === 'member';
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const unreadActivity = useActivityUnread(currentWorkspaceId, route);
@@ -63,8 +63,6 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
     { id: 'templates', label: 'Templates',  icon: <I.template size={16} /> },
     { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
   ];
-
-  const me = data.members[0];
 
   return (
     <>
