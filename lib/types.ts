@@ -435,6 +435,33 @@ export interface TaskChecklistItemView {
 // Standardised return shape for every server action. Lets callers update
 // optimistic state with `data` (and merge `activity` into the activity log)
 // or surface `error` in the UI.
+export type AssistantItemType   = 'follow_up' | 'scheduling' | 'document_request' | 'approval' | 'reminder' | 'other';
+export type AssistantItemStatus = 'open' | 'waiting' | 'done' | 'escalated' | 'cancelled';
+export type AssistantPriority   = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface AssistantItem {
+  id: string;
+  workspaceId: string;
+  ownerId?: string;
+  createdBy?: string;
+  relatedProjectId?: string;
+  title: string;
+  description?: string;
+  type: AssistantItemType;
+  status: AssistantItemStatus;
+  priority?: AssistantPriority;
+  contactName?: string;
+  contactEmail?: string;
+  company?: string;
+  dueDate?: string;
+  nextFollowUpAt?: string;
+  lastContactedAt?: string;
+  snoozedUntil?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ActionResult<T> = {
   ok: boolean;
   data?: T;

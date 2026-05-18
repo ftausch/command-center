@@ -148,6 +148,13 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           </>
         )}
 
+        {/* ── Assistenz ─────────────────────────────────────────── */}
+        <div className="nav-section">Assistenz</div>
+        <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
+          <span style={{ fontSize: 15 }}>🗂</span>
+          <span>Assistant Hub</span>
+        </div>
+
         {/* ── Team ──────────────────────────────────────────────── */}
         <div className="nav-section">Team</div>
         {navWork.map(n => (
