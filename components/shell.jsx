@@ -148,12 +148,16 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           </>
         )}
 
-        {/* ── Assistenz ─────────────────────────────────────────── */}
-        <div className="nav-section">Assistenz</div>
-        <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
-          <span style={{ fontSize: 15 }}>🗂</span>
-          <span>Assistant Hub</span>
-        </div>
+        {/* ── Assistenz — owner/admin/manager (Fabian, Malik, Kashiri) ─ */}
+        {(myRole === 'owner' || myRole === 'admin' || myRole === 'manager') && (
+          <>
+            <div className="nav-section">Assistenz</div>
+            <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
+              <span style={{ fontSize: 15 }}>🗂</span>
+              <span>Assistant Hub</span>
+            </div>
+          </>
+        )}
 
         {/* ── Operations — nur owner/admin (Fabian, Malik, Tim) ─── */}
         {(myRole === 'owner' || myRole === 'admin') && (
