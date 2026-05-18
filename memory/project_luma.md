@@ -1,11 +1,11 @@
 ---
 name: luma-integration-pending
-description: Luma (lu.ma) API integration planned for Command Center — waiting for API key
+description: Luma (lu.ma) API integration planned for Command Center — API key to be added tomorrow
 metadata:
   type: project
 ---
 
-Luma Integration steht aus — API Key fehlt noch.
+Luma Integration steht aus — API Key wird morgen eingetragen.
 
 **Geplanter Scope (alle 4 Features bestätigt):**
 1. Luma-Link speichern → `eventMeta.lumaUrl` + "Auf Luma öffnen" Button im Event Detail
@@ -13,10 +13,18 @@ Luma Integration steht aus — API Key fehlt noch.
 3. RSVP-Zähler → `getLumaEventStats()` Server Action → Anmeldezahl in Event Hub + Event Detail
 4. Gästeliste sync → "Von Luma importieren" Button im Gäste-Tab → confirmed guests in `event_attendees`
 
-**Was gebraucht wird:**
-- `LUMA_API_KEY` in Vercel eintragen (Luma → Settings → API → "Create API Key")
-- Kein neues SQL nötig
+**Setup-Schritte morgen:**
+1. Luma → Settings → API → "Create API Key" → kopieren
+2. Vercel → command-center → Settings → Environment Variables → `LUMA_API_KEY` eintragen (Production)
+3. Redeploy triggern
+4. Dann bauen: `lib/integrations/luma.ts` + NewEventModal + EventOps AttendeeList + ProjectDetail
 
-**Why:** Luma ist das Event-Anmelde-Tool von Unicorn Bakery. Integration schließt den Kreis zwischen Anmeldung (Luma) und Produktion (Command Center).
+**Luma API Basis-URL:** `https://api.lu.ma/public/v1/`
+**Auth:** `x-luma-api-key: <KEY>` Header
 
-**How to apply:** Sobald API Key vorhanden: lib/integrations/luma.ts erstellen, NewEventModal + EventOps.jsx (AttendeeList) + ProjectDetail erweitern.
+**Relevante Endpoints:**
+- `GET /event/get?api_id=<id>` — Event-Details (Titel, Datum, Location, Cover)
+- `GET /event/get-guests?event_api_id=<id>` — Gästeliste (name, email, approval_status)
+- Luma Event URL Format: `lu.ma/EVENT-SLUG` → API ID aus URL extrahieren
+
+**Why:** Luma ist das Event-Anmelde-Tool von Unicorn Bakery. Schließt den Kreis zwischen Anmeldung (Luma) und Produktion (Command Center).

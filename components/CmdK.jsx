@@ -40,10 +40,14 @@ function SectionHeader({ label }) {
   );
 }
 
+const KINDS = ['Alle', 'Tasks', 'Projekte', 'Episoden', 'Events'];
+const KIND_TO_GROUP = { Tasks: 'Tasks', Projekte: 'Projekte', Episoden: 'Episoden' };
+
 export function CmdK({ open, onClose, setRoute, onOpenTask }) {
   const { currentWorkspace: brand, data } = useWorkspace();
-  const [q, setQ] = useState('');
-  const [idx, setIdx] = useState(0);
+  const [q, setQ]           = useState('');
+  const [idx, setIdx]       = useState(0);
+  const [kindFilter, setKindFilter] = useState('Alle');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const inputRef = useRef(null);
   const activeRef = useRef(null);
@@ -52,6 +56,7 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
     if (open) {
       setQ('');
       setIdx(0);
+      setKindFilter('Alle');
       setNewTaskOpen(false);
       setTimeout(() => inputRef.current?.focus(), 30);
     }
@@ -95,13 +100,17 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       action: () => setRoute('project:' + p.id),
     }));
 
-    const taskItems = data.tasks.map((t) => ({
-      kind: 'Task', id: t.id,
-      label: t.title,
-      sub: (data.projects.find((p) => p.id === t.projectId)?.name ?? '') + ' · ' + t.status,
-      meta2: t.priority,
-      action: () => onOpenTask?.(t.id, t.projectId),
-    }));
+    const taskItems = data.tasks.map((t) => {
+      const proj = data.projects.find((p) => p.id === t.projectId);
+      return {
+        kind: 'Task', id: t.id,
+        label: t.title,
+        sub: (proj?.name ?? '') + ' · ' + t.status + (t.description ? ' · ' + t.description.slice(0, 60) : ''),
+        meta2: t.priority,
+        division: proj?.division ?? 'general',
+        action: () => onOpenTask?.(t.id, t.projectId),
+      };
+    });
 
     const personItems = data.members.map((u) => ({
       kind: 'Person', id: u.id,
@@ -120,17 +129,33 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
     const filtering = q.trim() !== '';
     const filtered = (items) => filtering ? items.filter((it) => matches(it, q)) : items;
 
-    const groups = [
-      { label: 'Actions',  items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
-      { label: 'Projekte', items: filtered(projectItems).slice(0, filtering ? 10 : 3) },
-      { label: 'Tasks',    items: filtered(taskItems).slice(0, filtering ? 12 : 4) },
-      { label: 'Episoden', items: filtered(episodeItems).slice(0, filtering ? 10 : 3) },
-      { label: 'Personen', items: filtered(personItems).slice(0, 5) },
-    ].filter((g) => g.items.length > 0);
+    // Kind filter: 'Events' shows only event-division projects
+    const filteredProjects = kindFilter === 'Events'
+      ? projectItems.filter((p) => {
+          const proj = data.projects.find((pr) => pr.id === p.id);
+          return proj?.division === 'events';
+        })
+      : projectItems;
+
+    const allGroups = [
+      { label: 'Actions',  kind: null,       items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
+      { label: 'Projekte', kind: 'Projekte', items: filtered(filteredProjects).slice(0, filtering ? 10 : 3) },
+      { label: 'Events',   kind: 'Events',   items: kindFilter === 'Events' ? filtered(filteredProjects).slice(0, filtering ? 10 : 3) : [] },
+      { label: 'Tasks',    kind: 'Tasks',    items: filtered(taskItems).slice(0, filtering ? 12 : 4) },
+      { label: 'Episoden', kind: 'Episoden', items: filtered(episodeItems).slice(0, filtering ? 10 : 3) },
+      { label: 'Personen', kind: null,       items: filtered(personItems).slice(0, 5) },
+    ];
+
+    const groups = allGroups.filter((g) => {
+      if (g.items.length === 0) return false;
+      if (kindFilter === 'Alle') return g.label !== 'Events';
+      if (kindFilter === 'Events') return g.label === 'Events';
+      return g.kind === kindFilter || g.kind === null;
+    });
 
     const flat = groups.flatMap((g) => g.items);
     return { groups, flat };
-  }, [q, open, brand, data, data.episodes, setRoute, onOpenTask]);
+  }, [q, kindFilter, open, brand, data, data.episodes, setRoute, onOpenTask]);
 
   // Clamp idx when results change
   useEffect(() => {
@@ -192,8 +217,25 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
             <Kbd>esc</Kbd>
           </div>
 
+          {/* Kind filter chips */}
+          <div style={{ display: 'flex', gap: 4, padding: '6px 12px 6px', borderBottom: '1px solid var(--border-soft)', overflowX: 'auto' }}>
+            {KINDS.map((k) => (
+              <button
+                key={k}
+                onClick={() => { setKindFilter(k); setIdx(0); }}
+                style={{
+                  padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap',
+                  background: kindFilter === k ? 'var(--brand)' : 'var(--bg-sunk)',
+                  color: kindFilter === k ? '#fff' : 'var(--text-2)',
+                  transition: 'background 0.1s, color 0.1s',
+                }}
+              >{k}</button>
+            ))}
+          </div>
+
           {/* Results */}
-          <div style={{ maxHeight: 420, overflowY: 'auto', padding: '4px 6px 6px' }}>
+          <div style={{ maxHeight: 380, overflowY: 'auto', padding: '4px 6px 6px' }}>
             {flat.length === 0 && (
               <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
                 Keine Treffer in {brand?.name ?? 'Workspace'}.

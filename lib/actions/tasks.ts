@@ -167,7 +167,7 @@ export async function updateTask(input: {
   taskId: string;
   workspaceId: string;
   patch: Partial<
-    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'description' | 'tags' | 'blocker' | 'waitingOn' | 'episodeId'>
+    Pick<TaskView, 'title' | 'assignee' | 'due' | 'priority' | 'description' | 'tags' | 'blocker' | 'waitingOn' | 'episodeId' | 'blockedByTaskId'>
   >;
 }): Promise<ActionResult<Partial<TaskView> & { id: string }>> {
   const supabase = createClient();
@@ -191,6 +191,7 @@ export async function updateTask(input: {
   if (input.patch.blocker !== undefined) row.blocker = input.patch.blocker || null;
   if (input.patch.waitingOn !== undefined) row.waiting_on_id = input.patch.waitingOn || null;
   if (input.patch.episodeId !== undefined) row.episode_id = input.patch.episodeId || null;
+  if (input.patch.blockedByTaskId !== undefined) row.blocked_by_task_id = input.patch.blockedByTaskId || null;
 
   const { error } = await supabase
     .from('tasks')

@@ -269,6 +269,7 @@ export interface TaskView {
   waitingOn?: string;
   blocker?: string;
   episodeId?: string;
+  blockedByTaskId?: string;
 }
 
 export interface ActivityView {

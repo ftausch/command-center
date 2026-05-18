@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
+import { QuickStatusPicker } from '@/components/QuickStatus';
 import { I } from '@/components/icons';
 import {
   Avatar, AvatarStack, Badge, EmptyState,
@@ -34,6 +35,7 @@ function greeting(name) {
 export function DashboardScreen({ setRoute, onOpenTask }) {
   const { currentWorkspace: brand, data, me } = useWorkspace();
   const filterByDivision = useDivisionFilter();
+  const [dashTab, setDashTab] = useState('overview'); // 'overview' | 'focus'
 
   const allTasks  = filterByDivision(data.tasks.map(t => ({
     ...t,
@@ -99,6 +101,16 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
           <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
             <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>
             <DivisionSwitcher />
+            <div style={{ display: 'flex', gap: 4, padding: '2px', background: 'var(--bg-sunk)', borderRadius: 10, marginLeft: 4 }}>
+              {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }].map((t) => (
+                <button key={t.id} onClick={() => setDashTab(t.id)} style={{
+                  padding: '4px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, transition: 'all 0.12s',
+                  background: dashTab === t.id ? 'white' : 'transparent',
+                  color: dashTab === t.id ? 'var(--text-1)' : 'var(--text-3)',
+                  boxShadow: dashTab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                }}>{t.label}</button>
+              ))}
+            </div>
           </div>
           <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
@@ -123,6 +135,20 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
         </button>
       </div>
 
+      {/* ── Mein Fokus ──────────────────────────────────────────────────── */}
+      {dashTab === 'focus' && me && (
+        <MeinFokus me={me} data={data} setRoute={setRoute} onOpenTask={onOpenTask} />
+      )}
+
+      {dashTab === 'focus' && !me && (
+        <div className="card card-pad" style={{ textAlign: 'center', padding: 48, color: 'var(--text-3)' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Profil wird geladen…</div>
+        </div>
+      )}
+
+      {dashTab !== 'focus' && (
+      <>
       {/* ── KPI row — 4 coloured stat cards ─────────────────────────────── */}
       <div className="grid grid-4 gap-3 mb-6">
         <StatCard
@@ -307,6 +333,102 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
           )}
         </div>
       </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+// ── Mein Fokus ────────────────────────────────────────────────────────────
+
+function MeinFokus({ me, data, setRoute, onOpenTask }) {
+  const myTasks     = data.tasks.filter((t) => t.assignee === me.id && t.status !== 'Done');
+  const overdue     = myTasks.filter((t) => daysUntil(t.due) < 0);
+  const dueToday    = myTasks.filter((t) => daysUntil(t.due) === 0);
+  const thisWeek    = myTasks.filter((t) => daysUntil(t.due) > 0 && daysUntil(t.due) <= 7);
+  const inProgress  = myTasks.filter((t) => t.status === 'In Progress');
+  const inReview    = myTasks.filter((t) => t.status === 'Review');
+  const myProjects  = data.projects.filter(
+    (p) => p.status !== 'Done' && (p.owner === me.id || p.team?.includes(me.id))
+  );
+  const myEvents    = myProjects.filter((p) => p.division === 'events');
+
+  const sections = [
+    { label: '🔴 Überfällig', items: overdue, empty: 'Nichts überfällig.' },
+    { label: '📅 Heute fällig', items: dueToday, empty: 'Heute nichts fällig.' },
+    { label: '▶️ In Bearbeitung', items: inProgress, empty: null },
+    { label: '👀 Wartet auf Review', items: inReview, empty: null },
+    { label: '📆 Diese Woche', items: thisWeek, empty: null },
+  ].filter((s) => s.items.length > 0 || s.empty !== null);
+
+  return (
+    <div className="col gap-4">
+      {/* Personal task sections */}
+      {sections.map((s) => s.items.length > 0 && (
+        <div key={s.label} className="card card-pad">
+          <div className="h3 mb-3">{s.label} <span style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 400 }}>({s.items.length})</span></div>
+          <div className="col gap-2">
+            {s.items.map((t) => {
+              const p = data.projects.find((pr) => pr.id === t.projectId);
+              return (
+                <div key={t.id} className="row between items-center"
+                  style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-sunk)', cursor: 'pointer' }}
+                  onClick={() => onOpenTask?.(t.id, t.projectId)}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                    {p && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>{p.name}</div>}
+                  </div>
+                  <div className="row gap-2" style={{ flexShrink: 0, marginLeft: 8 }}>
+                    {t.due && <span style={{ fontSize: 11.5, color: daysUntil(t.due) < 0 ? 'var(--danger)' : 'var(--text-3)' }}>{dueLabel(t.due).text}</span>}
+                    <QuickStatusPicker task={t} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {myTasks.length === 0 && (
+        <div className="card card-pad" style={{ textAlign: 'center', padding: 48 }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-2)' }}>Alles erledigt!</div>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 4 }}>Du hast keine offenen Tasks.</div>
+        </div>
+      )}
+
+      {/* My projects */}
+      {myProjects.length > 0 && (
+        <div className="card card-pad">
+          <div className="h3 mb-3">📁 Meine Projekte ({myProjects.length})</div>
+          <div className="col gap-2">
+            {myProjects.slice(0, 6).map((p) => {
+              const open = data.tasks.filter((t) => t.projectId === p.id && t.status !== 'Done').length;
+              return (
+                <div key={p.id} className="row between items-center"
+                  style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-sunk)', cursor: 'pointer' }}
+                  onClick={() => setRoute('project:' + p.id)}
+                >
+                  <div className="row gap-2 items-center">
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: p.division === 'events' ? '#e8780a' : 'var(--brand)',
+                    }} />
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
+                    {p.division !== 'general' && (
+                      <span style={{ fontSize: 10, color: p.division === 'events' ? '#e8780a' : 'var(--brand)', fontWeight: 600, textTransform: 'uppercase' }}>
+                        {p.division === 'events' ? 'Event' : 'Podcast'}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{open} offen</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

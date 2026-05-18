@@ -431,6 +431,22 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
               </select>
             </DetailRow>
           )}
+          <DetailRow label="Wartet auf Task">
+            <select
+              className="input"
+              value={task.blockedByTaskId || ''}
+              onChange={(e) => saveField('blockedByTaskId', e.target.value)}
+              disabled={fieldPending === 'blockedByTaskId'}
+              style={{ height: 28, fontSize: 12.5, flex: 1 }}
+            >
+              <option value="">— Keine Abhängigkeit —</option>
+              {data.tasks
+                .filter((t) => t.id !== task.id && t.projectId === task.projectId)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+            </select>
+          </DetailRow>
         </div>
 
         {/* ── Description ── */}
@@ -474,6 +490,24 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
             </div>
           )}
         </div>
+
+        {/* ── Dependency banner ── */}
+        {task.blockedByTaskId && (() => {
+          const dep = data.tasks.find((t) => t.id === task.blockedByTaskId);
+          if (!dep) return null;
+          return (
+            <div style={{ fontSize: 12.5, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-sunk)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <I.arrowRight size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-3)' }}>Wartet auf:</span>
+              <span style={{ fontWeight: 600, color: dep.status === 'Done' ? 'var(--success)' : 'var(--warning)' }}>
+                {dep.title}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: dep.status === 'Done' ? 'var(--success)' : 'var(--text-3)' }}>
+                {dep.status}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* ── Blocker banner ── */}
         {task.blocker && (

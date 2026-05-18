@@ -6,18 +6,25 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { DivisionSwitcher, useDivisionFilter } from '@/components/DivisionSwitcher';
 import { I } from '@/components/icons';
 import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from '@/components/ui';
-import { dueLabel, projectProgress, statusColor } from '@/lib/utils';
+import { dueLabel, projectProgress, projectHealthScore, eventHealthColor, statusColor } from '@/lib/utils';
 import { NewProjectModal } from '@/components/NewProjectModal';
+import { SavedViewsButton } from '@/components/SavedViews';
 import { CAN } from '@/lib/roles';
 
 const DIVISION_DOT = { podcast: 'var(--brand)', events: '#e8780a', general: 'var(--text-4)' };
 
 export function ProjectsScreen({ setRoute }) {
-  const { currentWorkspace: brand, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
   const filterByDivision = useDivisionFilter();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+
+  const currentView = { statusFilter, search };
+  const applyView = (v) => {
+    if (v.statusFilter) setStatusFilter(v.statusFilter);
+    if (v.search !== undefined) setSearch(v.search);
+  };
 
   const all = filterByDivision(data.projects);
   const allTasks = data.tasks;
@@ -74,8 +81,7 @@ export function ProjectsScreen({ setRoute }) {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <button className="chip" disabled title="Noch nicht verfügbar">View: List <I.chevronDown size={11} /></button>
-        <button className="chip" disabled title="Noch nicht verfügbar">Sort: Deadline <I.chevronDown size={11} /></button>
+        <SavedViewsButton workspaceId={currentWorkspaceId} currentView={currentView} onApply={applyView} />
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -84,6 +90,7 @@ export function ProjectsScreen({ setRoute }) {
             <tr>
               <th>Project</th>
               <th>Status</th>
+              <th>Health</th>
               <th>Phase</th>
               <th>Progress</th>
               <th>Priority</th>
@@ -96,7 +103,7 @@ export function ProjectsScreen({ setRoute }) {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+                <td colSpan={10} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
                   {search.trim()
                     ? 'Keine Projekte gefunden.'
                     : all.length === 0
@@ -114,7 +121,9 @@ export function ProjectsScreen({ setRoute }) {
               const owner = data.members.find((u) => u.id === p.owner);
               const phases = data.phases;
               const due = dueLabel(p.due);
-              const pProgress = projectProgress(allTasks.filter((t) => t.projectId === p.id));
+              const projTasks = allTasks.filter((t) => t.projectId === p.id);
+              const pProgress = projectProgress(projTasks);
+              const health = p.status !== 'Done' ? projectHealthScore(p, projTasks) : null;
               return (
                 <tr key={p.id} onClick={() => setRoute('project:' + p.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ minWidth: 240 }}>
@@ -132,6 +141,24 @@ export function ProjectsScreen({ setRoute }) {
                     <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>{p.type}</div>
                   </td>
                   <td><StatusBadge status={p.status} /></td>
+                  <td>
+                    {health ? (
+                      <span
+                        title={health.reasons.length > 0 ? health.reasons.join('\n') : 'Alles gut'}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 11.5, fontWeight: 600,
+                          color: eventHealthColor(health.score),
+                          cursor: health.reasons.length > 0 ? 'help' : 'default',
+                        }}
+                      >
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: eventHealthColor(health.score), display: 'inline-block', flexShrink: 0 }} />
+                        {health.score === 'green' ? 'Gut' : health.score === 'yellow' ? 'Warnung' : 'Kritisch'}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>—</span>
+                    )}
+                  </td>
                   <td>
                     <span className="mono" style={{ fontSize: 11.5, color: 'var(--text-2)' }}>
                       {phases[p.phaseIdx]}
