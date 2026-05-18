@@ -47,6 +47,7 @@ export function App() {
     loading,
     error,
     me,
+    myRole,
     mode,
   } = useWorkspace();
 
