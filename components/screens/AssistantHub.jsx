@@ -511,7 +511,7 @@ function DashboardTab({ items, workspaceId, onUpdate, onDelete, onAddNew, select
           { l: 'Wartet auf Antwort', v: waiting.length,      c: waiting.length > 0 ? 'var(--warning)' : undefined,         i: '⏳' },
           { l: 'Fehlende Unterlagen',v: missingDoc.length,   c: missingDoc.length > 0 ? 'var(--warning)' : undefined,      i: '📄' },
           { l: 'Termine offen',      v: appts.length,        c: appts.length > 0 ? 'var(--info)' : undefined,              i: '📅' },
-          { l: 'Wartet auf Chef',    v: fabian.length,       c: fabian.length > 0 ? '#e8780a' : undefined,                 i: '👔' },
+          { l: 'Wartet auf Fabian',    v: fabian.length,       c: fabian.length > 0 ? '#e8780a' : undefined,                 i: '⏳' },
           { l: 'Wiedervorlagen',     v: snoozed.length,      c: undefined,                                                 i: '💤' },
         ].map(({ l, v, c, i }) => (
           <div key={l} className="card card-pad" style={{ flex: '1 1 120px' }}>
@@ -550,7 +550,7 @@ function DashboardTab({ items, workspaceId, onUpdate, onDelete, onAddNew, select
       {/* Waiting on Fabian */}
       {fabian.length > 0 && (
         <div className="card card-pad">
-          <Section title="👔 Wartet auf Entscheidung" list={fabian} empty="" />
+          <Section title="⏳ Wartet auf Fabian" list={fabian} empty="" />
         </div>
       )}
 

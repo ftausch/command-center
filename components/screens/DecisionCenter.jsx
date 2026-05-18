@@ -255,7 +255,7 @@ export function DecisionCenterScreen({ setRoute }) {
       </div>
 
       <div className="row gap-1 mb-4">
-        {[{id:'active',l:'Offen'},{id:'overdue',l:`Überfällig ${counts.overdue}`,c:counts.overdue>0?'var(--danger)':undefined},{id:'waiting',l:'Wartet auf Chef'},{id:'decided',l:'Entschieden'}]
+        {[{id:'active',l:'Offen'},{id:'overdue',l:`Überfällig ${counts.overdue}`,c:counts.overdue>0?'var(--danger)':undefined},{id:'waiting',l:'Wartet auf Fabian'},{id:'decided',l:'Entschieden'}]
           .map(({id,l,c})=>(
             <button key={id} className={`chip${statusFilter===id?' active':''}`}
               onClick={()=>setStatusFilter(id)} style={{fontSize:12,color:statusFilter===id?undefined:c}}>{l}</button>
