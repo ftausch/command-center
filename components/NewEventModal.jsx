@@ -69,8 +69,6 @@ export function NewEventModal({ open, onClose, onCreated }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, status, onClose]);
 
-  if (!open) return null;
-
   const doFetchPreview = useCallback(async (url) => {
     if (!url.trim()) return;
     setLumaImporting(true);
@@ -84,13 +82,16 @@ export function NewEventModal({ open, onClose, onCreated }) {
 
   // Auto-fetch after 600ms debounce when URL looks valid
   useEffect(() => {
+    if (!open) return;
     const url = lumaUrl.trim();
     const looksValid = url.includes('lu.ma') || url.includes('luma.com') || url.startsWith('evt-');
     if (!url || !looksValid) { setLumaPreview(null); setLumaMsg(null); return; }
     clearTimeout(lumaDebounceRef.current);
     lumaDebounceRef.current = setTimeout(() => doFetchPreview(url), 600);
     return () => clearTimeout(lumaDebounceRef.current);
-  }, [lumaUrl, doFetchPreview]);
+  }, [open, lumaUrl, doFetchPreview]);
+
+  if (!open) return null;
 
   const onLumaImport = () => doFetchPreview(lumaUrl);
 
