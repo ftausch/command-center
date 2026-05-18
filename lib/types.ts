@@ -435,9 +435,10 @@ export interface TaskChecklistItemView {
 // Standardised return shape for every server action. Lets callers update
 // optimistic state with `data` (and merge `activity` into the activity log)
 // or surface `error` in the UI.
-export type AssistantItemType   = 'follow_up' | 'scheduling' | 'document_request' | 'approval' | 'reminder' | 'other';
-export type AssistantItemStatus = 'open' | 'waiting' | 'done' | 'escalated' | 'cancelled';
+export type AssistantItemType   = 'follow_up' | 'scheduling' | 'document_request' | 'meeting_prep' | 'approval' | 'decision' | 'reminder' | 'contact' | 'other';
+export type AssistantItemStatus = 'open' | 'waiting' | 'done' | 'escalated' | 'cancelled' | 'blocked';
 export type AssistantPriority   = 'low' | 'medium' | 'high' | 'urgent';
+export type AssistantSensitivity = 'normal' | 'internal' | 'confidential';
 
 export interface AssistantItem {
   id: string;
@@ -458,6 +459,7 @@ export interface AssistantItem {
   lastContactedAt?: string;
   snoozedUntil?: string;
   metadata: Record<string, unknown>;
+  sensitivity: AssistantSensitivity;
   createdAt: string;
   updatedAt: string;
 }

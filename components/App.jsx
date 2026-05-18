@@ -30,6 +30,10 @@ import { EventHubScreen } from '@/components/screens/EventHub';
 import { EventPipelineScreen } from '@/components/screens/EventPipeline';
 import { PartnersScreen } from '@/components/screens/Partners';
 import { AssistantHubScreen } from '@/components/screens/AssistantHub';
+import { OpsHealthScreen } from '@/components/screens/OpsHealth';
+import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
+import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
+import { RiskBoardScreen } from '@/components/screens/RiskBoard';
 
 export function App() {
   const {
@@ -220,6 +224,18 @@ export function App() {
         break;
       case 'assisthub':
         screen = <AssistantHubScreen setRoute={setRoute} />;
+        break;
+      case 'ops-health':
+        screen = <OpsHealthScreen setRoute={setRoute} />;
+        break;
+      case 'approvals':
+        screen = <ApprovalCenterScreen setRoute={setRoute} />;
+        break;
+      case 'decisions':
+        screen = <DecisionCenterScreen setRoute={setRoute} />;
+        break;
+      case 'risks':
+        screen = <RiskBoardScreen setRoute={setRoute} />;
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

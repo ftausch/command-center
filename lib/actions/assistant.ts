@@ -32,6 +32,7 @@ function rowToItem(row: any): AssistantItem {
     lastContactedAt:  row.last_contacted_at ?? undefined,
     snoozedUntil:     row.snoozed_until     ?? undefined,
     metadata:         row.metadata          ?? {},
+    sensitivity:      row.sensitivity       ?? 'normal',
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
   };
@@ -64,6 +65,8 @@ export async function createAssistantItem(input: {
   description?: string;
   relatedProjectId?: string;
   ownerId?: string;
+  sensitivity?: string;
+  metadata?: Record<string, unknown>;
 }): Promise<ActionResult<AssistantItem>> {
   const supabase = createClient();
   if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
@@ -88,6 +91,8 @@ export async function createAssistantItem(input: {
       contact_email:       input.contactEmail ?? null,
       company:             input.company ?? null,
       due_date:            input.dueDate ?? null,
+      sensitivity:         input.sensitivity ?? 'normal',
+      metadata:            input.metadata ?? {},
     })
     .select().single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
@@ -124,6 +129,8 @@ export async function updateAssistantItem(input: {
   if (input.patch.snoozedUntil   !== undefined) row.snoozed_until      = input.patch.snoozedUntil || null;
   if (input.patch.ownerId        !== undefined) row.owner_id           = input.patch.ownerId || null;
   if (input.patch.relatedProjectId!==undefined) row.related_project_id = input.patch.relatedProjectId || null;
+  if ((input.patch as any).sensitivity !== undefined) row.sensitivity  = (input.patch as any).sensitivity;
+  if ((input.patch as any).metadata    !== undefined) row.metadata     = (input.patch as any).metadata;
 
   const { data, error } = await supabase
     .from('assistant_items')

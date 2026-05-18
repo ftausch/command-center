@@ -155,6 +155,25 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           <span>Assistant Hub</span>
         </div>
 
+        {/* ── Operations ────────────────────────────────────────── */}
+        <div className="nav-section">Operations</div>
+        <div className={`nav-item ${route === 'ops-health' ? 'active' : ''}`} onClick={() => closeAndNav('ops-health')}>
+          <I.shield size={16} />
+          <span>Health</span>
+        </div>
+        <div className={`nav-item ${route === 'approvals' ? 'active' : ''}`} onClick={() => closeAndNav('approvals')}>
+          <I.check size={16} />
+          <span>Approvals</span>
+        </div>
+        <div className={`nav-item ${route === 'decisions' ? 'active' : ''}`} onClick={() => closeAndNav('decisions')}>
+          <I.log size={16} />
+          <span>Decisions</span>
+        </div>
+        <div className={`nav-item ${route === 'risks' ? 'active' : ''}`} onClick={() => closeAndNav('risks')}>
+          <I.alert size={16} />
+          <span>Risks & Blockers</span>
+        </div>
+
         {/* ── Team ──────────────────────────────────────────────── */}
         <div className="nav-section">Team</div>
         {navWork.map(n => (

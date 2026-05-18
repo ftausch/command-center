@@ -16,12 +16,21 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const TYPE_META = {
-  follow_up:        { label: 'Follow-up',  icon: '📩', color: 'var(--info)'    },
-  scheduling:       { label: 'Termin',     icon: '📅', color: 'var(--brand)'   },
-  document_request: { label: 'Dokument',   icon: '📄', color: 'var(--warning)' },
-  approval:         { label: 'Freigabe',   icon: '✅', color: 'var(--success)' },
-  reminder:         { label: 'Erinnerung', icon: '🔔', color: '#e8780a'        },
-  other:            { label: 'Sonstiges',  icon: '📌', color: 'var(--text-3)'  },
+  follow_up:        { label: 'Follow-up',     icon: '📩', color: 'var(--info)'    },
+  scheduling:       { label: 'Termin',        icon: '📅', color: 'var(--brand)'   },
+  document_request: { label: 'Dokument',      icon: '📄', color: 'var(--warning)' },
+  meeting_prep:     { label: 'Meeting Prep',  icon: '🤝', color: 'var(--brand)'   },
+  approval:         { label: 'Freigabe',      icon: '✅', color: 'var(--success)' },
+  decision:         { label: 'Entscheidung',  icon: '⚖️', color: '#712edd'        },
+  reminder:         { label: 'Erinnerung',    icon: '🔔', color: '#e8780a'        },
+  contact:          { label: 'Kontakt',       icon: '👤', color: 'var(--text-2)'  },
+  other:            { label: 'Sonstiges',     icon: '📌', color: 'var(--text-3)'  },
+};
+
+const SENSITIVITY_META = {
+  normal:       { label: 'Normal',       color: 'var(--text-4)' },
+  internal:     { label: 'Intern',       color: 'var(--warning)' },
+  confidential: { label: 'Vertraulich',  color: 'var(--danger)'  },
 };
 const STATUS_META = {
   open:      { label: 'Offen',       color: 'var(--info)'    },
@@ -391,7 +400,7 @@ function BulkBar({ count, workspaceId, selectedIds, items, onUpdate, onClear }) 
 // ── Quick Add Form ────────────────────────────────────────────────────────
 
 function QuickAdd({ workspaceId, onAdd, onCancel }) {
-  const [f, setF] = useState({ title:'', type:'follow_up', priority:'medium', contactName:'', contactEmail:'', company:'', dueDate:'', description:'' });
+  const [f, setF] = useState({ title:'', type:'follow_up', priority:'medium', sensitivity:'normal', contactName:'', contactEmail:'', company:'', dueDate:'', description:'' });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
@@ -403,6 +412,7 @@ function QuickAdd({ workspaceId, onAdd, onCancel }) {
     setSaving(true); setError(null);
     const r = await createAssistantItem({
       workspaceId, title: f.title.trim(), type: f.type, priority: f.priority,
+      sensitivity:  f.sensitivity,
       contactName:  f.contactName.trim()  || undefined,
       contactEmail: f.contactEmail.trim() || undefined,
       company:      f.company.trim()      || undefined,
