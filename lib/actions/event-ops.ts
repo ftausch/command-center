@@ -10,11 +10,16 @@ import type {
   EventAgendaItem,
   EventAttendee,
   EventPartner,
+  EventApproval,
+  EventDecision,
   AgendaStatus,
   AttendeeRole,
   AttendeeStatus,
   PartnerStatus,
   InvoiceStatus,
+  ApprovalType,
+  ApprovalStatus,
+  DecisionImpact,
 } from '@/lib/types';
 
 const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
@@ -476,6 +481,209 @@ export async function deleteEventPartner(input: {
     .from('event_partners')
     .delete()
     .eq('id', input.partnerId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: null };
+}
+
+// ── Approvals ─────────────────────────────────────────────────────────────
+
+function rowToApproval(row: any): EventApproval {
+  return {
+    id:          row.id,
+    projectId:   row.project_id,
+    workspaceId: row.workspace_id,
+    title:       row.title,
+    type:        (row.type ?? 'other') as ApprovalType,
+    status:      (row.status ?? 'draft') as ApprovalStatus,
+    reviewerId:  row.reviewer_id ?? undefined,
+    requestedBy: row.requested_by ?? undefined,
+    dueDate:     row.due_date ?? undefined,
+    notes:       row.notes ?? undefined,
+    createdAt:   row.created_at,
+    updatedAt:   row.updated_at,
+  };
+}
+
+export async function listApprovals(
+  workspaceId: string,
+  projectId: string,
+): Promise<EventApproval[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('event_approvals')
+    .select()
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  return (data ?? []).map(rowToApproval);
+}
+
+export async function createApproval(input: {
+  workspaceId: string;
+  projectId: string;
+  title: string;
+  type?: ApprovalType;
+  reviewerId?: string;
+  dueDate?: string;
+  notes?: string;
+}): Promise<ActionResult<EventApproval>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+
+  const userId = await actor();
+  const { data, error } = await supabase
+    .from('event_approvals')
+    .insert({
+      workspace_id:  ctx.uuid,
+      project_id:    input.projectId,
+      title:         input.title,
+      type:          input.type ?? 'other',
+      reviewer_id:   input.reviewerId ?? null,
+      requested_by:  userId,
+      due_date:      input.dueDate ?? null,
+      notes:         input.notes ?? null,
+    })
+    .select().single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+  return { ok: true, data: rowToApproval(data) };
+}
+
+export async function updateApproval(input: {
+  workspaceId: string;
+  approvalId: string;
+  patch: Partial<Pick<EventApproval, 'title' | 'type' | 'status' | 'reviewerId' | 'dueDate' | 'notes'>>;
+}): Promise<ActionResult<EventApproval>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.patch.title      !== undefined) row.title       = input.patch.title;
+  if (input.patch.type       !== undefined) row.type        = input.patch.type;
+  if (input.patch.status     !== undefined) row.status      = input.patch.status;
+  if (input.patch.reviewerId !== undefined) row.reviewer_id = input.patch.reviewerId || null;
+  if (input.patch.dueDate    !== undefined) row.due_date    = input.patch.dueDate || null;
+  if (input.patch.notes      !== undefined) row.notes       = input.patch.notes || null;
+
+  const { data, error } = await supabase
+    .from('event_approvals')
+    .update(row)
+    .eq('id', input.approvalId)
+    .eq('workspace_id', ctx.uuid)
+    .select().single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  // Notify on approval/rejection
+  if (input.patch.status === 'approved' || input.patch.status === 'changes_requested') {
+    const { data: proj } = await supabase.from('projects').select('name, id').eq('id', data.project_id).single();
+    const icon = input.patch.status === 'approved' ? '✅' : '🔄';
+    const label = input.patch.status === 'approved' ? 'freigegeben' : 'Änderungen angefordert';
+    notifyEventSlack(ctx.uuid, data.project_id,
+      `${icon} *${data.title}* wurde ${label} bei *${proj?.name ?? 'Event'}*.`);
+  }
+
+  return { ok: true, data: rowToApproval(data) };
+}
+
+export async function deleteApproval(input: {
+  workspaceId: string;
+  approvalId: string;
+}): Promise<ActionResult<null>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+  const { error } = await supabase
+    .from('event_approvals')
+    .delete()
+    .eq('id', input.approvalId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: null };
+}
+
+// ── Decision Log ──────────────────────────────────────────────────────────
+
+function rowToDecision(row: any): EventDecision {
+  return {
+    id:          row.id,
+    projectId:   row.project_id,
+    workspaceId: row.workspace_id,
+    decision:    row.decision,
+    reason:      row.reason ?? undefined,
+    decidedBy:   row.decided_by ?? undefined,
+    decidedAt:   row.decided_at,
+    impact:      (row.impact ?? undefined) as DecisionImpact | undefined,
+    notes:       row.notes ?? undefined,
+    createdAt:   row.created_at,
+  };
+}
+
+export async function listDecisions(
+  workspaceId: string,
+  projectId: string,
+): Promise<EventDecision[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('event_decisions')
+    .select()
+    .eq('project_id', projectId)
+    .order('decided_at', { ascending: false });
+  return (data ?? []).map(rowToDecision);
+}
+
+export async function createDecision(input: {
+  workspaceId: string;
+  projectId: string;
+  decision: string;
+  reason?: string;
+  impact?: DecisionImpact;
+  notes?: string;
+}): Promise<ActionResult<EventDecision>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+
+  const userId = await actor();
+  const { data, error } = await supabase
+    .from('event_decisions')
+    .insert({
+      workspace_id: ctx.uuid,
+      project_id:   input.projectId,
+      decision:     input.decision,
+      reason:       input.reason ?? null,
+      decided_by:   userId,
+      impact:       input.impact ?? null,
+      notes:        input.notes ?? null,
+    })
+    .select().single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+  return { ok: true, data: rowToDecision(data) };
+}
+
+export async function deleteDecision(input: {
+  workspaceId: string;
+  decisionId: string;
+}): Promise<ActionResult<null>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+  const { error } = await supabase
+    .from('event_decisions')
+    .delete()
+    .eq('id', input.decisionId)
     .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: null };

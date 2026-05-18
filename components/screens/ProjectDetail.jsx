@@ -16,7 +16,7 @@ import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
-import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, HealthBadge } from '@/components/EventOps';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, HealthBadge } from '@/components/EventOps';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -434,6 +434,8 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className={`tab ${tab === 'agenda' ? 'active' : ''}`} onClick={() => setTab('agenda')}>Ablaufplan</div>
           <div className={`tab ${tab === 'attendees' ? 'active' : ''}`} onClick={() => setTab('attendees')}>Gäste</div>
           <div className={`tab ${tab === 'partners' ? 'active' : ''}`} onClick={() => setTab('partners')}>Partner</div>
+          <div className={`tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>Freigaben</div>
+          <div className={`tab ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>Entscheidungen</div>
           <div className={`tab ${tab === 'recap' ? 'active' : ''}`} onClick={() => setTab('recap')}>Recap</div>
         </>)}
       </div>
@@ -633,6 +635,28 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 projectId={projectId}
                 workspaceId={workspaceId}
                 canEdit={CAN.editProject(myRole)}
+              />
+            </div>
+          )}
+
+          {tab === 'approvals' && project.division === 'events' && (
+            <div className="card card-pad">
+              <ApprovalsPanel
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+                members={data.members}
+              />
+            </div>
+          )}
+
+          {tab === 'decisions' && project.division === 'events' && (
+            <div className="card card-pad">
+              <DecisionLog
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+                members={data.members}
               />
             </div>
           )}

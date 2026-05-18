@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Badge, EmptyState, PriorityBadge, StatusBadge } from '@/components/ui';
 import { I } from '@/components/icons';
-import { daysUntil, dueLabel, projectProgress, eventHealthScore } from '@/lib/utils';
+import { daysUntil, dueLabel, projectProgress, eventHealthScore, eventHealthColor } from '@/lib/utils';
 import { NewEventModal } from '@/components/NewEventModal';
 import { HealthBadge } from '@/components/EventOps';
 
@@ -311,6 +311,51 @@ export function EventHubScreen({ setRoute }) {
 
         {/* ── Sidebar ──────────────────────────────────────────────────── */}
         <div className="col gap-3">
+
+          {/* ── Ops Health Dashboard ─────────────────────────────────────── */}
+          {(() => {
+            const noOwner    = eventProjects.filter(p => p.status !== 'Done' && !p.owner);
+            const noLocation = eventProjects.filter(p => p.status !== 'Done' && p.eventMeta?.eventDate && !p.eventMeta?.location);
+            const noSignup   = eventProjects.filter(p => p.status !== 'Done' && p.eventMeta?.eventDate && !p.eventMeta?.signupUrl && !p.eventMeta?.landingPageUrl);
+            const unassigned = openTasks.filter(t => !t.assignee);
+            const critical   = eventProjects.filter(p => p.status !== 'Done' && eventHealthScore(p, data.tasks.filter(t => t.projectId === p.id)).score === 'red');
+            const atRisk     = eventProjects.filter(p => p.status !== 'Done' && eventHealthScore(p, data.tasks.filter(t => t.projectId === p.id)).score === 'yellow');
+
+            const rows = [
+              { label: 'Kritische Events',        value: critical.length,   color: critical.length   > 0 ? 'var(--danger)'  : 'var(--success)', icon: '🔴' },
+              { label: 'Events mit Risiko',        value: atRisk.length,     color: atRisk.length     > 0 ? 'var(--warning)' : 'var(--success)', icon: '🟡' },
+              { label: 'Überfällige Tasks',        value: overdue.length,    color: overdue.length    > 0 ? 'var(--danger)'  : 'var(--success)', icon: '⏰' },
+              { label: 'Blockierte Tasks',         value: blocked.length,    color: blocked.length    > 0 ? 'var(--warning)' : 'var(--success)', icon: '🚫' },
+              { label: 'Nicht zugewiesene Tasks',  value: unassigned.length, color: unassigned.length > 0 ? 'var(--warning)' : 'var(--success)', icon: '👤' },
+              { label: 'Kein Owner',               value: noOwner.length,    color: noOwner.length    > 0 ? 'var(--warning)' : 'var(--success)', icon: '👋' },
+              { label: 'Keine Location',           value: noLocation.length, color: noLocation.length > 0 ? 'var(--warning)' : 'var(--success)', icon: '📍' },
+              { label: 'Kein Signup-Link',         value: noSignup.length,   color: noSignup.length   > 0 ? 'var(--warning)' : 'var(--success)', icon: '🔗' },
+            ].filter(r => r.value > 0);
+
+            if (rows.length === 0) return (
+              <div className="card card-pad">
+                <div className="h3 mb-2">Ops-Health</div>
+                <div style={{ fontSize: 12.5, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                  Alle Events auf Kurs
+                </div>
+              </div>
+            );
+
+            return (
+              <div className="card card-pad">
+                <div className="h3 mb-3">Ops-Health</div>
+                <div className="col gap-1">
+                  {rows.map((r) => (
+                    <div key={r.label} className="row between" style={{ padding: '5px 0', borderBottom: '1px solid var(--border-soft)', fontSize: 12.5 }}>
+                      <span style={{ color: 'var(--text-2)' }}>{r.icon} {r.label}</span>
+                      <span style={{ fontWeight: 700, color: r.color, minWidth: 20, textAlign: 'right' }}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Projects with resources */}
           <div className="card card-pad">

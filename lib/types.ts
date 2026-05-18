@@ -190,6 +190,13 @@ export type PartnerStatus =
 export type InvoiceStatus = 'pending' | 'sent' | 'paid' | 'cancelled';
 export type EventHealthScore = 'green' | 'yellow' | 'red';
 
+export type ApprovalType =
+  | 'landingpage' | 'sponsor_text' | 'linkedin_post' | 'event_recap'
+  | 'thumbnail' | 'newsletter' | 'run_of_show' | 'other';
+export type ApprovalStatus =
+  | 'draft' | 'ready_for_review' | 'changes_requested' | 'approved' | 'published';
+export type DecisionImpact = 'low' | 'medium' | 'high';
+
 export interface EventAgendaItem {
   id: string;
   projectId: string;
@@ -230,6 +237,34 @@ export interface EventPartner {
   deliverables?: string;
   logoReceived: boolean;
   invoiceStatus: InvoiceStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface EventApproval {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  title: string;
+  type: ApprovalType;
+  status: ApprovalStatus;
+  reviewerId?: string;
+  requestedBy?: string;
+  dueDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventDecision {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  decision: string;
+  reason?: string;
+  decidedBy?: string;
+  decidedAt: string;
+  impact?: DecisionImpact;
   notes?: string;
   createdAt: string;
 }

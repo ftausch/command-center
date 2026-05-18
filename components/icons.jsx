@@ -50,4 +50,8 @@ export const I = {
   download:  (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>,
   rss:       (p) => <Icon {...p}><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/></Icon>,
   bookmark:  (p) => <Icon {...p}><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></Icon>,
+  edit:      (p) => <Icon {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></Icon>,
+  send:      (p) => <Icon {...p}><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/></Icon>,
+  shield:    (p) => <Icon {...p}><path d="M12 2l9 4v5c0 5-3.5 9.7-9 11-5.5-1.3-9-6-9-11V6z"/></Icon>,
+  log:       (p) => <Icon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></Icon>,
 };

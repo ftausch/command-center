@@ -10,6 +10,8 @@ import {
   listAgendaItems, createAgendaItem, updateAgendaItem, deleteAgendaItem,
   listAttendees, createAttendee, updateAttendee, deleteAttendee,
   listEventPartners, createEventPartner, updateEventPartner, deleteEventPartner,
+  listApprovals, createApproval, updateApproval, deleteApproval,
+  listDecisions, createDecision, deleteDecision,
 } from '@/lib/actions/event-ops';
 import { updateProject } from '@/lib/actions/projects';
 import { CAN } from '@/lib/roles';
@@ -696,7 +698,379 @@ export function RecapChecklist({ project, workspaceId, canEdit, onUpdate }) {
   );
 }
 
-// ── E) Event Health Badge ──────────────────────────────────────────────────
+// ── E) Approvals ──────────────────────────────────────────────────────────
+
+const APPROVAL_TYPES = [
+  { value: 'landingpage',   label: 'Landingpage' },
+  { value: 'sponsor_text',  label: 'Sponsor-Text' },
+  { value: 'linkedin_post', label: 'LinkedIn Post' },
+  { value: 'event_recap',   label: 'Event Recap' },
+  { value: 'thumbnail',     label: 'Thumbnail' },
+  { value: 'newsletter',    label: 'Newsletter' },
+  { value: 'run_of_show',   label: 'Run-of-Show' },
+  { value: 'other',         label: 'Sonstiges' },
+];
+
+const APPROVAL_STATUSES = ['draft','ready_for_review','changes_requested','approved','published'];
+const APPROVAL_STATUS_LABEL = {
+  draft:             'Entwurf',
+  ready_for_review:  'Zur Review',
+  changes_requested: 'Änderungen erbeten',
+  approved:          'Freigegeben',
+  published:         'Veröffentlicht',
+};
+const APPROVAL_STATUS_COLOR = {
+  draft:             'var(--text-3)',
+  ready_for_review:  'var(--info)',
+  changes_requested: 'var(--warning)',
+  approved:          'var(--success)',
+  published:         '#712edd',
+};
+
+export function ApprovalsPanel({ projectId, workspaceId, canEdit, members = [] }) {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding]   = useState(false);
+  const [pending, setPending] = useState(null);
+  const [draft, setDraft]     = useState({ title: '', type: 'other', reviewerId: '', dueDate: '' });
+
+  useEffect(() => {
+    listApprovals(workspaceId, projectId).then((d) => { setItems(d); setLoading(false); });
+  }, [projectId, workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.title.trim()) return;
+    setPending('add');
+    const r = await createApproval({
+      workspaceId, projectId,
+      title:      draft.title.trim(),
+      type:       draft.type || 'other',
+      reviewerId: draft.reviewerId || undefined,
+      dueDate:    draft.dueDate || undefined,
+    });
+    setPending(null);
+    if (r.ok && r.data) {
+      setItems((prev) => [...prev, r.data]);
+      setDraft({ title: '', type: 'other', reviewerId: '', dueDate: '' });
+      setAdding(false);
+    }
+  };
+
+  const onStatusChange = async (item, status) => {
+    const r = await updateApproval({ workspaceId, approvalId: item.id, patch: { status } });
+    if (r.ok && r.data) setItems((prev) => prev.map((x) => x.id === item.id ? r.data : x));
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteApproval({ workspaceId, approvalId: id });
+    setPending(null);
+    if (r.ok) setItems((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  const openCount    = items.filter((i) => i.status !== 'approved' && i.status !== 'published').length;
+  const approvedCount = items.filter((i) => i.status === 'approved' || i.status === 'published').length;
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div>
+          <div className="h3">Freigaben</div>
+          {items.length > 0 && (
+            <div className="row gap-3 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              <span style={{ color: 'var(--success)' }}>✓ {approvedCount} freigegeben</span>
+              {openCount > 0 && <span style={{ color: 'var(--warning)' }}>⏳ {openCount} offen</span>}
+            </div>
+          )}
+        </div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Freigabe anlegen
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 && !adding && (
+        <EmptyOps
+          icon="✅"
+          title="Keine Freigaben"
+          desc="Lege Review-Items für Landingpages, Sponsor-Texte, LinkedIn Posts oder Recaps an."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Erste Freigabe anlegen"
+        />
+      )}
+
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <input
+            className="input mb-2"
+            placeholder="Titel der Freigabe *"
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+            autoFocus
+            style={{ fontSize: 13 }}
+          />
+          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <select className="input" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })} style={{ fontSize: 13 }}>
+              {APPROVAL_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <select className="input" value={draft.reviewerId} onChange={(e) => setDraft({ ...draft, reviewerId: e.target.value })} style={{ fontSize: 13 }}>
+              <option value="">— Reviewer —</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <input
+              type="date" className="input"
+              value={draft.dueDate}
+              onChange={(e) => setDraft({ ...draft, dueDate: e.target.value })}
+              style={{ fontSize: 13 }}
+            />
+          </div>
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.title.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Anlegen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      <div className="col gap-2">
+        {items.map((item) => {
+          const reviewer = members.find((m) => m.id === item.reviewerId);
+          const typeLabel = APPROVAL_TYPES.find((t) => t.value === item.type)?.label ?? item.type;
+          const color = APPROVAL_STATUS_COLOR[item.status] ?? 'var(--text-3)';
+          return (
+            <div key={item.id} className="card" style={{ padding: '12px 14px' }}>
+              <div className="row between items-start">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="row gap-2 items-center mb-1">
+                    <span style={{ fontSize: 13.5, fontWeight: 600 }}>{item.title}</span>
+                    <span style={{
+                      fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 12,
+                      background: 'var(--bg-sunk)', color: 'var(--text-3)',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
+                    }}>{typeLabel}</span>
+                  </div>
+                  <div className="row gap-3 items-center" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {reviewer && <span>👤 {reviewer.name}</span>}
+                    {item.dueDate && <span>📅 {item.dueDate}</span>}
+                  </div>
+                </div>
+                <div className="row gap-2 items-center">
+                  {canEdit ? (
+                    <select
+                      className="input"
+                      value={item.status}
+                      onChange={(e) => onStatusChange(item, e.target.value)}
+                      style={{ height: 26, fontSize: 12, padding: '0 6px', width: 160, color }}
+                    >
+                      {APPROVAL_STATUSES.map((s) => (
+                        <option key={s} value={s}>{APPROVAL_STATUS_LABEL[s]}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span style={{
+                      fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                      background: 'var(--bg-sunk)', color,
+                    }}>
+                      {APPROVAL_STATUS_LABEL[item.status] ?? item.status}
+                    </span>
+                  )}
+                  {canEdit && (
+                    <button
+                      className="btn btn-quiet btn-icon"
+                      style={{ width: 26, height: 26, color: 'var(--text-4)' }}
+                      onClick={() => onDelete(item.id)}
+                      disabled={pending === item.id}
+                    ><I.x size={11} /></button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── F) Decision Log ────────────────────────────────────────────────────────
+
+const IMPACT_COLOR = { low: 'var(--text-3)', medium: 'var(--warning)', high: 'var(--danger)' };
+const IMPACT_LABEL = { low: 'Niedrig', medium: 'Mittel', high: 'Hoch' };
+
+export function DecisionLog({ projectId, workspaceId, canEdit, members = [] }) {
+  const [decisions, setDecisions] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [adding, setAdding]       = useState(false);
+  const [pending, setPending]     = useState(null);
+  const [draft, setDraft]         = useState({ decision: '', reason: '', impact: 'medium', notes: '' });
+
+  useEffect(() => {
+    listDecisions(workspaceId, projectId).then((d) => { setDecisions(d); setLoading(false); });
+  }, [projectId, workspaceId]);
+
+  const onAdd = async () => {
+    if (!draft.decision.trim()) return;
+    setPending('add');
+    const r = await createDecision({
+      workspaceId, projectId,
+      decision: draft.decision.trim(),
+      reason:   draft.reason || undefined,
+      impact:   draft.impact || undefined,
+      notes:    draft.notes || undefined,
+    });
+    setPending(null);
+    if (r.ok && r.data) {
+      setDecisions((prev) => [r.data, ...prev]);
+      setDraft({ decision: '', reason: '', impact: 'medium', notes: '' });
+      setAdding(false);
+    }
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteDecision({ workspaceId, decisionId: id });
+    setPending(null);
+    if (r.ok) setDecisions((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  if (loading) return <div style={{ padding: 24, color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>;
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div className="h3">Entscheidungslog</div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Entscheidung eintragen
+          </button>
+        )}
+      </div>
+
+      {decisions.length === 0 && !adding && (
+        <EmptyOps
+          icon="📋"
+          title="Keine Entscheidungen"
+          desc="Halte wichtige Entscheidungen fest — Location, Sponsoren, Formatänderungen, Absagen."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Erste Entscheidung eintragen"
+        />
+      )}
+
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <input
+            className="input mb-2"
+            placeholder="Entscheidung *  — z.B. Location: PATO bestätigt"
+            value={draft.decision}
+            onChange={(e) => setDraft({ ...draft, decision: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+            autoFocus
+            style={{ fontSize: 13 }}
+          />
+          <input
+            className="input mb-2"
+            placeholder="Begründung (optional)"
+            value={draft.reason}
+            onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+            style={{ fontSize: 12.5 }}
+          />
+          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '160px 1fr' }}>
+            <select className="input" value={draft.impact} onChange={(e) => setDraft({ ...draft, impact: e.target.value })} style={{ fontSize: 13 }}>
+              <option value="low">Impact: Niedrig</option>
+              <option value="medium">Impact: Mittel</option>
+              <option value="high">Impact: Hoch</option>
+            </select>
+            <input
+              className="input"
+              placeholder="Notizen (optional)"
+              value={draft.notes}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              style={{ fontSize: 12.5 }}
+            />
+          </div>
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd} disabled={!draft.decision.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Eintragen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      <div className="col gap-0">
+        {decisions.map((d, idx) => {
+          const decider = members.find((m) => m.id === d.decidedBy);
+          const impactColor = IMPACT_COLOR[d.impact] ?? 'var(--text-4)';
+          const date = new Date(d.decidedAt);
+          const dateStr = date.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' });
+          return (
+            <div key={d.id} style={{
+              display: 'flex', gap: 14, alignItems: 'flex-start',
+              padding: '12px 0',
+              borderBottom: idx < decisions.length - 1 ? '1px solid var(--border-soft)' : 'none',
+            }}>
+              {/* Timeline dot */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 3 }}>
+                <div style={{
+                  width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                  background: d.impact ? impactColor : 'var(--text-4)',
+                  border: '2px solid var(--bg-base)',
+                  outline: `2px solid ${d.impact ? impactColor : 'var(--border-soft)'}`,
+                }} />
+                {idx < decisions.length - 1 && (
+                  <div style={{ width: 1, flex: 1, minHeight: 20, background: 'var(--border-soft)', marginTop: 4 }} />
+                )}
+              </div>
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-1)', marginBottom: 2 }}>
+                  {d.decision}
+                </div>
+                {d.reason && (
+                  <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 4, lineHeight: 1.5 }}>
+                    {d.reason}
+                  </div>
+                )}
+                <div className="row gap-3" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                  <span>{dateStr}</span>
+                  {decider && <span>von {decider.name}</span>}
+                  {d.impact && (
+                    <span style={{ color: impactColor, fontWeight: 600 }}>
+                      Impact: {IMPACT_LABEL[d.impact]}
+                    </span>
+                  )}
+                </div>
+                {d.notes && (
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, fontStyle: 'italic' }}>
+                    {d.notes}
+                  </div>
+                )}
+              </div>
+              {canEdit && (
+                <button
+                  className="btn btn-quiet btn-icon"
+                  style={{ width: 24, height: 24, color: 'var(--text-4)', flexShrink: 0 }}
+                  onClick={() => onDelete(d.id)}
+                  disabled={pending === d.id}
+                  title="Löschen"
+                ><I.x size={10} /></button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── G) Event Health Badge ──────────────────────────────────────────────────
 
 export function HealthBadge({ score, reasons = [], size = 'md' }) {
   const [showTip, setShowTip] = useState(false);
