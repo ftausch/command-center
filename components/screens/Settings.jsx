@@ -12,18 +12,20 @@ import { MemberManageModal } from '@/components/MemberManageModal';
 import { timeAgo } from '@/lib/utils';
 import { updateWorkspace } from '@/lib/actions/workspaces';
 import { updateProject } from '@/lib/actions/projects';
+import { updateMyProfile } from '@/lib/actions/profile';
 import { CAN } from '@/lib/roles';
 
 export function SettingsScreen() {
-  const { currentWorkspaceId: workspace, currentWorkspace: brand, myRole } = useWorkspace();
-  const [section, setSection] = useState('slack');
+  const { currentWorkspaceId: workspace, currentWorkspace: brand, myRole, me } = useWorkspace();
+  const [section, setSection] = useState('profile');
 
   const sections = [
-    { id: 'workspace', label: 'Workspace', icon: <I.folder size={14} /> },
-    { id: 'members',   label: 'Team & Roles', icon: <I.team size={14} /> },
-    { id: 'slack',     label: 'Slack Integration', icon: <I.slack size={14} /> },
+    { id: 'profile',   label: 'Mein Profil',  icon: <I.user size={14} /> },
+    { id: 'workspace', label: 'Workspace',     icon: <I.folder size={14} /> },
+    { id: 'members',   label: 'Team & Roles',  icon: <I.team size={14} /> },
+    { id: 'slack',     label: 'Slack',         icon: <I.slack size={14} /> },
     { id: 'notifs',    label: 'Notifications', icon: <I.bell size={14} /> },
-    { id: 'brand',     label: 'Brand Colors', icon: <I.flag size={14} /> },
+    { id: 'brand',     label: 'Brand Colors',  icon: <I.flag size={14} /> },
   ];
 
   if (!brand) return null;
@@ -50,11 +52,12 @@ export function SettingsScreen() {
         </nav>
 
         <div>
-          {section === 'slack' && <SlackSection />}
+          {section === 'profile'   && <ProfileSection me={me} />}
+          {section === 'slack'     && <SlackSection />}
           {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
-          {section === 'members' && <MembersSection myRole={myRole} />}
-          {section === 'notifs' && <NotifsSection />}
-          {section === 'brand' && <BrandSection brand={brand} workspace={workspace} myRole={myRole} />}
+          {section === 'members'   && <MembersSection myRole={myRole} />}
+          {section === 'notifs'    && <NotifsSection />}
+          {section === 'brand'     && <BrandSection brand={brand} workspace={workspace} myRole={myRole} />}
         </div>
       </div>
     </div>
@@ -483,6 +486,110 @@ function BrandSection({ brand, workspace, myRole }) {
       )}
       <div className="meta" style={{ background: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, marginTop: 16 }}>
         💡 <strong style={{ color: 'var(--text-2)' }}>Designregel:</strong> Brand-Farben sind absichtlich gedeckt. Status (rot/gelb/grün) muss immer stärker stechen als die Brand-Farbe — sonst sieht der Nutzer Brand-Akzente an, wo er Warnungen sehen sollte.
+      </div>
+    </div>
+  );
+}
+
+// ── Mein Profil ───────────────────────────────────────────────────────────
+
+const SPECIALTIES = [
+  { value: '',          label: '— Keine Spezialisierung —' },
+  { value: 'host',      label: '🎙️ Host / Moderator' },
+  { value: 'editor',    label: '✂️ Cutter / Editor' },
+  { value: 'thumbnail', label: '🎨 Thumbnail Designer' },
+  { value: 'shownotes', label: '📝 Show Notes' },
+  { value: 'social',    label: '📱 Social Media' },
+  { value: 'audio',     label: '🎵 Audio Engineer' },
+  { value: 'manager',   label: '⚙️ Manager / Producer' },
+];
+
+function ProfileSection({ me }) {
+  const [name,      setName]      = useState(me?.name === me?.id ? '' : (me?.name ?? ''));
+  const [specialty, setSpecialty] = useState(me?.specialty ?? '');
+  const [status,    setStatus]    = useState('idle');
+  const [error,     setError]     = useState(null);
+
+  // Re-sync when me loads
+  useEffect(() => {
+    if (me) {
+      // If name looks like an email, clear it so user can set a real name
+      const isEmail = me.name?.includes('@');
+      setName(isEmail ? '' : (me.name ?? ''));
+      setSpecialty(me.specialty ?? '');
+    }
+  }, [me?.id]);
+
+  const save = async () => {
+    setStatus('saving'); setError(null);
+    const r = await updateMyProfile({ fullName: name.trim() || undefined, specialty: specialty || undefined });
+    setStatus(r.ok ? 'saved' : 'error');
+    if (!r.ok) setError(r.error);
+    else setTimeout(() => setStatus('idle'), 2000);
+  };
+
+  if (!me) return <div className="meta">Profil wird geladen…</div>;
+
+  return (
+    <div className="col gap-5">
+      <div>
+        <div className="h3 mb-1">Mein Profil</div>
+        <div className="meta">Name und Rolle die andere sehen wenn du Tasks bearbeitest oder Kommentare schreibst.</div>
+      </div>
+
+      {/* Avatar preview */}
+      <div className="row gap-4 items-center">
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%',
+          background: 'var(--brand)', color: 'white',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22, fontWeight: 700,
+        }}>
+          {(name || me.name || '?').split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase()}
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>{name || me.name || '—'}</div>
+          <div className="meta">{me.role} · {me.id}</div>
+        </div>
+      </div>
+
+      <div className="col gap-3" style={{ maxWidth: 420 }}>
+        <div className="col gap-1">
+          <label className="label">Name *</label>
+          <input
+            className="input"
+            placeholder="Vor- und Nachname"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            style={{ fontSize: 14 }}
+          />
+          <div className="meta">Wird in der Sidebar und in Grüßen angezeigt.</div>
+        </div>
+
+        <div className="col gap-1">
+          <label className="label">Spezialisierung</label>
+          <select
+            className="input"
+            value={specialty}
+            onChange={e => setSpecialty(e.target.value)}
+            style={{ fontSize: 14 }}
+          >
+            {SPECIALTIES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <div className="meta">Erscheint als Badge auf deinem Dashboard.</div>
+        </div>
+
+        {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
+        {status === 'saved' && <div style={{ fontSize: 12.5, color: 'var(--success)' }}>✓ Gespeichert — beim nächsten Login aktiv.</div>}
+
+        <button
+          className="btn btn-brand btn-sm"
+          onClick={save}
+          disabled={status === 'saving' || (!name.trim() && !specialty)}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          {status === 'saving' ? 'Wird gespeichert…' : 'Profil speichern'}
+        </button>
       </div>
     </div>
   );

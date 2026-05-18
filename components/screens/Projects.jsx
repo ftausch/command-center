@@ -27,14 +27,15 @@ export function ProjectsScreen({ setRoute }) {
     if (v.search !== undefined) setSearch(v.search);
   };
 
-  const all = filterByDivision(data.projects);
+  const [showArchive, setShowArchive] = useState(false);
+  const all = filterByDivision(data.projects).filter(p => showArchive ? p.status === 'Done' : p.status !== 'Done');
   const allTasks = data.tasks;
   const filtered = useMemo(() => {
     let r = all;
-    if (statusFilter !== 'All') r = r.filter((p) => p.status === statusFilter);
+    if (statusFilter !== 'All' && !showArchive) r = r.filter((p) => p.status === statusFilter);
     if (search.trim()) r = r.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
     return r;
-  }, [all, statusFilter, search]);
+  }, [all, statusFilter, search, showArchive]);
 
   const counts = {
     All: all.length,
@@ -82,6 +83,12 @@ export function ProjectsScreen({ setRoute }) {
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        <button
+          className={`chip${showArchive ? ' active' : ''}`}
+          onClick={() => { setShowArchive(a => !a); setStatusFilter('All'); }}
+        >
+          📦 Archiv {showArchive && <span className="count">{filterByDivision(data.projects).filter(p=>p.status==='Done').length}</span>}
+        </button>
         <SavedViewsButton workspaceId={currentWorkspaceId} currentView={currentView} onApply={applyView} />
       </div>
 

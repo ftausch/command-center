@@ -126,8 +126,35 @@ export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
         });
       });
 
+    // Assistant items due today or overdue (assigned to me or created by me)
+    // Stored in localStorage from last AssistantHub load — check sessionStorage
+    try {
+      const cached = sessionStorage.getItem(`cc.assist.${currentWorkspaceId}`);
+      if (cached) {
+        const items = JSON.parse(cached);
+        items
+          .filter((i) => i.status !== 'done' && i.status !== 'cancelled' && i.dueDate)
+          .filter((i) => i.dueDate <= today)
+          .slice(0, 3)
+          .forEach((i) => {
+            const late = i.dueDate < today;
+            result.push({
+              id:       `assist-${i.id}`,
+              type:     'assist',
+              icon:     late ? '⏰' : '🗂',
+              title:    i.title,
+              sub:      late ? 'Assistant Item überfällig' : 'Assistant Item heute fällig',
+              sortKey:  late ? 0 : 1,
+              time:     i.dueDate,
+              severity: late ? 'danger' : 'warning',
+              route:    'assisthub',
+            });
+          });
+      }
+    } catch {}
+
     return result.sort((a, b) => a.sortKey - b.sortKey || (a.time < b.time ? -1 : 1));
-  }, [me?.id, data.tasks, data.activity]);
+  }, [me?.id, currentWorkspaceId, data.tasks, data.activity]);
 
   const unread = notifications.filter((n) => !readIds.has(n.id));
 
@@ -156,6 +183,8 @@ export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
     onClose();
     if (notif.taskId && onOpenTask) {
       onOpenTask(notif.taskId, notif.projectId);
+    } else if (notif.route) {
+      setRoute?.(notif.route);
     } else if (notif.projectId) {
       setRoute?.('project:' + notif.projectId);
     }

@@ -70,21 +70,32 @@ export async function GET(req: NextRequest) {
 
       const hours = hoursUntil(meta.eventDate);
 
+      const loc = meta.location ? ` · 📍 ${meta.location}` : '';
+      const partner = meta.partnerSponsor ? ` · 🤝 ${meta.partnerSponsor}` : '';
+
+      // 7-day reminder (between 6.5d and 7.5d)
+      if (hours >= 156 && hours <= 180) {
+        reminders.push(`📅 *${proj.name}* — in 7 Tagen${loc}${partner}. Alles auf Kurs?`);
+      }
+
+      // 3-day reminder (between 68h and 76h)
+      if (hours >= 68 && hours <= 76) {
+        const dateStr = new Date(meta.eventDate).toLocaleDateString('de-DE', { weekday:'long', day:'2-digit', month:'2-digit', timeZone:'Europe/Berlin' });
+        reminders.push(`🔔 *${proj.name}* — in 3 Tagen (${dateStr})${loc}. Finale Checks!`);
+      }
+
       // 24h reminder window (between 20h and 26h ahead)
       if (hours >= 20 && hours <= 26) {
         const time = new Date(meta.eventDate).toLocaleString('de-DE', {
           weekday: 'long', day: '2-digit', month: '2-digit',
           hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin',
         });
-        const location = meta.location ? ` · 📍 ${meta.location}` : '';
-        const partner  = meta.partnerSponsor ? ` · 🤝 ${meta.partnerSponsor}` : '';
-        reminders.push(`🎪 *${proj.name}* — morgen um ${time}${location}${partner}`);
+        reminders.push(`🎪 *${proj.name}* — morgen um ${time}${loc}${partner}`);
       }
 
       // 2h reminder
       if (hours >= 1.5 && hours <= 2.5) {
-        const location = meta.location ? ` 📍 ${meta.location}` : '';
-        reminders.push(`⏰ *${proj.name}* beginnt in ~2 Stunden!${location}`);
+        reminders.push(`⏰ *${proj.name}* beginnt in ~2 Stunden!${loc}`);
       }
     }
 

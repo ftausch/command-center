@@ -809,7 +809,12 @@ export function AssistantHubScreen({ setRoute }) {
 
   useEffect(() => {
     if (!currentWorkspaceId) return;
-    listAssistantItems(currentWorkspaceId).then((d) => { setItems(d); setLoading(false); });
+    listAssistantItems(currentWorkspaceId).then((d) => {
+      setItems(d);
+      setLoading(false);
+      // Cache for bell notifications
+      try { sessionStorage.setItem(`cc.assist.${currentWorkspaceId}`, JSON.stringify(d)); } catch {}
+    });
   }, [currentWorkspaceId]);
 
   const onAdd    = (item)    => { setItems((p) => [item, ...p]); setAdding(false); };
