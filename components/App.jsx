@@ -92,6 +92,18 @@ export function App() {
       // 'b' — board
       if (e.key === 'b') { e.preventDefault(); setRoute('kanban'); return; }
 
+      // 'a' — assistant hub
+      if (e.key === 'a') { e.preventDefault(); setRoute('assisthub'); return; }
+
+      // 'e' — event hub
+      if (e.key === 'e') { e.preventDefault(); setRoute('eventhub'); return; }
+
+      // 'h' — health dashboard
+      if (e.key === 'h') { e.preventDefault(); setRoute('ops-health'); return; }
+
+      // 'p' — podcast hub
+      if (e.key === 'P' && e.shiftKey) { e.preventDefault(); setRoute('podcast'); return; }
+
       // 'g' prefix navigation
       if (e.key === 'g') {
         e.preventDefault();

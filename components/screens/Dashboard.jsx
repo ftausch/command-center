@@ -149,6 +149,58 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
 
       {dashTab !== 'focus' && (
       <>
+      {/* ── Morning Briefing strip ───────────────────────────────────────── */}
+      {(() => {
+        const todayEvents = data.projects.filter(p =>
+          p.division === 'events' && p.eventMeta?.eventDate &&
+          p.eventMeta.eventDate.slice(0,10) === todayIso
+        );
+        const todayEpisodes = (data.episodes ?? []).filter(e => e.date === todayIso);
+        const myDueToday = me ? dueToday.filter(t => t.assignee === me.id) : dueToday;
+
+        if (todayEvents.length === 0 && todayEpisodes.length === 0 && myDueToday.length === 0) return null;
+
+        return (
+          <div style={{
+            margin: '0 0 24px',
+            padding: '14px 18px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, var(--brand-soft) 0%, #fff4e6 100%)',
+            border: '1px solid var(--brand)',
+            display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', flexShrink: 0 }}>
+              📅 Heute
+            </div>
+            {todayEvents.map(p => (
+              <div key={p.id} onClick={() => setRoute('project:' + p.id)}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>🎪</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#e8780a' }}>{p.name}</div>
+                  {p.eventMeta?.location && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{p.eventMeta.location}</div>}
+                </div>
+              </div>
+            ))}
+            {todayEpisodes.map(ep => (
+              <div key={ep.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>🎙</span>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)' }}>
+                  {ep.num ? `Ep. ${ep.num} ` : ''}{ep.title}
+                </div>
+              </div>
+            ))}
+            {myDueToday.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>✅</span>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+                  {myDueToday.length} Task{myDueToday.length > 1 ? 's' : ''} heute fällig
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {/* ── KPI row — 4 coloured stat cards ─────────────────────────────── */}
       <div className="grid grid-4 gap-3 mb-6">
         <StatCard

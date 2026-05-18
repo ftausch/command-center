@@ -9,6 +9,7 @@ import { Avatar, AvatarStack, Badge, PriorityBadge, Progress, StatusBadge } from
 import { dueLabel, projectProgress, projectHealthScore, eventHealthColor, statusColor } from '@/lib/utils';
 import { NewProjectModal } from '@/components/NewProjectModal';
 import { SavedViewsButton } from '@/components/SavedViews';
+import { QuickActions } from '@/components/QuickActions';
 import { CAN } from '@/lib/roles';
 
 const DIVISION_DOT = { podcast: 'var(--brand)', events: '#e8780a', general: 'var(--text-4)' };
@@ -97,13 +98,14 @@ export function ProjectsScreen({ setRoute }) {
               <th>Owner</th>
               <th>Team</th>
               <th>Deadline</th>
+              <th></th>
               <th>Slack</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+                <td colSpan={11} style={{ padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
                   {search.trim()
                     ? 'Keine Projekte gefunden.'
                     : all.length === 0
@@ -181,6 +183,13 @@ export function ProjectsScreen({ setRoute }) {
                   </td>
                   <td><AvatarStack users={team} max={3} /></td>
                   <td><span className={`badge ${due.danger ? 'danger' : 'ghost'}`}>{due.text}</span></td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <QuickActions actions={[
+                      { label: 'Öffnen', icon: '↗', onClick: () => setRoute('project:' + p.id) },
+                      { label: 'Kanban', icon: '📋', onClick: () => setRoute('kanban') },
+                      { label: 'Calendar', icon: '📅', onClick: () => setRoute('calendar') },
+                    ]} />
+                  </td>
                   <td>
                     {p.slackConnected ? (
                       <span className="row gap-1" style={{ fontSize: 11, color: 'var(--text-3)' }}>

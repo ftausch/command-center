@@ -17,6 +17,7 @@ import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, LumaUrlField, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
+import { EventDayOf } from '@/components/EventDayOf';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -75,6 +76,9 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   // ── Budget tracker ────────────────────────────────────────────────────────
   const [budgetItems, setBudgetItems] = useState([]);
   const [budgetPending, setBudgetPending] = useState(false);
+
+  // ── Day-of Mode ───────────────────────────────────────────────────────────
+  const [dayOfMode, setDayOfMode] = useState(false);
 
   // ── Duplicate ─────────────────────────────────────────────────────────────
   const [duplicating, setDuplicating] = useState(false);
@@ -364,9 +368,23 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               <I.slack size={13} /> Open in Slack
             </button>
           )}
+          {project.division === 'events' && (() => {
+            const ed = project.eventMeta?.eventDate;
+            if (!ed) return null;
+            const daysAway = Math.round((new Date(ed).getTime() - Date.now()) / 86400000);
+            if (daysAway > 1 || daysAway < -1) return null;
+            return (
+              <button className="btn btn-sm" onClick={() => setDayOfMode(true)}
+                style={{ background: '#e8780a', border: 'none', color: 'white', fontWeight: 700 }}>
+                🎪 Live Event
+              </button>
+            );
+          })()}
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
+
+      {dayOfMode && <EventDayOf project={project} onClose={() => setDayOfMode(false)} />}
 
       <NewTaskModal
         open={newTaskOpen}

@@ -334,6 +334,63 @@ function splitTaskComment(text: string, tasks: TaskRow[]): { task: TaskRow; comm
   return null;
 }
 
+// ── /cc approvals ─────────────────────────────────────────────────────────
+
+async function handleApprovals(workspaceUuid: string, admin: SupabaseClient): Promise<string> {
+  const { data } = await admin
+    .from('approval_items').select('title, type, status, due_date, priority')
+    .eq('workspace_id', workspaceUuid)
+    .in('status', ['draft', 'ready_for_review', 'changes_requested'])
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .limit(8);
+  if (!data?.length) return '✅ Keine offenen Freigaben.';
+  const lines = ['*✅ Offene Freigaben*', ''];
+  for (const a of data) {
+    const due = a.due_date ? ` _(${a.due_date})_` : '';
+    const s = a.status === 'ready_for_review' ? '👀 Zur Review' : a.status === 'changes_requested' ? '🔄 Änderungen' : '📝 Entwurf';
+    lines.push(`• ${a.title} — ${s}${due}`);
+  }
+  return lines.join('\n');
+}
+
+// ── /cc decisions ─────────────────────────────────────────────────────────
+
+async function handleDecisions(workspaceUuid: string, admin: SupabaseClient): Promise<string> {
+  const { data } = await admin
+    .from('decision_items').select('title, status, needed_by, impact')
+    .eq('workspace_id', workspaceUuid)
+    .in('status', ['open', 'ready', 'blocked'])
+    .order('needed_by', { ascending: true, nullsFirst: false })
+    .limit(8);
+  if (!data?.length) return '✅ Keine offenen Entscheidungen.';
+  const lines = ['*⚖️ Offene Entscheidungen*', ''];
+  for (const d of data) {
+    const nb = d.needed_by ? ` _(bis ${d.needed_by})_` : '';
+    const imp = d.impact === 'critical' ? ' 🔴' : d.impact === 'high' ? ' 🟠' : '';
+    lines.push(`• ${d.title}${imp}${nb}`);
+  }
+  return lines.join('\n');
+}
+
+// ── /cc risks ─────────────────────────────────────────────────────────────
+
+async function handleRisks(workspaceUuid: string, admin: SupabaseClient): Promise<string> {
+  const { data } = await admin
+    .from('risk_items').select('title, type, severity, status')
+    .eq('workspace_id', workspaceUuid)
+    .in('status', ['open', 'monitoring'])
+    .order('severity', { ascending: false })
+    .limit(8);
+  if (!data?.length) return '✅ Keine aktiven Risiken oder Blocker.';
+  const lines = ['*⚠️ Aktive Risiken & Blocker*', ''];
+  for (const r of data) {
+    const sev = r.severity === 'critical' ? '🔴' : r.severity === 'high' ? '🟠' : r.severity === 'medium' ? '🟡' : '⚪';
+    const t = r.type === 'blocker' ? '[Blocker]' : '[Risiko]';
+    lines.push(`• ${sev} ${t} ${r.title}`);
+  }
+  return lines.join('\n');
+}
+
 // ── /cc help ──────────────────────────────────────────────────────────────
 
 function handleHelp(cmd: string): string {
@@ -359,6 +416,11 @@ function handleHelp(cmd: string): string {
     `*Projekte*`,
     `\`${cmd} project <name>\` — neues Projekt anlegen`,
     `\`${cmd} project status <name>\` — Projekt-Status ansehen`,
+    '',
+    `*Operations*`,
+    `\`${cmd} approvals\` — offene Freigaben`,
+    `\`${cmd} decisions\` — offene Entscheidungen`,
+    `\`${cmd} risks\` — aktive Risiken & Blocker`,
     '',
     `Status-Aliase: \`todo\` · \`progress\` · \`review\` · \`done\` · \`backlog\` · \`blocked\``,
   ].join('\n');
@@ -841,7 +903,10 @@ export async function POST(req: NextRequest) {
     case 'status':  responseText = await handleStatus(rest, workspaceUuid, userName, userId, cmd, admin); break;
     case 'assign':  responseText = await handleAssign(rest, workspaceUuid, userName, userId, cmd, admin); break;
     case 'comment': responseText = await handleComment(rest, workspaceUuid, userName, userId, cmd, admin); break;
-    case 'project': responseText = await handleProject(rest, workspaceUuid, userName, userId, cmd, admin); break;
+    case 'project':   responseText = await handleProject(rest, workspaceUuid, userName, userId, cmd, admin); break;
+    case 'approvals': responseText = await handleApprovals(workspaceUuid, admin); break;
+    case 'decisions': responseText = await handleDecisions(workspaceUuid, admin); break;
+    case 'risks':     responseText = await handleRisks(workspaceUuid, admin); break;
     case 'help':
     default:        responseText = handleHelp(cmd);
   }

@@ -195,6 +195,38 @@ function buildDigest(
   return lines.join('\n');
 }
 
+function buildEnhancedDigest(
+  base: string,
+  events: { name: string; date: string; location: string | null }[],
+  openDecisions: number,
+  criticalRisks: number,
+  paItemsToday: number,
+  pendingApprovals: number,
+): string {
+  if (!events.length && !openDecisions && !criticalRisks && !paItemsToday && !pendingApprovals) return base;
+
+  const extras: string[] = [];
+
+  if (events.length) {
+    extras.push(`🎪 *Events diese Woche* (${events.length})`);
+    for (const ev of events.slice(0, 3)) {
+      const loc = ev.location ? ` — ${ev.location}` : '';
+      extras.push(`• ${ev.name} _(${ev.date})_${loc}`);
+    }
+    extras.push('');
+  }
+
+  if (pendingApprovals > 0) extras.push(`✅ *${pendingApprovals} Freigabe${pendingApprovals>1?'n':''} warten auf Review*`);
+  if (openDecisions > 0)    extras.push(`⚖️ *${openDecisions} offene Entscheidung${openDecisions>1?'en':''}*`);
+  if (criticalRisks > 0)    extras.push(`🔴 *${criticalRisks} kritische${criticalRisks>1?' Risiken':' Risiko'}*`);
+  if (paItemsToday > 0)     extras.push(`🗂 *PA: ${paItemsToday} Item${paItemsToday>1?'s':''} heute fällig*`);
+
+  if (extras.length) {
+    return base + '\n' + extras.join('\n') + '\n';
+  }
+  return base;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -313,8 +345,32 @@ export async function GET(req: NextRequest) {
         guest:         e.guest ?? null,
       }));
 
-      // 6. Build message and send
-      const text = buildDigest(workspaceName, today, tasks, projects, episodes);
+      // 6. Events this week
+      const inSevenDays = (() => { const d = new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); })();
+      const { data: rawEvents } = await admin
+        .from('projects')
+        .select('name, event_meta')
+        .eq('workspace_id', workspace_id)
+        .eq('division', 'events')
+        .neq('status', 'Done');
+      const events = (rawEvents ?? [])
+        .filter((p: any) => {
+          const d = p.event_meta?.eventDate?.slice(0,10);
+          return d && d >= today && d <= inSevenDays;
+        })
+        .map((p: any) => ({ name: p.name, date: p.event_meta.eventDate.slice(0,10), location: p.event_meta.location ?? null }));
+
+      // 7. Operations counts (best-effort)
+      const [{ count: pendingApprovals }, { count: openDecisions }, { count: criticalRisks }, { count: paItemsToday }] = await Promise.all([
+        admin.from('approval_items').select('id',{count:'exact',head:true}).eq('workspace_id',workspace_id).eq('status','ready_for_review'),
+        admin.from('decision_items').select('id',{count:'exact',head:true}).eq('workspace_id',workspace_id).in('status',['open','ready']),
+        admin.from('risk_items').select('id',{count:'exact',head:true}).eq('workspace_id',workspace_id).eq('severity','critical').neq('status','resolved'),
+        admin.from('assistant_items').select('id',{count:'exact',head:true}).eq('workspace_id',workspace_id).eq('due_date',today).neq('status','done'),
+      ]);
+
+      // 8. Build message and send
+      const base = buildDigest(workspaceName, today, tasks, projects, episodes);
+      const text = buildEnhancedDigest(base, events, openDecisions??0, criticalRisks??0, paItemsToday??0, pendingApprovals??0);
       await postSlackNotification({ workspaceUuid: workspace_id, text, channelLabel: 'daily-digest' });
 
       console.log(`[cron/digest] sent for workspace "${workspaceName}": ${tasks.length} open tasks`);
