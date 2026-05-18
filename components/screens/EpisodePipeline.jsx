@@ -40,7 +40,7 @@ const STATUS_LABEL = {
 
 // ── Droppable column ──────────────────────────────────────────────────────
 
-function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange }) {
+function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange, onOpenEpisode }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
 
   return (
@@ -91,6 +91,7 @@ function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange })
             episode={ep}
             isDragging={ep.id === activeId}
             colAccent={col.accent}
+            onOpen={onOpenEpisode ? () => onOpenEpisode(ep.id) : null}
           />
         ))}
         {episodes.length === 0 && (
@@ -105,7 +106,7 @@ function Column({ col, episodes, activeId, onAdd, workspaceId, onStatusChange })
 
 // ── Draggable episode card ────────────────────────────────────────────────
 
-function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false }) {
+function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false, onOpen }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: ep.id });
 
   const style = {
@@ -136,6 +137,17 @@ function EpisodeCard({ episode: ep, isDragging, colAccent, overlay = false }) {
       {ep.guest && (
         <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>
           <I.user size={11} /> {ep.guest}
+        </div>
+      )}
+      {onOpen && (
+        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-4)', padding: '2px 4px', borderRadius: 4 }}
+          >
+            Detail →
+          </button>
         </div>
       )}
     </>
@@ -195,7 +207,7 @@ function NewEpisodeForm({ defaultStatus, workspaceId, onDone, onCancel }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────
 
-export function EpisodePipelineScreen({ setRoute, embedded = false }) {
+export function EpisodePipelineScreen({ setRoute, embedded = false, onOpenEpisode }) {
   const {
     currentWorkspace: brand,
     currentWorkspaceId: workspaceId,
@@ -291,6 +303,7 @@ export function EpisodePipelineScreen({ setRoute, embedded = false }) {
                 onAdd={(colId) => setAddingTo(colId)}
                 workspaceId={workspaceId}
                 onStatusChange={() => {}}
+                onOpenEpisode={onOpenEpisode}
               />
               {addingTo === col.id && (
                 <div style={{ background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>

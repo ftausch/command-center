@@ -355,6 +355,15 @@ export interface ProjectMemberView {
 
 export type EpisodeStatus = 'idea' | 'draft' | 'review' | 'scheduled' | 'published';
 
+export interface EpisodeMeta {
+  guestBio?: string;
+  guestNotes?: string;
+  guestQuestions?: string[];
+  clips?: { id: string; title: string; platform: string; status: 'todo' | 'done' }[];
+  publishChecklist?: Record<string, boolean>;
+  recordingUrl?: string;
+}
+
 export interface EpisodeView {
   id: string;
   workspace: string;
@@ -367,6 +376,8 @@ export interface EpisodeView {
   status: EpisodeStatus;
   hasVideo: boolean;
   description?: string;
+  showNotes?: string;
+  episodeMeta?: EpisodeMeta;
 }
 
 export interface ProjectResource {

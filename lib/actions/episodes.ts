@@ -91,7 +91,7 @@ export async function createEpisode(input: {
 export async function updateEpisode(input: {
   episodeId: string;
   workspaceId: string;
-  patch: Partial<Pick<EpisodeView, 'title' | 'guest' | 'date' | 'duration' | 'status' | 'hasVideo' | 'num' | 'description'>>;
+  patch: Partial<Pick<EpisodeView, 'title' | 'guest' | 'date' | 'duration' | 'status' | 'hasVideo' | 'num' | 'description' | 'showNotes' | 'episodeMeta'>>;
 }): Promise<ActionResult<{ id: string }>> {
   const supabase = createClient();
   if (!supabase) return { ok: true, data: { id: input.episodeId } };
@@ -110,7 +110,9 @@ export async function updateEpisode(input: {
   if (input.patch.status    !== undefined) row.status         = input.patch.status;
   if (input.patch.hasVideo  !== undefined) row.has_video      = input.patch.hasVideo;
   if (input.patch.num       !== undefined) row.episode_number = input.patch.num;
-  if (input.patch.description !== undefined) row.description  = input.patch.description || null;
+  if (input.patch.description  !== undefined) row.description   = input.patch.description || null;
+  if (input.patch.showNotes    !== undefined) row.show_notes    = input.patch.showNotes || null;
+  if (input.patch.episodeMeta  !== undefined) row.episode_meta  = input.patch.episodeMeta ?? null;
 
   const { error } = await supabase
     .from('podcast_episodes')

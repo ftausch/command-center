@@ -9,6 +9,7 @@ import { generateMarketingPackage } from '@/lib/actions/podcast';
 import { createEpisode, updateEpisode } from '@/lib/actions/episodes';
 import { createTask } from '@/lib/actions/tasks';
 import { EpisodePipelineScreen } from '@/components/screens/EpisodePipeline';
+import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 
 // EPISODES is now loaded from Supabase via WorkspaceProvider.
 
@@ -87,6 +88,7 @@ export function PodcastHubScreen({ setRoute }) {
   const { currentWorkspace: brand, currentWorkspaceId, data, addEpisode } = useWorkspace();
   const episodes = data.episodes ?? [];
   const [tab, setTab] = useState('overview');
+  const [drawerEpId, setDrawerEpId] = useState(null);
 
   const tabs = [
     { id: 'overview',     label: 'Übersicht',      icon: <I.home size={12} />   },
@@ -140,9 +142,11 @@ export function PodcastHubScreen({ setRoute }) {
         ))}
       </div>
 
-      {tab === 'overview'     && <OverviewTab episodes={episodes} />}
-      {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} setTab={setTab} />}
-      {tab === 'pipeline'     && <EpisodePipelineScreen setRoute={setRoute} embedded />}
+      {tab === 'overview'     && <OverviewTab episodes={episodes} onOpenEpisode={setDrawerEpId} />}
+      {tab === 'episodes'     && <EpisodenTab episodes={episodes} workspaceId={currentWorkspaceId} addEpisode={addEpisode} setTab={setTab} onOpenEpisode={setDrawerEpId} />}
+      {tab === 'pipeline'     && <EpisodePipelineScreen setRoute={setRoute} embedded onOpenEpisode={setDrawerEpId} />}
+
+      <EpisodeDrawer episodeId={drawerEpId} onClose={() => setDrawerEpId(null)} />
       {tab === 'analytics'    && <AnalyticsTab />}
       {tab === 'transcripts'  && <TranskriptKITab episodes={episodes} />}
       {tab === 'distribution' && <DistributionTab />}
@@ -249,7 +253,7 @@ const EPISODE_WORKFLOW = [
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 2 — Episoden + Video-Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════════
-function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
+function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode }) {
   const { updateEpisodeInCache, data, addTask } = useWorkspace();
   const [search, setSearch] = useState('');
   const [expandedEp, setExpandedEp] = useState(null);
@@ -466,7 +470,7 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
               const allDone = total > 0 && done === total;
               return (
               <Fragment key={ep.id}>
-                <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedEp(expandedEp === ep.id ? null : ep.id)}>
+                <tr style={{ cursor: 'pointer' }} onClick={() => onOpenEpisode?.(ep.id)}>
                   <td><span className="mono" style={{ fontSize: 12, color: 'var(--text-3)' }}>{ep.num}</span></td>
                   <td><div style={{ fontWeight: 500, fontSize: 13.5 }}>{ep.title}</div></td>
                   <td><span style={{ color: 'var(--text-2)', fontSize: 13 }}>{ep.guest}</span></td>
@@ -496,7 +500,18 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab }) {
                       : <span style={{ fontSize: 11, color: 'var(--text-4)' }}>Audio only</span>}
                   </td>
                   <td><EpStatusBadge status={ep.status} /></td>
-                  <td><I.chevron size={12} style={{ transform: expandedEp === ep.id ? 'rotate(90deg)' : 'none', transition: '0.15s' }} /></td>
+                  <td>
+                    <div className="row gap-1">
+                      <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26 }}
+                        onClick={(e) => { e.stopPropagation(); onOpenEpisode?.(ep.id); }}
+                        title="Episode öffnen"
+                      ><I.arrowRight size={12} /></button>
+                      <button className="btn btn-quiet btn-icon" style={{ width: 26, height: 26 }}
+                        onClick={(e) => { e.stopPropagation(); setExpandedEp(expandedEp === ep.id ? null : ep.id); }}
+                        title="Schnell-Edit"
+                      ><I.edit size={11} /></button>
+                    </div>
+                  </td>
                 </tr>
                 {expandedEp === ep.id && (
                   <tr>

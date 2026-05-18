@@ -331,8 +331,10 @@ export function rowToEpisode(row: any, workspaceSlug: string): EpisodeView {
     duration: row.duration ?? '—',
     downloads: row.downloads ?? 0,
     status: row.status,
-    hasVideo: !!row.has_video,
-    description: row.description ?? undefined,
+    hasVideo:     !!row.has_video,
+    description:  row.description  ?? undefined,
+    showNotes:    row.show_notes    ?? undefined,
+    episodeMeta:  row.episode_meta  ?? undefined,
   };
 }
 
