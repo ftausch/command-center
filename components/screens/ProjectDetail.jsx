@@ -148,6 +148,8 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     setEditingDesc(false);
   };
 
+  const [showRecapPrompt, setShowRecapPrompt] = useState(false);
+
   const saveField = async (key, value) => {
     setFieldPending(key);
     setFieldError(null);
@@ -155,6 +157,10 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     setFieldPending(null);
     if (!r.ok) { setFieldError(r.error ?? 'Feld konnte nicht gespeichert werden'); return; }
     updateProjectInCache(projectId, { [key]: value });
+    // Show recap prompt when event is marked Done
+    if (key === 'status' && value === 'Done' && project.division === 'events') {
+      setShowRecapPrompt(true);
+    }
   };
 
   const startSlackEdit = () => {
@@ -442,6 +448,34 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           onSelect={(i) => { if (i !== project.phaseIdx) saveField('phaseIdx', i); }}
         />
       </div>
+
+      {/* ── Recap Automation Prompt ─────────────────────────────────── */}
+      {showRecapPrompt && (
+        <div style={{
+          marginBottom: 16, padding: '14px 18px', borderRadius: 10,
+          background: '#fff4e6', border: '1px solid #fed7aa',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#e8780a', marginBottom: 2 }}>
+              🎉 Event abgeschlossen — Zeit für den Recap!
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              Fotos, Clips, LinkedIn-Post, Sponsor Report — öffne die Recap-Checkliste um nichts zu vergessen.
+            </div>
+          </div>
+          <div className="row gap-2" style={{ flexShrink: 0 }}>
+            <button className="btn btn-sm"
+              style={{ background: '#e8780a', color: 'white', border: 'none', fontWeight: 600 }}
+              onClick={() => { setTab('recap'); setShowRecapPrompt(false); }}>
+              Recap öffnen →
+            </button>
+            <button className="btn btn-quiet btn-icon" onClick={() => setShowRecapPrompt(false)}>
+              <I.x size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>

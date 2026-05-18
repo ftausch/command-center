@@ -191,7 +191,11 @@ export function WorkspaceProvider({ children }) {
         episodes,
       });
     } catch (e) {
-      setError(e);
+      const enhanced = e instanceof Error ? e : new Error(String(e));
+      if (enhanced.message.includes('fetch') || enhanced.message.includes('network') || enhanced.message.includes('Failed to fetch')) {
+        enhanced.message = 'Netzwerkfehler — bitte Internetverbindung prüfen und Seite neu laden.';
+      }
+      setError(enhanced);
       console.error('[workspace] loadData failed', e);
     } finally {
       setLoading(false);

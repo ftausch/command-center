@@ -31,6 +31,9 @@ import { EventPipelineScreen } from '@/components/screens/EventPipeline';
 import { PartnersScreen } from '@/components/screens/Partners';
 import { AssistantHubScreen } from '@/components/screens/AssistantHub';
 import { ShortcutOverlay } from '@/components/ShortcutOverlay';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SkeletonPage } from '@/components/Skeleton';
+import { PAWelcome } from '@/components/PAWelcome';
 import { OpsHealthScreen } from '@/components/screens/OpsHealth';
 import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
 import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
@@ -289,13 +292,12 @@ export function App() {
             <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>Neu laden</button>
           </div>
         ) : loading && data.projects.length === 0 ? (
-          // First load only — flicker-free render once the cache is warm.
-          <div style={{ padding: '40px 28px', color: 'var(--text-3)', fontSize: 13 }}>
-            Lade Workspace …
-          </div>
+          <SkeletonPage />
         ) : (
           <div className="main-scroll" key={route}>
-            {screen}
+            <ErrorBoundary key={route}>
+              {screen}
+            </ErrorBoundary>
           </div>
         )}
       </main>
@@ -322,6 +324,9 @@ export function App() {
         onClose={() => setDrawerTask(null)}
       />
       {shortcutsOpen && <ShortcutOverlay onClose={() => setShortcutsOpen(false)} />}
+      {me && myRole === 'manager' && (
+        <PAWelcome userId={me.id} onClose={() => setRoute('assisthub')} />
+      )}
     </div>
   );
 }
