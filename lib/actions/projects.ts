@@ -666,3 +666,67 @@ export async function duplicateEventProject(input: {
 
   return { ok: true, data: project };
 }
+
+// ── Project Resources ─────────────────────────────────────────────────────
+
+export async function addProjectResource(input: {
+  workspaceId: string;
+  projectId: string;
+  type: ProjectResource['type'];
+  provider: ProjectResource['provider'];
+  name: string;
+  url?: string;
+  externalId?: string;
+}): Promise<ActionResult<ProjectResource>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+
+  const { data, error } = await supabase
+    .from('project_resources')
+    .insert({
+      workspace_id: ctx.uuid,
+      project_id:   input.projectId,
+      type:         input.type,
+      provider:     input.provider,
+      name:         input.name,
+      url:          input.url ?? null,
+      external_id:  input.externalId ?? null,
+    })
+    .select().single();
+  if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  return {
+    ok: true,
+    data: {
+      id:         data.id,
+      projectId:  data.project_id,
+      type:       data.type,
+      provider:   data.provider,
+      externalId: data.external_id ?? null,
+      name:       data.name,
+      url:        data.url ?? null,
+      createdAt:  data.created_at,
+    },
+  };
+}
+
+export async function deleteProjectResource(input: {
+  workspaceId: string;
+  resourceId: string;
+}): Promise<ActionResult<null>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx || !canWriteAsRole(ctx.role, [...MANAGER_ROLES]))
+    return { ok: false, error: 'Keine Berechtigung.' };
+  const { error } = await supabase
+    .from('project_resources')
+    .delete()
+    .eq('id', input.resourceId)
+    .eq('workspace_id', ctx.uuid);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: null };
+}

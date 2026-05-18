@@ -16,7 +16,7 @@ import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
-import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -436,6 +436,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className={`tab ${tab === 'partners' ? 'active' : ''}`} onClick={() => setTab('partners')}>Partner</div>
           <div className={`tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>Freigaben</div>
           <div className={`tab ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>Entscheidungen</div>
+          <div className={`tab ${tab === 'resources' ? 'active' : ''}`} onClick={() => setTab('resources')}>Ressourcen <span className="count">{projectResources.length}</span></div>
           <div className={`tab ${tab === 'recap' ? 'active' : ''}`} onClick={() => setTab('recap')}>Recap</div>
         </>)}
       </div>
@@ -658,6 +659,17 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 workspaceId={workspaceId}
                 canEdit={CAN.editProject(myRole)}
                 members={data.members}
+              />
+            </div>
+          )}
+
+          {tab === 'resources' && project.division === 'events' && (
+            <div className="card card-pad">
+              <ResourcesPanel
+                projectId={projectId}
+                workspaceId={workspaceId}
+                canEdit={CAN.editProject(myRole)}
+                initialResources={projectResources}
               />
             </div>
           )}

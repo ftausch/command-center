@@ -14,7 +14,7 @@ import {
   listDecisions, createDecision, deleteDecision,
 } from '@/lib/actions/event-ops';
 import { syncLumaGuests, getLumaRsvpCount } from '@/lib/actions/luma';
-import { updateProject } from '@/lib/actions/projects';
+import { updateProject, addProjectResource, deleteProjectResource } from '@/lib/actions/projects';
 import { CAN } from '@/lib/roles';
 
 // ── Shared helpers ────────────────────────────────────────────────────────
@@ -1125,7 +1125,145 @@ export function DecisionLog({ projectId, workspaceId, canEdit, members = [] }) {
   );
 }
 
-// ── G) Luma RSVP Badge ────────────────────────────────────────────────────
+// ── G) Resources Panel ────────────────────────────────────────────────────
+
+const RESOURCE_TYPES = [
+  { value: 'slack_channel',  label: 'Slack Channel',   icon: '💬', provider: 'slack'        },
+  { value: 'drive_folder',   label: 'Drive Ordner',    icon: '📁', provider: 'google_drive' },
+  { value: 'landing_page',   label: 'Landing Page',    icon: '🌐', provider: 'web'          },
+  { value: 'signup',         label: 'Signup Link',     icon: '📋', provider: 'web'          },
+  { value: 'figma',          label: 'Figma',           icon: '🎨', provider: 'figma'        },
+  { value: 'canva',          label: 'Canva',           icon: '🖌', provider: 'canva'        },
+  { value: 'partner_deck',   label: 'Partner Deck',    icon: '🤝', provider: 'google_drive' },
+  { value: 'recap',          label: 'Recap Ordner',    icon: '📸', provider: 'google_drive' },
+];
+
+export function ResourcesPanel({ projectId, workspaceId, canEdit, initialResources = [] }) {
+  const [resources, setResources] = useState(initialResources);
+  const [adding, setAdding]       = useState(false);
+  const [pending, setPending]     = useState(null);
+  const [draft, setDraft]         = useState({ type: 'landing_page', name: '', url: '' });
+
+  // Sync when parent passes fresh resources
+  useEffect(() => { setResources(initialResources); }, [initialResources.length]);
+
+  const typeInfo = (type) => RESOURCE_TYPES.find((r) => r.value === type) ?? { icon: '🔗', label: type, provider: 'web' };
+
+  const onAdd = async () => {
+    if (!draft.name.trim() || !draft.url.trim()) return;
+    setPending('add');
+    const info = typeInfo(draft.type);
+    const r = await addProjectResource({
+      workspaceId, projectId,
+      type:     draft.type,
+      provider: info.provider,
+      name:     draft.name.trim(),
+      url:      draft.url.trim(),
+    });
+    setPending(null);
+    if (r.ok && r.data) {
+      setResources((prev) => [...prev, r.data]);
+      setDraft({ type: 'landing_page', name: '', url: '' });
+      setAdding(false);
+    }
+  };
+
+  const onDelete = async (id) => {
+    setPending(id);
+    const r = await deleteProjectResource({ workspaceId, resourceId: id });
+    setPending(null);
+    if (r.ok) setResources((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  return (
+    <div>
+      <div className="row between mb-3">
+        <div className="h3">Ressourcen & Links</div>
+        {canEdit && !adding && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)}>
+            <I.plus size={13} /> Link hinzufügen
+          </button>
+        )}
+      </div>
+
+      {resources.length === 0 && !adding && (
+        <EmptyOps
+          icon="🔗"
+          title="Keine Ressourcen verknüpft"
+          desc="Füge Slack-Channel, Drive-Ordner, Landing Page, Signup-Link, Figma oder Partner-Deck hinzu."
+          onAdd={() => setAdding(true)}
+          canEdit={canEdit}
+          addLabel="Erste Ressource hinzufügen"
+        />
+      )}
+
+      {adding && (
+        <div className="card card-pad mb-3" style={{ background: 'var(--bg-sunk)' }}>
+          <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: '160px 1fr' }}>
+            <select className="input" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })} style={{ fontSize: 13 }}>
+              {RESOURCE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
+              ))}
+            </select>
+            <input className="input" placeholder="Name *" value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              autoFocus style={{ fontSize: 13 }}
+            />
+          </div>
+          <input className="input mb-3" placeholder="URL *" value={draft.url}
+            onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+            style={{ fontSize: 13 }}
+          />
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={onAdd}
+              disabled={!draft.name.trim() || !draft.url.trim() || pending === 'add'}>
+              {pending === 'add' ? '…' : 'Hinzufügen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      <div className="col gap-2">
+        {resources.map((res) => {
+          const info = typeInfo(res.type);
+          return (
+            <div key={res.id} className="row gap-3 items-center"
+              style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-card)' }}
+            >
+              <span style={{ fontSize: 18, flexShrink: 0 }}>{info.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{res.name}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>{info.label}</div>
+              </div>
+              {res.url && (
+                <a
+                  href={res.url} target="_blank" rel="noopener noreferrer"
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, flexShrink: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Öffnen <I.arrowRight size={11} />
+                </a>
+              )}
+              {canEdit && (
+                <button className="btn btn-quiet btn-icon"
+                  style={{ width: 26, height: 26, color: 'var(--text-4)', flexShrink: 0 }}
+                  onClick={() => onDelete(res.id)} disabled={pending === res.id}
+                >
+                  <I.x size={11} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── H) Luma RSVP Badge ────────────────────────────────────────────────────
 
 export function LumaRsvpBadge({ lumaUrl }) {
   const [count, setCount]     = useState(null);
