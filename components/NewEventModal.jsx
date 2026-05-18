@@ -3,7 +3,7 @@
 // Extends NewProjectModal but scoped to division=events with location,
 // partner/sponsor, landing page, optional Slack channel, and template tasks.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
@@ -40,6 +40,8 @@ export function NewEventModal({ open, onClose, onCreated }) {
   const [lumaEventId,   setLumaEventId]   = useState('');
   const [lumaImporting, setLumaImporting] = useState(false);
   const [lumaMsg,       setLumaMsg]       = useState(null);
+  const [lumaPreview,   setLumaPreview]   = useState(null); // { name, location, eventDate, guestCount }
+  const lumaDebounceRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +50,8 @@ export function NewEventModal({ open, onClose, onCreated }) {
     setLandingPage(''); setSignupUrl(''); setPriority('Medium');
     setDescription(''); setTemplateId(''); setSetupSlack(false);
     setChannelName(''); setStatus('idle'); setErrorMsg(null);
-    setLumaUrl(''); setLumaEventId(''); setLumaImporting(false); setLumaMsg(null);
+    setLumaUrl(''); setLumaEventId(''); setLumaImporting(false); setLumaMsg(null); setLumaPreview(null);
+    clearTimeout(lumaDebounceRef.current);
     submittingRef.current = false;
     idempotencyId.current = crypto.randomUUID();
   }, [open]);
@@ -68,21 +71,38 @@ export function NewEventModal({ open, onClose, onCreated }) {
 
   if (!open) return null;
 
-  const onLumaImport = async () => {
-    if (!lumaUrl.trim()) return;
+  const doFetchPreview = useCallback(async (url) => {
+    if (!url.trim()) return;
     setLumaImporting(true);
     setLumaMsg(null);
-    const r = await fetchLumaEventPreview(lumaUrl.trim());
+    setLumaPreview(null);
+    const r = await fetchLumaEventPreview(url.trim());
     setLumaImporting(false);
     if (!r.ok) { setLumaMsg({ type: 'error', text: r.error }); return; }
-    const d = r.data;
-    if (d.name)       setName(d.name);
-    if (d.location)   setLocation(d.location);
-    if (d.eventDate)  setEventDate(d.eventDate.slice(0, 16)); // datetime-local format
-    if (lumaUrl.trim()) setLandingPage(lumaUrl.trim());
-    if (lumaUrl.trim()) setSignupUrl(lumaUrl.trim());
-    if (d.lumaEventId) setLumaEventId(d.lumaEventId);
-    setLumaMsg({ type: 'success', text: `✓ ${d.name} importiert${d.guestCount ? ` · ${d.guestCount} Anmeldungen` : ''}` });
+    setLumaPreview({ ...r.data, sourceUrl: url.trim() });
+  }, []);
+
+  // Auto-fetch after 600ms debounce when URL looks valid
+  useEffect(() => {
+    const url = lumaUrl.trim();
+    const looksValid = url.includes('lu.ma') || url.includes('luma.com') || url.startsWith('evt-');
+    if (!url || !looksValid) { setLumaPreview(null); setLumaMsg(null); return; }
+    clearTimeout(lumaDebounceRef.current);
+    lumaDebounceRef.current = setTimeout(() => doFetchPreview(url), 600);
+    return () => clearTimeout(lumaDebounceRef.current);
+  }, [lumaUrl, doFetchPreview]);
+
+  const onLumaImport = () => doFetchPreview(lumaUrl);
+
+  const applyLumaPreview = () => {
+    if (!lumaPreview) return;
+    if (lumaPreview.name)       setName(lumaPreview.name);
+    if (lumaPreview.location)   setLocation(lumaPreview.location);
+    if (lumaPreview.eventDate)  setEventDate(lumaPreview.eventDate.slice(0, 16));
+    if (lumaPreview.sourceUrl)  { setLandingPage(lumaPreview.sourceUrl); setSignupUrl(lumaPreview.sourceUrl); }
+    if (lumaPreview.lumaEventId) setLumaEventId(lumaPreview.lumaEventId);
+    setLumaPreview(null);
+    setLumaMsg({ type: 'success', text: `✓ Felder ausgefüllt${lumaPreview.guestCount ? ` · ${lumaPreview.guestCount} Anmeldungen auf Luma` : ''}` });
   };
 
   const onSubmit = async (e) => {
@@ -190,24 +210,53 @@ export function NewEventModal({ open, onClose, onCreated }) {
             <div className="row gap-2">
               <input
                 className="input"
-                type="url"
+                type="text"
                 placeholder="https://lu.ma/dein-event"
                 value={lumaUrl}
-                onChange={(e) => { setLumaUrl(e.target.value); setLumaMsg(null); }}
+                onChange={(e) => { setLumaUrl(e.target.value); setLumaMsg(null); setLumaPreview(null); }}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onLumaImport())}
                 disabled={lumaImporting || status === 'submitting'}
                 style={{ flex: 1, fontSize: 13 }}
               />
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={onLumaImport}
-                disabled={!lumaUrl.trim() || lumaImporting || status === 'submitting'}
-                style={{ background: '#e8780a', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
-              >
-                {lumaImporting ? '…' : 'Importieren'}
-              </button>
+              {lumaImporting && (
+                <span style={{ color: '#e8780a', fontSize: 13, alignSelf: 'center', flexShrink: 0 }}>⟳</span>
+              )}
             </div>
+
+            {/* Preview card */}
+            {lumaPreview && (
+              <div style={{
+                marginTop: 10, borderRadius: 8, border: '1px solid #fed7aa',
+                background: '#fff9f2', padding: '10px 12px',
+              }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>{lumaPreview.name}</div>
+                <div className="col gap-1" style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 10 }}>
+                  {lumaPreview.eventDate && (
+                    <span>📅 {new Date(lumaPreview.eventDate).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  )}
+                  {lumaPreview.location && <span>📍 {lumaPreview.location}</span>}
+                  {lumaPreview.guestCount != null && <span>🎟 {lumaPreview.guestCount} Anmeldungen</span>}
+                </div>
+                <div className="row gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={applyLumaPreview}
+                    style={{ background: '#e8780a', color: 'white', border: 'none' }}
+                  >
+                    ✓ Felder übernehmen
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { setLumaPreview(null); setLumaUrl(''); }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
+
             {lumaMsg && (
               <div style={{
                 marginTop: 8, fontSize: 12.5, borderRadius: 6, padding: '5px 8px',

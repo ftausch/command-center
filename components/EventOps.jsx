@@ -304,16 +304,28 @@ export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
     if (r.ok) setAttendees((prev) => prev.filter((x) => x.id !== id));
   };
 
+  const [lumaSyncMsg, setLumaSyncMsg] = useState('');
+
   const onLumaSync = async () => {
     const url = lumaInput.trim();
     if (!url) return;
     setLumaSyncing(true);
     setLumaResult(null);
+    setLumaSyncMsg('Verbinde mit Luma…');
+    // Small delay so the message is visible
+    await new Promise((r) => setTimeout(r, 300));
+    setLumaSyncMsg('Lade Gästeliste…');
     const r = await syncLumaGuests({ workspaceId, projectId, lumaUrl: url });
     setLumaSyncing(false);
+    setLumaSyncMsg('');
     if (!r.ok) { setLumaResult({ ok: false, text: r.error }); return; }
-    setLumaResult({ ok: true, text: `${r.data.imported} importiert, ${r.data.skipped} bereits vorhanden` });
-    // Refresh list
+    const { imported, skipped } = r.data;
+    setLumaResult({
+      ok: true,
+      text: imported === 0
+        ? `Alle ${skipped} Gäste bereits vorhanden`
+        : `${imported} neu importiert${skipped > 0 ? ` · ${skipped} bereits vorhanden` : ''}`,
+    });
     listAttendees(workspaceId, projectId).then(setAttendees);
   };
 
@@ -373,6 +385,12 @@ export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
               {lumaSyncing ? '…' : 'Sync'}
             </button>
           </div>
+          {lumaSyncing && lumaSyncMsg && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#e8780a', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span>
+              {lumaSyncMsg}
+            </div>
+          )}
           {lumaResult && (
             <div style={{
               marginTop: 6, fontSize: 12, padding: '4px 8px', borderRadius: 5,
@@ -1263,41 +1281,125 @@ export function ResourcesPanel({ projectId, workspaceId, canEdit, initialResourc
   );
 }
 
-// ── H) Luma RSVP Badge ────────────────────────────────────────────────────
+// ── H) Luma URL Field (editable inline) ──────────────────────────────────
+
+export function LumaUrlField({ lumaUrl, canEdit, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState(lumaUrl ?? '');
+  const [saving,  setSaving]  = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    await onSave(draft.trim());
+    setSaving(false);
+    setEditing(false);
+  };
+
+  if (!lumaUrl && !canEdit) return null;
+
+  return (
+    <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-soft)', marginTop: 4 }}>
+      {editing ? (
+        <div className="col gap-2">
+          <input
+            className="input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+            placeholder="https://lu.ma/dein-event"
+            autoFocus
+            disabled={saving}
+            style={{ fontSize: 12.5 }}
+          />
+          <div className="row gap-2">
+            <button className="btn btn-brand btn-sm" onClick={save} disabled={saving}>
+              {saving ? '…' : 'Speichern'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setDraft(lumaUrl ?? ''); }}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="row gap-2 items-center">
+          {lumaUrl
+            ? <LumaRsvpBadge lumaUrl={lumaUrl} />
+            : <span style={{ fontSize: 12, color: 'var(--text-4)', fontStyle: 'italic' }}>Kein Luma-Link</span>
+          }
+          {canEdit && (
+            <button
+              className="btn btn-quiet btn-sm"
+              onClick={() => { setDraft(lumaUrl ?? ''); setEditing(true); }}
+              style={{ fontSize: 11.5, color: 'var(--text-3)', marginLeft: 4 }}
+              title="Luma-URL bearbeiten"
+            >
+              <I.edit size={11} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── I) Luma RSVP Badge ────────────────────────────────────────────────────
 
 export function LumaRsvpBadge({ lumaUrl }) {
-  const [count, setCount]     = useState(null);
+  const [count,   setCount]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
-  useEffect(() => {
-    if (!lumaUrl) { setLoading(false); return; }
+  const fetch = () => {
+    if (!lumaUrl) return;
+    setLoading(true);
     getLumaRsvpCount(lumaUrl).then((r) => {
       setLoading(false);
-      if (r.ok) setCount(r.data.count);
+      if (r.ok) { setCount(r.data.count); setUpdatedAt(new Date()); }
     });
-  }, [lumaUrl]);
+  };
+
+  useEffect(() => { fetch(); }, [lumaUrl]); // eslint-disable-line
 
   if (!lumaUrl) return null;
 
+  const timeStr = updatedAt
+    ? updatedAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
   return (
-    <a
-      href={lumaUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        fontSize: 12.5, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-        background: '#fff4e6', color: '#e8780a',
-        textDecoration: 'none', border: '1px solid #fed7aa',
-        transition: 'opacity 0.1s',
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-    >
-      <span>🎟</span>
-      {loading ? '…' : count !== null ? `${count} Anmeldungen` : 'Auf Luma öffnen'}
-      <span style={{ fontSize: 10, opacity: 0.7 }}>↗</span>
-    </a>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <a
+        href={lumaUrl} target="_blank" rel="noopener noreferrer"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 12.5, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+          background: '#fff4e6', color: '#e8780a',
+          textDecoration: 'none', border: '1px solid #fed7aa',
+        }}
+      >
+        <span>🎟</span>
+        {loading ? '…' : count !== null ? `${count} Anmeldungen` : 'Auf Luma öffnen'}
+        <span style={{ fontSize: 10, opacity: 0.7 }}>↗</span>
+      </a>
+      <button
+        onClick={fetch}
+        disabled={loading}
+        title={timeStr ? `Zuletzt aktualisiert: ${timeStr}` : 'Aktualisieren'}
+        style={{
+          background: 'none', border: 'none', cursor: loading ? 'default' : 'pointer',
+          color: 'var(--text-4)', padding: 2, borderRadius: 4,
+          opacity: loading ? 0.4 : 1, transition: 'color 0.1s',
+          fontSize: 13,
+        }}
+        onMouseEnter={(e) => { if (!loading) e.currentTarget.style.color = '#e8780a'; }}
+        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-4)'}
+      >
+        ↻
+      </button>
+      {timeStr && !loading && (
+        <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{timeStr}</span>
+      )}
+    </div>
   );
 }
 

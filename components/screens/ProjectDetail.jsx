@@ -16,7 +16,7 @@ import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
-import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, LumaUrlField, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -835,12 +835,21 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                   {!project.eventMeta?.eventDate && !project.eventMeta?.location && (
                     <div style={{ fontSize: 12, color: 'var(--text-4)' }}>Noch keine Event-Details eingetragen.</div>
                   )}
-                  {/* Luma RSVP counter */}
-                  {(project.eventMeta?.lumaUrl || project.eventMeta?.signupUrl?.includes('lu.ma')) && (
-                    <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-soft)', marginTop: 4 }}>
-                      <LumaRsvpBadge lumaUrl={project.eventMeta.lumaUrl ?? project.eventMeta.signupUrl} />
-                    </div>
-                  )}
+                  {/* Luma URL — editable inline */}
+                  {(() => {
+                    const currentLumaUrl = project.eventMeta?.lumaUrl ?? (project.eventMeta?.signupUrl?.includes('lu.ma') ? project.eventMeta.signupUrl : '');
+                    return (
+                      <LumaUrlField
+                        lumaUrl={currentLumaUrl}
+                        canEdit={CAN.editProject(myRole)}
+                        onSave={async (url) => {
+                          const newMeta = { ...(project.eventMeta ?? {}), lumaUrl: url || undefined };
+                          const r = await updateProject({ projectId, workspaceId, patch: { eventMeta: newMeta } });
+                          if (r.ok) updateProjectInCache(projectId, { eventMeta: newMeta });
+                        }}
+                      />
+                    );
+                  })()}
                 </div>
               </div>
 
