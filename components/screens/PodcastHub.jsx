@@ -252,6 +252,7 @@ function OverviewTab({ episodes }) {
 // "Workflow-Tasks anlegen" is checked.
 const EPISODE_WORKFLOW = [
   { title: 'Aufnahme',               priority: 'High'   },
+  { title: 'Abnahme',                priority: 'High'   },
   { title: 'Schnitt',                priority: 'High'   },
   { title: 'Thumbnail erstellen',    priority: 'Medium' },
   { title: 'Show Notes schreiben',   priority: 'Medium' },
