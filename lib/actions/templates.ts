@@ -180,11 +180,6 @@ const EPISODE_TASKS: {
   { title: 'Episode veröffentlichen & distribuieren', specialty: 'manager',   daysBeforeDue: 0,  priority: 'High',   phase: 'Publishing'   },
 ];
 
-export const EPISODE_TEMPLATE_PREVIEW = EPISODE_TASKS.map((t) => ({
-  title: t.title,
-  phase: t.phase,
-  specialty: t.specialty,
-}));
 
 function subtractDays(isoDate: string, days: number): string {
   const d = new Date(isoDate + 'T00:00:00');

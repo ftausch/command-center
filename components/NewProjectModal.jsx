@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { createProject, setupProjectWorkspace } from '@/lib/actions/projects';
-import { applyEpisodeTemplate, EPISODE_TEMPLATE_PREVIEW } from '@/lib/actions/templates';
+import { applyEpisodeTemplate } from '@/lib/actions/templates';
+import { EPISODE_TEMPLATE_PREVIEW } from '@/lib/episode-template-data';
 import { safeSlackChannelName } from '@/lib/workspace-utils';
 import { isDriveConfigured } from '@/lib/actions/workspace';
 
