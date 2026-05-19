@@ -124,7 +124,7 @@ export function ProjectsScreen({ setRoute }) {
               </tr>
             )}
             {filtered.map((p) => {
-              const team = p.team
+              const team = (p.team ?? [])
                 .map((id) => data.members.find((u) => u.id === id))
                 .filter(Boolean);
               const owner = data.members.find((u) => u.id === p.owner);
