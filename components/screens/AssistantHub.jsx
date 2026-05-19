@@ -789,6 +789,513 @@ function ContactsTab({ items, workspaceId, onUpdate, onDelete, selectedIds, onSe
   );
 }
 
+// ── Scheduling Tab ────────────────────────────────────────────────────────
+
+function countdownText(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+  target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target - today) / 86400000);
+  if (diff < -1)   return { text: `${Math.abs(diff)} Tage her`, past: true };
+  if (diff === -1) return { text: 'Gestern', past: true };
+  if (diff === 0)  return { text: 'Heute!', today: true };
+  if (diff === 1)  return { text: 'Morgen', soon: true };
+  if (diff <= 7)   return { text: `in ${diff} Tagen`, soon: true };
+  return { text: `in ${diff} Tagen`, future: true };
+}
+
+function schedStatusInfo(item) {
+  if (item.status === 'done')      return { label: 'Erledigt',       color: 'var(--text-3)',  icon: '🏁' };
+  if (item.status === 'cancelled') return { label: 'Abgesagt',       color: 'var(--danger)',  icon: '❌' };
+  const cd = item.metadata?.confirmedDate;
+  if (item.status === 'waiting' && cd) return { label: 'Bestätigt', color: 'var(--success)', icon: '📆' };
+  if (item.status === 'waiting')   return { label: 'Vorschlag raus', color: 'var(--warning)', icon: '📤' };
+  return                                  { label: 'Datum offen',    color: 'var(--info)',    icon: '📋' };
+}
+
+function SchedulingCard({ item, workspaceId, onUpdate, onDelete }) {
+  const [expanded,         setExpanded]         = useState(false);
+  const [pending,          setPending]          = useState(null);
+  const [editing,          setEditing]          = useState(false);
+  const [showConfirmInput, setShowConfirmInput] = useState(false);
+  const [confirmDateInput, setConfirmDateInput] = useState('');
+
+  const meta       = item.metadata ?? {};
+  const si         = schedStatusInfo(item);
+  const cd         = meta.confirmedDate ? countdownText(meta.confirmedDate) : null;
+  const isDone     = item.status === 'done' || item.status === 'cancelled';
+
+  const patchMeta = async (metaPatch, statusPatch) => {
+    setPending('patch');
+    const newMeta = { ...meta, ...metaPatch };
+    const r = await updateAssistantItem({
+      workspaceId, itemId: item.id,
+      patch: { ...(statusPatch ?? {}), metadata: newMeta },
+    });
+    setPending(null);
+    if (r.ok && r.data) onUpdate(r.data);
+  };
+
+  const markVorschlag = () => patchMeta({}, { status: 'waiting' });
+
+  const confirmDate = async () => {
+    if (!confirmDateInput) return;
+    await patchMeta(
+      { confirmedDate: confirmDateInput },
+      { status: 'waiting', dueDate: confirmDateInput.split('T')[0] },
+    );
+    setShowConfirmInput(false);
+    setConfirmDateInput('');
+  };
+
+  const markDone = () => patchMeta({ meetingDone: true }, { status: 'done' });
+
+  return (
+    <div style={{
+      borderRadius: 10,
+      border: `1px solid ${si.color === 'var(--success)' ? 'var(--border)' : 'var(--border-soft)'}`,
+      background: 'var(--bg-card)',
+      opacity: isDone ? 0.6 : pending ? 0.75 : 1,
+      transition: 'opacity 0.15s',
+    }}>
+      <div className="row gap-3 items-start" style={{ padding: '12px 14px' }}>
+        <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{si.icon}</span>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+          <div className="row gap-2 items-center mb-1" style={{ flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 13.5, fontWeight: 600,
+              color: isDone ? 'var(--text-3)' : 'var(--text-1)',
+              textDecoration: item.status === 'done' ? 'line-through' : 'none',
+            }}>{item.title}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: si.color,
+              background: 'var(--bg-sunk)', padding: '1px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+            }}>{si.label}</span>
+          </div>
+          <div className="row gap-3" style={{ fontSize: 12, color: 'var(--text-3)', flexWrap: 'wrap' }}>
+            {meta.participants && <span>👥 {meta.participants}</span>}
+            {meta.confirmedDate && (
+              <span style={{ fontWeight: 600, color: cd?.today ? 'var(--danger)' : cd?.soon ? 'var(--warning)' : 'var(--success)' }}>
+                📆 {new Date(meta.confirmedDate).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                {cd && ` · ${cd.text}`}
+              </span>
+            )}
+            {!meta.confirmedDate && meta.desiredDates && (
+              <span style={{ color: 'var(--text-4)' }}>🗓 Wunsch: {meta.desiredDates}</span>
+            )}
+            {meta.duration && <span>⏱ {meta.duration}</span>}
+            {meta.location && <span>📍 {meta.location}</span>}
+          </div>
+          {meta.proposedDates && !meta.confirmedDate && (
+            <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 4 }}>
+              📤 Vorgeschlagen: {meta.proposedDates}
+            </div>
+          )}
+        </div>
+
+        {/* Quick actions */}
+        {!isDone && (
+          <div className="row gap-1 items-center" style={{ flexShrink: 0 }}>
+            {item.status === 'open' && (
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => markVorschlag()} disabled={!!pending}>
+                📤 Vorschlag raus
+              </button>
+            )}
+            {item.status === 'waiting' && !meta.confirmedDate && (
+              <button className="btn btn-brand btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => setShowConfirmInput(true)} disabled={!!pending}>
+                ✅ Bestätigen
+              </button>
+            )}
+            {meta.confirmedDate && item.status !== 'done' && (
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--success)' }}
+                onClick={markDone} disabled={!!pending}>
+                🏁 Stattgefunden
+              </button>
+            )}
+            <button className="btn btn-quiet btn-icon" style={{ width: 28, height: 28 }}
+              onClick={() => setEditing(true)} title="Bearbeiten">
+              <I.edit size={11} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm date inline */}
+      {showConfirmInput && (
+        <div className="row gap-2 items-center" style={{ padding: '0 14px 12px 48px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Bestätigter Termin:</span>
+          <input type="datetime-local" className="input"
+            value={confirmDateInput}
+            onChange={(e) => setConfirmDateInput(e.target.value)}
+            style={{ fontSize: 12, height: 32, width: 210 }} />
+          <button className="btn btn-brand btn-sm" onClick={confirmDate} disabled={!confirmDateInput}>
+            Speichern
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setShowConfirmInput(false); setConfirmDateInput(''); }}>✕</button>
+        </div>
+      )}
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--border-soft)', padding: '10px 14px 14px 48px' }}>
+          {item.description && (
+            <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 10, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+              {item.description}
+            </div>
+          )}
+          <div className="grid gap-x-4 gap-y-1 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', fontSize: 12, color: 'var(--text-3)' }}>
+            {meta.participants  && <div><strong>👥 Teilnehmer:</strong> {meta.participants}</div>}
+            {meta.desiredDates  && <div><strong>🗓 Wunschtermin:</strong> {meta.desiredDates}</div>}
+            {meta.proposedDates && <div><strong>📤 Vorgeschlagen:</strong> {meta.proposedDates}</div>}
+            {meta.confirmedDate && (
+              <div><strong>✅ Bestätigt:</strong> {new Date(meta.confirmedDate).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            )}
+            {meta.location && <div><strong>📍 Ort:</strong> {meta.location}</div>}
+            {meta.duration && <div><strong>⏱ Dauer:</strong> {meta.duration}</div>}
+          </div>
+          <SchedulingDetailActions item={item} workspaceId={workspaceId}
+            onUpdate={onUpdate} onDelete={onDelete} onClose={() => setExpanded(false)} />
+        </div>
+      )}
+
+      {editing && (
+        <SchedulingEditModal item={item} workspaceId={workspaceId}
+          onSave={(u) => { onUpdate(u); setEditing(false); }}
+          onClose={() => setEditing(false)} />
+      )}
+    </div>
+  );
+}
+
+function SchedulingDetailActions({ item, workspaceId, onUpdate, onDelete, onClose }) {
+  const [pending, setPending] = useState(false);
+
+  const cancelAppt = async () => {
+    setPending(true);
+    const r = await updateAssistantItem({ workspaceId, itemId: item.id, patch: { status: 'cancelled' } });
+    setPending(false);
+    if (r.ok && r.data) onUpdate(r.data);
+  };
+
+  const remove = async () => {
+    setPending(true);
+    const r = await deleteAssistantItem({ workspaceId, itemId: item.id });
+    if (r.ok) onDelete(item.id);
+    setPending(false);
+  };
+
+  return (
+    <div className="row gap-2">
+      {item.status !== 'cancelled' && item.status !== 'done' && (
+        <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--warning)' }}
+          onClick={cancelAppt} disabled={pending}>
+          ❌ Absagen
+        </button>
+      )}
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--danger)' }}
+        onClick={remove} disabled={pending}><I.x size={11} /> Löschen</button>
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }} onClick={onClose}>Schließen</button>
+    </div>
+  );
+}
+
+function SchedulingEditModal({ item, workspaceId, onSave, onClose }) {
+  const meta = item.metadata ?? {};
+  const [f, setF] = useState({
+    title:         item.title,
+    participants:  meta.participants  ?? '',
+    desiredDates:  meta.desiredDates  ?? '',
+    proposedDates: meta.proposedDates ?? '',
+    confirmedDate: meta.confirmedDate ?? '',
+    location:      meta.location      ?? '',
+    duration:      meta.duration      ?? '',
+    description:   item.description   ?? '',
+    priority:      item.priority      ?? 'medium',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState(null);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const save = async () => {
+    if (!f.title.trim()) return;
+    setSaving(true); setError(null);
+    const newMeta = { ...meta };
+    const fields = { participants: f.participants, desiredDates: f.desiredDates, proposedDates: f.proposedDates, confirmedDate: f.confirmedDate, location: f.location, duration: f.duration };
+    Object.entries(fields).forEach(([k, v]) => {
+      const trimmed = v.trim ? v.trim() : v;
+      if (trimmed) newMeta[k] = trimmed; else delete newMeta[k];
+    });
+    const r = await updateAssistantItem({
+      workspaceId, itemId: item.id,
+      patch: {
+        title:       f.title.trim(),
+        description: f.description.trim() || undefined,
+        priority:    f.priority || undefined,
+        dueDate:     f.confirmedDate ? f.confirmedDate.split('T')[0] : undefined,
+        metadata:    newMeta,
+      },
+    });
+    setSaving(false);
+    if (!r.ok) { setError(r.error); return; }
+    onSave(r.data);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,22,28,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="card card-pad col gap-3" style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="row between">
+          <div className="h3">📅 Termin bearbeiten</div>
+          <button className="btn btn-quiet btn-icon" onClick={onClose}><I.x size={14} /></button>
+        </div>
+
+        <input className="input" placeholder="Worum geht es? *" value={f.title}
+          onChange={(e) => setF({ ...f, title: e.target.value })} autoFocus style={{ fontSize: 13 }} />
+
+        <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>👥 Teilnehmer</label>
+            <input className="input" placeholder="z.B. Fabian, Tim" value={f.participants}
+              onChange={(e) => setF({ ...f, participants: e.target.value })} style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>⏱ Dauer</label>
+            <input className="input" placeholder="z.B. 30 Min" value={f.duration}
+              onChange={(e) => setF({ ...f, duration: e.target.value })} style={{ fontSize: 13 }} />
+          </div>
+        </div>
+
+        <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>🗓 Wunschtermin / Zeitraum</label>
+            <input className="input" placeholder="z.B. KW22, morgens" value={f.desiredDates}
+              onChange={(e) => setF({ ...f, desiredDates: e.target.value })} style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>📍 Ort / Format</label>
+            <input className="input" placeholder="z.B. Zoom, Büro" value={f.location}
+              onChange={(e) => setF({ ...f, location: e.target.value })} style={{ fontSize: 13 }} />
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>📤 Vorgeschlagene Termine</label>
+          <textarea className="input" rows={2} placeholder="z.B. Di 21.05. 10:00 Uhr oder Do 23.05. 14:00 Uhr"
+            value={f.proposedDates} onChange={(e) => setF({ ...f, proposedDates: e.target.value })}
+            style={{ fontSize: 13, resize: 'vertical' }} />
+        </div>
+
+        <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>✅ Bestätigter Termin</label>
+            <input type="datetime-local" className="input" value={f.confirmedDate}
+              onChange={(e) => setF({ ...f, confirmedDate: e.target.value })} style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11.5, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Priorität</label>
+            <select className="input" value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })} style={{ fontSize: 13 }}>
+              <option value="urgent">🔴 Urgent</option>
+              <option value="high">🟠 High</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="low">⚪ Low</option>
+            </select>
+          </div>
+        </div>
+
+        <textarea className="input" rows={2} placeholder="Notizen…" value={f.description}
+          onChange={(e) => setF({ ...f, description: e.target.value })}
+          style={{ fontSize: 13, resize: 'vertical' }} />
+
+        {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
+        <div className="row gap-2">
+          <button className="btn btn-brand btn-sm" onClick={save} disabled={!f.title.trim() || saving}>
+            {saving ? 'Speichert…' : 'Speichern'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewSchedulingForm({ workspaceId, onAdd, onCancel }) {
+  const [f, setF] = useState({ title: '', participants: '', desiredDates: '', location: '', duration: '', priority: 'medium' });
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.title.trim()) return;
+    setSaving(true); setError(null);
+    const meta = {};
+    if (f.participants.trim()) meta.participants = f.participants.trim();
+    if (f.desiredDates.trim()) meta.desiredDates  = f.desiredDates.trim();
+    if (f.location.trim())     meta.location      = f.location.trim();
+    if (f.duration.trim())     meta.duration      = f.duration.trim();
+    const r = await createAssistantItem({
+      workspaceId, title: f.title.trim(), type: 'scheduling',
+      priority: f.priority, metadata: meta,
+    });
+    setSaving(false);
+    if (!r.ok) { setError(r.error); return; }
+    onAdd(r.data);
+  };
+
+  return (
+    <form onSubmit={submit} className="card card-pad col gap-3" style={{ border: '1px solid var(--brand)' }}>
+      <div className="h3">📅 Neuen Termin koordinieren</div>
+      <input className="input" placeholder="Worum geht es? *" value={f.title}
+        onChange={(e) => setF({ ...f, title: e.target.value })} autoFocus style={{ fontSize: 13 }} />
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <input className="input" placeholder="👥 Teilnehmer" value={f.participants}
+          onChange={(e) => setF({ ...f, participants: e.target.value })} style={{ fontSize: 13 }} />
+        <input className="input" placeholder="🗓 Wunschtermin" value={f.desiredDates}
+          onChange={(e) => setF({ ...f, desiredDates: e.target.value })} style={{ fontSize: 13 }} />
+        <input className="input" placeholder="📍 Ort / Zoom" value={f.location}
+          onChange={(e) => setF({ ...f, location: e.target.value })} style={{ fontSize: 13 }} />
+      </div>
+      <div className="row gap-2">
+        <select className="input" value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })} style={{ fontSize: 13, height: 36 }}>
+          <option value="urgent">🔴 Urgent</option>
+          <option value="high">🟠 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="low">⚪ Low</option>
+        </select>
+        <input className="input" placeholder="⏱ Dauer (z.B. 30 Min)" value={f.duration}
+          onChange={(e) => setF({ ...f, duration: e.target.value })} style={{ fontSize: 13, flex: 1 }} />
+      </div>
+      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
+      <div className="row gap-2">
+        <button type="submit" className="btn btn-brand btn-sm" disabled={!f.title.trim() || saving}>
+          {saving ? '…' : 'Termin anlegen'}
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Abbrechen</button>
+      </div>
+    </form>
+  );
+}
+
+function SchedulingTab({ items, workspaceId, onUpdate, onDelete, onAdd }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [filter,  setFilter]  = useState('active');
+
+  const schedItems = items.filter(i => i.type === 'scheduling');
+  const open       = schedItems.filter(i => i.status === 'open');
+  const proposed   = schedItems.filter(i => i.status === 'waiting' && !i.metadata?.confirmedDate);
+  const confirmed  = schedItems.filter(i => i.status === 'waiting' && !!i.metadata?.confirmedDate)
+    .sort((a, b) => (a.metadata.confirmedDate > b.metadata.confirmedDate ? 1 : -1));
+  const done       = schedItems.filter(i => i.status === 'done' || i.status === 'cancelled');
+
+  const cardProps = { workspaceId, onUpdate, onDelete };
+
+  return (
+    <div className="col gap-4">
+      {/* Toolbar */}
+      <div className="row between items-center" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <div className="row gap-1">
+          {[
+            { id: 'active',    label: 'Offen',      n: open.length + proposed.length },
+            { id: 'confirmed', label: '✅ Bestätigt', n: confirmed.length, c: confirmed.length > 0 ? 'var(--success)' : undefined },
+            { id: 'done',      label: 'Erledigt',   n: done.length },
+          ].map(({ id, label, n, c }) => (
+            <button key={id} className={`chip${filter === id ? ' active' : ''}`}
+              onClick={() => setFilter(id)}
+              style={{ fontSize: 12, color: filter !== id && c ? c : undefined }}>
+              {label}{n > 0 ? ` (${n})` : ''}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-brand btn-sm" onClick={() => setShowAdd(v => !v)}>
+          <I.plus size={13} /> Neuer Termin
+        </button>
+      </div>
+
+      {showAdd && (
+        <NewSchedulingForm workspaceId={workspaceId}
+          onAdd={(item) => { onAdd(item); setShowAdd(false); }}
+          onCancel={() => setShowAdd(false)} />
+      )}
+
+      {filter === 'active' && (
+        <>
+          {open.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                📋 Datum offen — noch keine Vorschläge raus ({open.length})
+              </div>
+              <div className="col gap-2">
+                {open.map(i => <SchedulingCard key={i.id} item={i} {...cardProps} />)}
+              </div>
+            </div>
+          )}
+
+          {proposed.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                📤 Vorschlag raus — warte auf Bestätigung ({proposed.length})
+              </div>
+              <div className="col gap-2">
+                {proposed.map(i => <SchedulingCard key={i.id} item={i} {...cardProps} />)}
+              </div>
+            </div>
+          )}
+
+          {open.length === 0 && proposed.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)' }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Keine offenen Terminkoordinationen</div>
+              <button className="btn btn-brand btn-sm mt-2" onClick={() => setShowAdd(true)}>
+                <I.plus size={13} /> Termin anlegen
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {filter === 'confirmed' && (
+        <>
+          {confirmed.length > 0 ? (
+            <div className="col gap-2">
+              {confirmed.map(i => <SchedulingCard key={i.id} item={i} {...cardProps} />)}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)', fontSize: 13 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+              Noch keine bestätigten Termine.
+            </div>
+          )}
+        </>
+      )}
+
+      {filter === 'done' && (
+        <>
+          {done.length > 0 ? (
+            <div className="col gap-2">
+              {done.map(i => <SchedulingCard key={i.id} item={i} {...cardProps} />)}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)', fontSize: 13 }}>
+              Noch keine erledigten Termine.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────
 
 export function AssistantHubScreen({ setRoute }) {
@@ -878,7 +1385,7 @@ export function AssistantHubScreen({ setRoute }) {
           {tab === 'dashboard'  && <DashboardTab  items={items} {...sharedProps} onAddNew={() => setAdding(true)} />}
           {tab === 'followups'  && <ListTab items={items} {...sharedProps} typeFilter="follow_up"        title="Follow-ups"  emptyMsg="Keine offenen Follow-ups."        icon="📩" />}
           {tab === 'documents'  && <ListTab items={items} {...sharedProps} typeFilter="document_request" title="Unterlagen"  emptyMsg="Keine fehlenden Unterlagen."      icon="📄" />}
-          {tab === 'scheduling' && <ListTab items={items} {...sharedProps} typeFilter="scheduling"       title="Termine"     emptyMsg="Keine Termine zu koordinieren."   icon="📅" />}
+          {tab === 'scheduling' && <SchedulingTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} onAdd={(item) => setItems(p => [item, ...p])} />}
           {tab === 'approvals'  && <ListTab items={items} {...sharedProps} typeFilter="approval"         title="Freigaben"   emptyMsg="Keine offenen Freigaben."         icon="✅" />}
           {tab === 'contacts'   && <ContactsTab items={items} {...sharedProps} />}
           {tab === 'all'        && <ListTab items={items} {...sharedProps} typeFilter={null}             title="Alle Items"  emptyMsg="Noch keine Assistant-Items."      icon="📋" />}
