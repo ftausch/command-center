@@ -128,7 +128,7 @@ export function ProjectsScreen({ setRoute }) {
                 .map((id) => data.members.find((u) => u.id === id))
                 .filter(Boolean);
               const owner = data.members.find((u) => u.id === p.owner);
-              const phases = data.phases;
+              const phases = data.phases ?? [];
               const due = dueLabel(p.due);
               const projTasks = allTasks.filter((t) => t.projectId === p.id);
               const pProgress = projectProgress(projTasks);
