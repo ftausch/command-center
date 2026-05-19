@@ -251,12 +251,16 @@ function OverviewTab({ episodes }) {
 // Standard production tasks created for every new episode when
 // "Workflow-Tasks anlegen" is checked.
 const EPISODE_WORKFLOW = [
-  { title: 'Aufnahme',               priority: 'High'   },
-  { title: 'Abnahme',                priority: 'High'   },
-  { title: 'Schnitt',                priority: 'High'   },
-  { title: 'Thumbnail erstellen',    priority: 'Medium' },
-  { title: 'Show Notes schreiben',   priority: 'Medium' },
-  { title: 'Distribution',           priority: 'Low'    },
+  { title: 'Aufnahme',                   priority: 'High'   },
+  { title: 'Abnahme',                    priority: 'High'   },
+  { title: 'Titelvorschläge',            priority: 'High'   },
+  { title: 'OpusClip',                   priority: 'Medium' },
+  { title: 'Trailer',                    priority: 'Medium' },
+  { title: 'Schnitt',                    priority: 'High'   },
+  { title: 'Thumbnail & Cover',          priority: 'Medium' },
+  { title: 'Shownotes',                  priority: 'Medium' },
+  { title: 'Distribution',               priority: 'Medium' },
+  { title: 'Promo Ordner verschicken',   priority: 'Low'    },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
