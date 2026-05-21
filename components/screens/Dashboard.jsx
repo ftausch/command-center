@@ -38,24 +38,6 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
   const defaultTab = (myRole === 'manager' || myRole === 'member') ? 'focus' : 'overview';
   const [dashTab, setDashTab] = useState(defaultTab);
 
-  // Build 7-day plan
-  const weekPlan = useMemo(() => {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      d.setHours(0, 0, 0, 0);
-      const iso = d.toISOString().slice(0, 10);
-      const tasks = allTasks.filter(t => t.due === iso && t.status !== 'Done');
-      const events = data.projects.filter(p =>
-        p.division === 'events' && p.eventMeta?.eventDate?.slice(0, 10) === iso
-      );
-      const episodes = (data.episodes ?? []).filter(e => e.date === iso);
-      days.push({ iso, label: i === 0 ? 'Heute' : i === 1 ? 'Morgen' : WEEKDAY_LABEL[d.getDay()], tasks, events, episodes, date: d });
-    }
-    return days;
-  }, [allTasks, data.projects, data.episodes]);
-
   const allTasks  = filterByDivision(data.tasks.map(t => ({
     ...t,
     division: data.projects.find(p => p.id === t.projectId)?.division ?? 'general',
@@ -110,6 +92,24 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
     });
     return evs.sort((a, b) => a.date.localeCompare(b.date));
   }, [allTasks, projects]);
+
+  // Build 7-day plan (after allTasks is defined)
+  const weekPlan = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      d.setHours(0, 0, 0, 0);
+      const iso = d.toISOString().slice(0, 10);
+      const tasks = allTasks.filter(t => t.due === iso && t.status !== 'Done');
+      const events = data.projects.filter(p =>
+        p.division === 'events' && p.eventMeta?.eventDate?.slice(0, 10) === iso
+      );
+      const episodes = (data.episodes ?? []).filter(e => e.date === iso);
+      days.push({ iso, label: i === 0 ? 'Heute' : i === 1 ? 'Morgen' : WEEKDAY_LABEL[d.getDay()], tasks, events, episodes, date: d });
+    }
+    return days;
+  }, [allTasks, data.projects, data.episodes]);
 
   return (
     <div className="page fade-in">
