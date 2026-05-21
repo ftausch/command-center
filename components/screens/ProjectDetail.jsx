@@ -392,6 +392,20 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </button>
             );
           })()}
+          <button className="btn btn-ghost btn-sm" title="Tasks als CSV exportieren"
+            onClick={() => {
+              const rows = [['Titel','Status','Priorität','Zugewiesen','Fälligkeit','Phase']];
+              tasks.forEach((t) => {
+                const assignee = data.members.find(m => m.id === t.assignee);
+                rows.push([t.title, t.status, t.priority ?? '', assignee?.name ?? '', t.due ?? '', (t.tags ?? []).join(';')]);
+              });
+              const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+              const url  = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
+              a.download = `${project?.name ?? 'tasks'}_tasks.csv`; a.click(); URL.revokeObjectURL(url);
+            }}>
+            ⬇️ CSV
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => { setBulkTaskOpen(true); setBulkText(''); setBulkResult(null); }} title="Mehrere Tasks auf einmal anlegen">
             <I.plus size={13} /> Mehrere Tasks
           </button>

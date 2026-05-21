@@ -91,6 +91,38 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
         kind: 'Action', id: 'go-podcast', label: 'Podcast Hub öffnen', sub: 'Episoden',
         action: () => setRoute('podcast'),
       },
+      {
+        kind: 'Action', id: 'go-eventhub', label: 'Event Hub öffnen', sub: 'Events',
+        action: () => setRoute('eventhub'),
+      },
+      {
+        kind: 'Action', id: 'go-assisthub', label: 'Assistant Hub öffnen', sub: 'PA / Termine',
+        action: () => setRoute('assisthub'),
+      },
+      {
+        kind: 'Action', id: 'go-approvals', label: 'Freigaben öffnen', sub: 'Operations',
+        action: () => setRoute('approvals'),
+      },
+      {
+        kind: 'Action', id: 'go-decisions', label: 'Entscheidungen öffnen', sub: 'Operations',
+        action: () => setRoute('decisions'),
+      },
+      {
+        kind: 'Action', id: 'go-risks', label: 'Risiken & Blocker öffnen', sub: 'Operations',
+        action: () => setRoute('risks'),
+      },
+      {
+        kind: 'Action', id: 'go-activity', label: 'Aktivitäts-Feed öffnen', sub: 'Alle Aktionen',
+        action: () => setRoute('activity'),
+      },
+      {
+        kind: 'Action', id: 'go-settings', label: 'Einstellungen öffnen', sub: 'Settings',
+        action: () => setRoute('settings'),
+      },
+      {
+        kind: 'Action', id: 'go-team', label: 'Team öffnen', sub: 'Mitglieder',
+        action: () => setRoute('team'),
+      },
     ];
 
     const projectItems = data.projects.map((p) => ({
@@ -123,7 +155,7 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       kind: 'Episode', id: e.id,
       label: e.num != null ? `Ep. ${e.num} — ${e.title}` : e.title,
       sub: [e.status, e.guest, e.date].filter(Boolean).join(' · '),
-      action: () => setRoute('podcast'),
+      action: () => { setRoute('podcast'); },
     }));
 
     const filtering = q.trim() !== '';

@@ -63,6 +63,22 @@ export function ProjectsScreen({ setRoute }) {
         </div>
         <div className="row gap-2">
           <input className="input" placeholder="Projekt suchen…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220, height: 32 }} />
+          <button className="btn btn-ghost btn-sm" title="Als CSV herunterladen"
+            onClick={() => {
+              const rows = [['Name','Status','Priorität','Division','Fälligkeit','Owner','Offene Tasks']];
+              filtered.forEach((p) => {
+                const owner = data.members.find((u) => u.id === p.owner);
+                const open  = allTasks.filter((t) => t.projectId === p.id && t.status !== 'Done').length;
+                rows.push([p.name, p.status, p.priority, p.division, p.due ?? '', owner?.name ?? '', String(open)]);
+              });
+              const csv  = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+              const url  = URL.createObjectURL(blob);
+              const a    = document.createElement('a'); a.href = url; a.download = 'projekte.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}>
+            ⬇️ CSV
+          </button>
           {CAN.createProject(myRole) && (
             <button className="btn btn-brand btn-sm" onClick={() => setCreateOpen(true)}><I.plus size={13} /> New Project</button>
           )}
