@@ -1342,10 +1342,515 @@ function SchedulingTab({ items, workspaceId, onUpdate, onDelete, onAdd }) {
   );
 }
 
+// ── Action Card (ersetzt ItemRow in den neuen Tabs) ──────────────────────
+
+const PRIORITY_BORDER = { urgent: 'var(--danger)', high: 'var(--warning)', medium: 'var(--info)', low: 'var(--border)' };
+
+function ActionCard({ item, workspaceId, onUpdate, onDelete, primaryAction, primaryLabel, secondaryActions = [] }) {
+  const [expanded,  setExpanded]  = useState(false);
+  const [pending,   setPending]   = useState(null);
+  const [editing,   setEditing]   = useState(false);
+
+  const typeMeta = TYPE_META[item.type] ?? TYPE_META.other;
+  const due      = item.dueDate ? dueLabel(item.dueDate) : null;
+  const overdue  = isOverdue(item);
+  const snoozed  = isSnoozed(item);
+  const isDone   = item.status === 'done' || item.status === 'cancelled';
+  const borderColor = PRIORITY_BORDER[item.priority ?? 'low'] ?? 'var(--border)';
+
+  const patch = async (p) => {
+    setPending('patch');
+    const r = await updateAssistantItem({ workspaceId, itemId: item.id, patch: p });
+    setPending(null);
+    if (r.ok && r.data) onUpdate(r.data);
+  };
+
+  const remove = async () => {
+    setPending('del');
+    const r = await deleteAssistantItem({ workspaceId, itemId: item.id });
+    setPending(null);
+    if (r.ok) onDelete(item.id);
+  };
+
+  return (
+    <>
+      {editing && (
+        <EditModal item={item} workspaceId={workspaceId} members={[]}
+          onSave={(u) => { onUpdate(u); setEditing(false); }}
+          onClose={() => setEditing(false)} />
+      )}
+      <div style={{
+        borderRadius: 12,
+        border: `1px solid ${overdue ? 'var(--danger-border,#fca5a5)' : 'var(--border-soft)'}`,
+        background: overdue ? 'var(--danger-bg,#fef2f2)' : snoozed ? 'var(--bg-sunk)' : isDone ? 'var(--bg-sunk)' : 'var(--bg-card)',
+        borderLeft: `4px solid ${isDone ? 'var(--border)' : borderColor}`,
+        opacity: isDone ? 0.6 : pending ? 0.8 : 1,
+        transition: 'all 0.15s',
+      }}>
+        {/* Main row */}
+        <div style={{ padding: '14px 16px', cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+          <div className="row gap-3 items-start">
+            {/* Type pill */}
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: `${typeMeta.color}18`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, marginTop: 1,
+            }}>
+              {typeMeta.icon}
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row gap-2 items-center mb-1" style={{ flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: 14, fontWeight: 600,
+                  color: isDone ? 'var(--text-3)' : 'var(--text-1)',
+                  textDecoration: isDone ? 'line-through' : 'none',
+                }}>{item.title}</span>
+                {item.priority === 'urgent' && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--danger)', color: 'white', padding: '1px 7px', borderRadius: 20 }}>URGENT</span>
+                )}
+                {snoozed && <span style={{ fontSize: 11 }}>💤</span>}
+              </div>
+              <div className="row gap-3" style={{ fontSize: 12, color: 'var(--text-3)', flexWrap: 'wrap' }}>
+                {item.contactName && (
+                  <span style={{ fontWeight: 500 }}>👤 {item.contactName}{item.company ? ` · ${item.company}` : ''}</span>
+                )}
+                {due && (
+                  <span style={{ color: due.danger ? 'var(--danger)' : due.today ? 'var(--warning)' : 'var(--text-4)', fontWeight: due.danger || due.today ? 600 : 400 }}>
+                    📅 {due.text}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Primary action */}
+            {!isDone && primaryAction && (
+              <button className="btn btn-brand btn-sm"
+                style={{ fontSize: 12.5, whiteSpace: 'nowrap', flexShrink: 0 }}
+                disabled={!!pending}
+                onClick={(e) => { e.stopPropagation(); primaryAction(patch); }}>
+                {primaryLabel}
+              </button>
+            )}
+            {!isDone && !primaryAction && (
+              <button className="btn btn-brand btn-sm"
+                style={{ fontSize: 12.5, flexShrink: 0 }}
+                disabled={!!pending}
+                onClick={(e) => { e.stopPropagation(); patch({ status: 'done' }); }}>
+                ✓ Erledigt
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Expanded detail */}
+        {expanded && (
+          <div style={{ borderTop: '1px solid var(--border-soft)', padding: '12px 16px 14px' }}>
+            {item.description && (
+              <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {item.description}
+              </p>
+            )}
+            {item.contactEmail && (
+              <div style={{ marginBottom: 10 }}>
+                <a href={`mailto:${item.contactEmail}`} style={{ fontSize: 13, color: 'var(--brand)' }}>✉️ {item.contactEmail}</a>
+              </div>
+            )}
+            <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+              {secondaryActions.map((a, i) => (
+                <button key={i} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+                  disabled={!!pending}
+                  onClick={() => a.action(patch)}>
+                  {a.label}
+                </button>
+              ))}
+              <button className="btn btn-quiet btn-sm" style={{ fontSize: 12 }}
+                onClick={() => setEditing(true)}>✏️ Bearbeiten</button>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', fontSize: 12 }}
+                disabled={!!pending} onClick={remove}>
+                <I.x size={11} /> Löschen
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Morning Briefing Tab (neues Dashboard) ────────────────────────────────
+
+function greeting(me) {
+  const h = new Date().getHours();
+  const name = me?.name?.split(' ')[0] ?? '';
+  if (h < 12) return `Guten Morgen${name ? `, ${name}` : ''}! 🌅`;
+  if (h < 17) return `Guten Tag${name ? `, ${name}` : ''}! ☀️`;
+  return `Guten Abend${name ? `, ${name}` : ''}! 🌙`;
+}
+
+function MorningBriefingTab({ items, workspaceId, onUpdate, onDelete, onAddNew, me }) {
+  const urgent    = items.filter(i => (isOverdue(i) || isDueToday(i)) && isActive(i));
+  const waiting   = items.filter(i => i.status === 'waiting' && !isSnoozed(i) && !isDueToday(i) && !isOverdue(i));
+  const upcoming  = items.filter(i => i.status === 'open' && i.dueDate && i.dueDate > TODAY_STR && !isSnoozed(i)).slice(0, 5);
+  const fabian    = items.filter(i => i.type === 'approval' && isActive(i));
+  const snoozed   = items.filter(isSnoozed);
+  const doneToday = items.filter(i => i.status === 'done' && i.updatedAt?.startsWith(TODAY_STR));
+
+  const confirmedMeetings = items
+    .filter(i => i.type === 'scheduling' && i.metadata?.confirmedDate && i.status !== 'done')
+    .sort((a, b) => a.metadata.confirmedDate > b.metadata.confirmedDate ? 1 : -1)
+    .slice(0, 3);
+
+  const totalActive = items.filter(isActive).length;
+
+  if (totalActive === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '64px 0' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', marginBottom: 6 }}>
+          {greeting(me)}
+        </div>
+        <div style={{ fontSize: 15, color: 'var(--text-3)', marginBottom: 24 }}>
+          Alles erledigt — du bist up to date!
+        </div>
+        <button className="btn btn-brand btn-sm" onClick={onAddNew}>
+          <I.plus size={13} /> Neues Item anlegen
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="col gap-5">
+      {/* Greeting + summary */}
+      <div style={{ padding: '20px 24px', borderRadius: 14, background: 'linear-gradient(135deg, var(--brand-soft) 0%, var(--bg-elev) 100%)', border: '1px solid var(--brand-soft)' }}>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{greeting(me)}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-2)' }}>
+          {urgent.length > 0
+            ? <span style={{ color: 'var(--danger)', fontWeight: 600 }}>⚡ {urgent.length} dringend · </span>
+            : null}
+          {totalActive} offene Items insgesamt
+          {doneToday.length > 0 ? ` · ✅ ${doneToday.length} heute erledigt` : ''}
+        </div>
+
+        {/* Nächste Termine */}
+        {confirmedMeetings.length > 0 && (
+          <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
+            {confirmedMeetings.map(item => {
+              const d = new Date(item.metadata.confirmedDate);
+              const dateStr = d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+              const timeStr = item.metadata.confirmedDate.includes('T')
+                ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
+                : '';
+              return (
+                <div key={item.id} style={{ fontSize: 12.5, background: 'var(--bg-elev)', borderRadius: 8, padding: '4px 10px', border: '1px solid var(--border-soft)' }}>
+                  📆 <strong>{item.title}</strong> · {dateStr}{timeStr ? ` ${timeStr}` : ''}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Dringend */}
+      {urgent.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            ⚡ Jetzt erledigen ({urgent.length})
+          </div>
+          <div className="col gap-3">
+            {urgent.map(i => (
+              <ActionCard key={i.id} item={i} workspaceId={workspaceId} onUpdate={onUpdate} onDelete={onDelete}
+                secondaryActions={[
+                  { label: '💤 Morgen', action: async () => { const { snoozeItem } = await import('@/lib/actions/assistant'); const r = await snoozeItem({ workspaceId, itemId: i.id, days: 1 }); if (r.ok && r.data) onUpdate(r.data); } },
+                ]} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Wartet auf Fabian */}
+      {fabian.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#e8780a', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            ⏳ Wartet auf Fabian ({fabian.length})
+          </div>
+          <div className="col gap-3">
+            {fabian.map(i => (
+              <ActionCard key={i.id} item={i} workspaceId={workspaceId} onUpdate={onUpdate} onDelete={onDelete} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Im Blick */}
+      {(waiting.length > 0 || upcoming.length > 0) && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            👁 Im Blick ({waiting.length + upcoming.length})
+          </div>
+          <div className="col gap-3">
+            {[...waiting, ...upcoming].slice(0, 6).map(i => (
+              <ActionCard key={i.id} item={i} workspaceId={workspaceId} onUpdate={onUpdate} onDelete={onDelete} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Wiedervorlagen */}
+      {snoozed.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            💤 Wiedervorlagen ({snoozed.length})
+          </div>
+          <div className="col gap-3">
+            {snoozed.map(i => (
+              <ActionCard key={i.id} item={i} workspaceId={workspaceId} onUpdate={onUpdate} onDelete={onDelete} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Follow-up Inbox Tab ───────────────────────────────────────────────────
+
+function FollowUpInboxTab({ items, workspaceId, onUpdate, onDelete }) {
+  const followUps = items.filter(i => i.type === 'follow_up');
+  const active    = followUps.filter(isActive).sort((a, b) => {
+    // Sort by last contacted (oldest first) then by due date
+    const la = a.lastContactedAt ?? '0';
+    const lb = b.lastContactedAt ?? '0';
+    return la < lb ? -1 : 1;
+  });
+  const done      = followUps.filter(i => i.status === 'done');
+
+  const markContacted = async (item, patch) => {
+    const { snoozeItem } = await import('@/lib/actions/assistant');
+    const r = await updateAssistantItem({
+      workspaceId, itemId: item.id,
+      patch: { status: 'waiting', lastContactedAt: new Date().toISOString(), nextFollowUpAt: (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString(); })() },
+    });
+    if (r.ok && r.data) onUpdate(r.data);
+  };
+
+  const Empty = () => (
+    <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)' }}>
+      <div style={{ fontSize: 36, marginBottom: 8 }}>📩</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)' }}>Keine offenen Follow-ups</div>
+    </div>
+  );
+
+  return (
+    <div className="col gap-4">
+      {active.length === 0 && <Empty />}
+
+      {active.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            📬 Offen — {active.length} Kontakt{active.length > 1 ? 'e' : ''} warten
+          </div>
+          <div className="col gap-3">
+            {active.map(item => {
+              const daysSince = item.lastContactedAt
+                ? Math.floor((Date.now() - new Date(item.lastContactedAt).getTime()) / 86400000)
+                : null;
+              return (
+                <ActionCard key={item.id} item={item} workspaceId={workspaceId}
+                  onUpdate={onUpdate} onDelete={onDelete}
+                  primaryLabel="✉️ Kontaktiert"
+                  primaryAction={() => markContacted(item)}
+                  secondaryActions={[
+                    { label: '✓ Erledigt', action: (p) => p({ status: 'done' }) },
+                    { label: '💤 3 Tage', action: async () => { const { snoozeItem } = await import('@/lib/actions/assistant'); const r = await snoozeItem({ workspaceId, itemId: item.id, days: 3 }); if (r.ok && r.data) onUpdate(r.data); }},
+                  ]}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {done.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+            ✅ Erledigt ({done.length})
+          </div>
+          <div className="col gap-2">
+            {done.slice(0, 5).map(item => (
+              <div key={item.id} style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--bg-sunk)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 16 }}>✅</span>
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--text-3)', textDecoration: 'line-through' }}>{item.title}</span>
+                {item.contactName && <span style={{ fontSize: 12, color: 'var(--text-4)' }}>👤 {item.contactName}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Unterlagen Tab ────────────────────────────────────────────────────────
+
+function UnterlagenTab({ items, workspaceId, onUpdate, onDelete }) {
+  const docs   = items.filter(i => i.type === 'document_request');
+  const active = docs.filter(isActive);
+  const done   = docs.filter(i => i.status === 'done');
+
+  return (
+    <div className="col gap-4">
+      {active.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)' }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📂</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)' }}>Alle Unterlagen vollständig</div>
+          <div style={{ fontSize: 13, color: 'var(--text-4)', marginTop: 4 }}>Keine ausstehenden Dokumente.</div>
+        </div>
+      )}
+
+      {active.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            📋 Ausstehend — {active.length} Dokument{active.length > 1 ? 'e' : ''} fehlen noch
+          </div>
+          <div className="col gap-3">
+            {active.map(item => (
+              <ActionCard key={item.id} item={item} workspaceId={workspaceId}
+                onUpdate={onUpdate} onDelete={onDelete}
+                primaryLabel="📎 Als erhalten markieren"
+                primaryAction={(p) => p({ status: 'done' })}
+                secondaryActions={[
+                  { label: '⏳ Nochmal anfragen', action: (p) => p({ status: 'waiting', lastContactedAt: new Date().toISOString() }) },
+                  { label: '💤 Morgen', action: async () => { const { snoozeItem } = await import('@/lib/actions/assistant'); const r = await snoozeItem({ workspaceId, itemId: item.id, days: 1 }); if (r.ok && r.data) onUpdate(r.data); }},
+                ]}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {done.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+            ✅ Erhalten ({done.length})
+          </div>
+          <div className="col gap-2">
+            {done.slice(0, 5).map(item => (
+              <div key={item.id} style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--bg-sunk)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 16 }}>📎</span>
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--text-3)', textDecoration: 'line-through' }}>{item.title}</span>
+                {item.contactName && <span style={{ fontSize: 12, color: 'var(--text-4)' }}>👤 {item.contactName}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Freigaben Kanban Tab ──────────────────────────────────────────────────
+
+const FREIGABEN_COLS = [
+  { id: 'open',      label: 'Warte auf mich',       icon: '🔴', statuses: ['open', 'escalated'], color: 'var(--danger)',  bg: 'var(--danger-bg,#fef2f2)' },
+  { id: 'waiting',   label: 'Wartet auf andere',     icon: '⏳', statuses: ['waiting'],           color: 'var(--warning)', bg: '#fffbeb' },
+  { id: 'done',      label: 'Erledigt',              icon: '✅', statuses: ['done','cancelled'],  color: 'var(--success)', bg: '#f0fdf4' },
+];
+
+function FreigabenKanbanTab({ items, workspaceId, onUpdate, onDelete }) {
+  const approvals = items.filter(i => i.type === 'approval');
+
+  const grouped = useMemo(() => {
+    const g = { open: [], waiting: [], done: [] };
+    approvals.forEach(i => {
+      if (i.status === 'open' || i.status === 'escalated') g.open.push(i);
+      else if (i.status === 'waiting') g.waiting.push(i);
+      else g.done.push(i);
+    });
+    return g;
+  }, [approvals]);
+
+  if (approvals.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-4)' }}>
+        <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)' }}>Keine offenen Freigaben</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, alignItems: 'start' }}>
+      {FREIGABEN_COLS.map(col => (
+        <div key={col.id} style={{ borderRadius: 12, border: `1px solid ${col.color}30`, background: col.bg, overflow: 'hidden' }}>
+          {/* Column header */}
+          <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${col.color}20`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 15 }}>{col.icon}</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: col.color }}>{col.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-4)' }}>{grouped[col.id].length} Item{grouped[col.id].length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+
+          {/* Cards */}
+          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 80 }}>
+            {grouped[col.id].length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--text-4)', padding: 8, textAlign: 'center', fontStyle: 'italic' }}>Leer</div>
+            )}
+            {grouped[col.id].map(item => {
+              const due = item.dueDate ? dueLabel(item.dueDate) : null;
+              return (
+                <div key={item.id} style={{
+                  background: 'var(--bg-card)', borderRadius: 8, padding: '10px 12px',
+                  border: '1px solid var(--border-soft)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: 'var(--text-1)' }}>{item.title}</div>
+                  {item.contactName && <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 6 }}>👤 {item.contactName}</div>}
+                  {due && <div style={{ fontSize: 11.5, color: due.danger ? 'var(--danger)' : 'var(--text-4)', marginBottom: 8, fontWeight: due.danger ? 600 : 400 }}>📅 {due.text}</div>}
+                  <div className="row gap-1" style={{ flexWrap: 'wrap' }}>
+                    {col.id === 'open' && (
+                      <>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flex: 1, color: 'var(--success)' }}
+                          onClick={async () => { const r = await updateAssistantItem({ workspaceId, itemId: item.id, patch: { status: 'done' } }); if (r.ok && r.data) onUpdate(r.data); }}>
+                          ✓ Freigeben
+                        </button>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flex: 1 }}
+                          onClick={async () => { const r = await updateAssistantItem({ workspaceId, itemId: item.id, patch: { status: 'waiting' } }); if (r.ok && r.data) onUpdate(r.data); }}>
+                          ⏳ Weitergeleitet
+                        </button>
+                      </>
+                    )}
+                    {col.id === 'waiting' && (
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, width: '100%', color: 'var(--success)' }}
+                        onClick={async () => { const r = await updateAssistantItem({ workspaceId, itemId: item.id, patch: { status: 'done' } }); if (r.ok && r.data) onUpdate(r.data); }}>
+                        ✓ Als erledigt markieren
+                      </button>
+                    )}
+                    {col.id === 'done' && (
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--text-4)' }}
+                        onClick={async () => { const r = await deleteAssistantItem({ workspaceId, itemId: item.id }); if (r.ok) onDelete(item.id); }}>
+                        <I.x size={10} /> Entfernen
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────
 
 export function AssistantHubScreen({ setRoute }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, me } = useWorkspace();
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState('dashboard');
@@ -1400,9 +1905,10 @@ export function AssistantHubScreen({ setRoute }) {
           <h1 className="h1" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>🗂 Assistant Hub</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
             {urgentCount > 0
-              ? <span style={{ color: 'var(--danger)', fontWeight: 600 }}>⚠️ {urgentCount} dringend heute</span>
-              : `${openCount} offene Items`}
-            {' · '}Follow-ups · Termine · Unterlagen
+              ? <><span style={{ color: 'var(--danger)', fontWeight: 600 }}>⚡ {urgentCount} dringend</span> · {openCount} offen gesamt</>
+              : openCount === 0
+                ? <span style={{ color: 'var(--success)' }}>✅ Alles erledigt!</span>
+                : `${openCount} offene Items`}
           </p>
         </div>
         <button className="btn btn-brand btn-sm" onClick={() => setAdding(true)}>
@@ -1428,13 +1934,13 @@ export function AssistantHubScreen({ setRoute }) {
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Wird geladen…</div>
       ) : (
         <>
-          {tab === 'dashboard'  && <DashboardTab  items={items} {...sharedProps} onAddNew={() => setAdding(true)} />}
-          {tab === 'followups'  && <ListTab items={items} {...sharedProps} typeFilter="follow_up"        title="Follow-ups"  emptyMsg="Keine offenen Follow-ups."        icon="📩" />}
-          {tab === 'documents'  && <ListTab items={items} {...sharedProps} typeFilter="document_request" title="Unterlagen"  emptyMsg="Keine fehlenden Unterlagen."      icon="📄" />}
+          {tab === 'dashboard'  && <MorningBriefingTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} onAddNew={() => setAdding(true)} me={me} />}
+          {tab === 'followups'  && <FollowUpInboxTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} />}
+          {tab === 'documents'  && <UnterlagenTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} />}
           {tab === 'scheduling' && <SchedulingTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} onAdd={(item) => setItems(p => [item, ...p])} />}
-          {tab === 'approvals'  && <ListTab items={items} {...sharedProps} typeFilter="approval"         title="Freigaben"   emptyMsg="Keine offenen Freigaben."         icon="✅" />}
+          {tab === 'approvals'  && <FreigabenKanbanTab items={items} workspaceId={currentWorkspaceId} onUpdate={onUpdate} onDelete={onDelete} />}
           {tab === 'contacts'   && <ContactsTab items={items} {...sharedProps} />}
-          {tab === 'all'        && <ListTab items={items} {...sharedProps} typeFilter={null}             title="Alle Items"  emptyMsg="Noch keine Assistant-Items."      icon="📋" />}
+          {tab === 'all'        && <ListTab items={items} {...sharedProps} typeFilter={null} title="Alle Items" emptyMsg="Noch keine Assistant-Items." icon="📋" />}
         </>
       )}
 
