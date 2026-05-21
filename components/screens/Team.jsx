@@ -1,7 +1,7 @@
 'use client';
 // Team View
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { Avatar, Badge } from '@/components/ui';
@@ -10,6 +10,26 @@ import { KPI } from '@/components/screens/Dashboard';
 import { InvitePersonModal } from '@/components/InvitePersonModal';
 import { MemberManageModal } from '@/components/MemberManageModal';
 import { CAN } from '@/lib/roles';
+
+// ── OOO helpers ──────────────────────────────────────────────────────────
+
+const OOO_KEY = (wsId, userId) => `cc.ooo.${wsId}.${userId}`;
+
+function getOOO(wsId, userId) {
+  try { return JSON.parse(localStorage.getItem(OOO_KEY(wsId, userId)) ?? 'null'); }
+  catch { return null; }
+}
+function setOOO(wsId, userId, data) {
+  try {
+    if (!data) localStorage.removeItem(OOO_KEY(wsId, userId));
+    else localStorage.setItem(OOO_KEY(wsId, userId), JSON.stringify(data));
+  } catch {}
+}
+function isCurrentlyOOO(ooo) {
+  if (!ooo?.until) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return ooo.until >= today;
+}
 
 const SPECIALTY_LABEL = {
   host:      { icon: '🎙️', label: 'Host / Moderator' },
@@ -46,6 +66,20 @@ export function TeamScreen({ setRoute }) {
   const hasEvents = currentWorkspace?.capabilities?.events;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [manageMember, setManageMember] = useState(null);
+
+  const { currentWorkspaceId, me } = useWorkspace();
+  const [oooState, setOooState] = useState({});
+
+  useEffect(() => {
+    const s = {};
+    users.forEach(u => { const o = getOOO(currentWorkspaceId, u.id); if (o) s[u.id] = o; });
+    setOooState(s);
+  }, [currentWorkspaceId, users.length]);
+
+  const updateOOO = (userId, data) => {
+    setOOO(currentWorkspaceId, userId, data);
+    setOooState(s => { const n = { ...s }; if (!data) delete n[userId]; else n[userId] = data; return n; });
+  };
 
   return (
     <div className="page fade-in">
@@ -149,7 +183,14 @@ export function TeamScreen({ setRoute }) {
                     }} />}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14.5 }}>{u.name}</div>
+                    <div className="row gap-2 items-center">
+                      <span style={{ fontWeight: 600, fontSize: 14.5 }}>{u.name}</span>
+                      {isCurrentlyOOO(oooState[u.id]) && (
+                        <span style={{ fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#d97706', padding: '1px 8px', borderRadius: 20 }}>
+                          🌴 OOO bis {new Date(oooState[u.id].until + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
+                    </div>
                     <div className="row gap-2 mt-1">
                       <span className="meta">{u.role}</span>
                       {u.specialty && SPECIALTY_LABEL[u.specialty] && (
@@ -160,13 +201,16 @@ export function TeamScreen({ setRoute }) {
                     </div>
                   </div>
                 </div>
-                {CAN.manageMember(myRole) && (
-                  <button
-                    className="btn btn-quiet btn-sm"
-                    onClick={() => setManageMember(u)}
-                    title="Mitglied verwalten"
-                  ><I.more size={14} /></button>
-                )}
+                <div className="row gap-1">
+                  {me?.id === u.id && (
+                    <OOOButton userId={u.id} wsId={currentWorkspaceId} ooo={oooState[u.id]} onUpdate={updateOOO} />
+                  )}
+                  {CAN.manageMember(myRole) && (
+                    <button className="btn btn-quiet btn-sm" onClick={() => setManageMember(u)} title="Mitglied verwalten">
+                      <I.more size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="row gap-4 mb-3">
@@ -258,3 +302,56 @@ const SmallStat = ({ label, value, tone }) => (
     <div className="mono" style={{ fontSize: 18, fontWeight: 600, marginTop: 2, color: tone === 'bad' ? 'var(--danger)' : 'var(--text-1)' }}>{value}</div>
   </div>
 );
+
+function OOOButton({ userId, wsId, ooo, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const [until, setUntil] = useState('');
+  const active = isCurrentlyOOO(ooo);
+
+  const save = () => {
+    if (!until) return;
+    onUpdate(userId, { until, since: new Date().toISOString().slice(0, 10) });
+    setOpen(false);
+    setUntil('');
+  };
+  const clear = () => { onUpdate(userId, null); setOpen(false); };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5, color: active ? '#d97706' : 'var(--text-3)' }}
+        onClick={() => setOpen(o => !o)} title="Out of Office markieren">
+        🌴 {active ? 'OOO' : 'OOO?'}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 30,
+          background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: 10,
+          padding: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 200,
+        }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>🌴 Out of Office</div>
+          {active ? (
+            <div className="col gap-2">
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                Abwesend bis {new Date(ooo.until + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', fontSize: 12 }} onClick={clear}>
+                OOO beenden
+              </button>
+            </div>
+          ) : (
+            <div className="col gap-2">
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Abwesend bis:</div>
+              <input type="date" className="input" value={until} onChange={e => setUntil(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)} style={{ fontSize: 13 }} />
+              <div className="row gap-2">
+                <button className="btn btn-brand btn-sm" onClick={save} disabled={!until} style={{ flex: 1 }}>Speichern</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>✕</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
