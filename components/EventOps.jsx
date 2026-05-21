@@ -277,7 +277,7 @@ const ATTENDEE_ROLES = ['attendee','speaker','vip','partner_guest','team'];
 const ATTENDEE_STATUSES = ['invited','confirmed','checked_in','no_show','cancelled'];
 const ROLE_LABELS = { attendee: 'Teilnehmer', speaker: 'Speaker', vip: 'VIP', partner_guest: 'Partner-Gast', team: 'Team' };
 
-export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
+export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl, maxCapacity, onUpdateCapacity }) {
   const [attendees, setAttendees] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [adding, setAdding]       = useState(false);
@@ -351,15 +351,45 @@ export function AttendeeList({ projectId, workspaceId, canEdit, lumaUrl }) {
         <div>
           <div className="h3">Gästeliste</div>
           {attendees.length > 0 && (
-            <div className="row gap-3 mt-1" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            <div className="row gap-3 mt-1" style={{ fontSize: 12, color: 'var(--text-3)', flexWrap: 'wrap' }}>
               <span>📩 {counts.invited} eingeladen</span>
               <span style={{ color: 'var(--success)' }}>✓ {counts.confirmed} bestätigt</span>
               <span style={{ color: '#10b981' }}>✅ {counts.checked_in} eingecheckt</span>
               {counts.no_show > 0 && <span style={{ color: 'var(--danger)' }}>✗ {counts.no_show} no-show</span>}
+              {maxCapacity > 0 && (() => {
+                const total = attendees.filter(a => a.status !== 'no_show' && a.status !== 'cancelled').length;
+                const pct = Math.min(100, Math.round((total / maxCapacity) * 100));
+                const over = total > maxCapacity;
+                return (
+                  <span style={{ color: over ? 'var(--danger)' : pct >= 80 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>
+                    {over ? '⛔' : pct >= 80 ? '⚠️' : '✅'} {total}/{maxCapacity} ({pct}% ausgelastet)
+                  </span>
+                );
+              })()}
             </div>
           )}
+          {maxCapacity > 0 && attendees.length > 0 && (() => {
+            const total = attendees.filter(a => a.status !== 'no_show' && a.status !== 'cancelled').length;
+            const pct = Math.min(100, Math.round((total / maxCapacity) * 100));
+            return (
+              <div style={{ marginTop: 8, height: 4, background: 'var(--bg-sunk)', borderRadius: 2, maxWidth: 240 }}>
+                <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, transition: 'width 0.3s',
+                  background: pct >= 100 ? 'var(--danger)' : pct >= 80 ? 'var(--warning)' : 'var(--success)' }} />
+              </div>
+            );
+          })()}
         </div>
         <div className="row gap-2">
+          {canEdit && onUpdateCapacity && (
+            <div className="row gap-1 items-center">
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Max:</span>
+              <input type="number" min="0" className="input"
+                defaultValue={maxCapacity || ''}
+                placeholder="—"
+                onBlur={(e) => { const v = parseInt(e.target.value); onUpdateCapacity(isNaN(v) ? 0 : v); }}
+                style={{ width: 60, height: 28, fontSize: 12, textAlign: 'center' }} />
+            </div>
+          )}
           {attendees.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => {
               const rows = [['Name','Email','Unternehmen','Rolle','Status'],
@@ -524,6 +554,87 @@ const PARTNER_STATUS_LABEL = {
   recap_sent: 'Recap gesendet', closed: 'Abgeschlossen',
 };
 
+function SponsorOutreachTemplates({ partner }) {
+  const [open,   setOpen]   = useState(false);
+  const [copied, setCopied] = useState(null);
+
+  const templates = [
+    {
+      id: 'first',
+      label: '📩 Erstanfrage',
+      subject: `Sponsoring-Anfrage: [Event-Name]`,
+      body: `Hallo ${partner.contact || partner.name},
+
+mein Name ist [Dein Name] und ich organisiere [Event-Name] am [Datum].
+
+${partner.name} wäre als Sponsor eine perfekte Ergänzung für unser Event — wir erwarten ca. [X] Teilnehmer aus eurer Zielgruppe.
+
+Ich würde mich gerne kurz vorstellen und die Möglichkeiten für eine Zusammenarbeit besprechen. Haben Sie in den nächsten Tagen 15 Minuten Zeit für ein kurzes Gespräch?
+
+Beste Grüße,
+[Dein Name]`,
+    },
+    {
+      id: 'followup',
+      label: '🔔 Follow-up',
+      subject: `Follow-up: Sponsoring [Event-Name]`,
+      body: `Hallo ${partner.contact || partner.name},
+
+ich wollte kurz nachhaken bezüglich meiner Anfrage zum Sponsoring von [Event-Name].
+
+Falls Sie Interesse haben oder weitere Infos benötigen, stehe ich gerne zur Verfügung.
+
+Viele Grüße,
+[Dein Name]`,
+    },
+    {
+      id: 'recap',
+      label: '🎉 Recap nach Event',
+      subject: `Event-Recap & Dankeschön — [Event-Name]`,
+      body: `Hallo ${partner.contact || partner.name},
+
+vielen Dank für Ihr Sponsoring von [Event-Name]! Das Event war ein voller Erfolg:
+
+✅ [X] Teilnehmer
+📸 [X] Social-Media-Erwähnungen
+📧 [X] Newsletter-Abonnenten
+
+Im Anhang finden Sie den vollständigen Sponsor-Report. Wir würden uns sehr freuen, auch beim nächsten Event zusammenzuarbeiten.
+
+Herzliche Grüße,
+[Dein Name]`,
+    },
+  ];
+
+  const copy = (t) => {
+    const text = `Betreff: ${t.subject}\n\n${t.body}`;
+    navigator.clipboard.writeText(text).then(() => { setCopied(t.id); setTimeout(() => setCopied(null), 2000); });
+  };
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }} onClick={() => setOpen(!open)}>
+        📧 E-Mail Vorlagen {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <div className="col gap-2 mt-2">
+          {templates.map((t) => (
+            <div key={t.id} style={{ background: 'var(--bg-sunk)', borderRadius: 8, padding: '10px 12px' }}>
+              <div className="row between items-center mb-1">
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{t.label}</span>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5 }} onClick={() => copy(t)}>
+                  {copied === t.id ? '✓ Kopiert!' : '📋 Kopieren'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Betreff: {t.subject}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PartnerSponsorList({ projectId, workspaceId, canEdit }) {
   const [partners, setPartners]   = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -686,6 +797,8 @@ export function PartnerSponsorList({ projectId, workspaceId, canEdit }) {
                     )}
                   </div>
                 </div>
+
+                <SponsorOutreachTemplates partner={p} />
 
                 <div className="row between items-center">
                   {canEdit ? (

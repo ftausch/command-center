@@ -923,9 +923,15 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             <div className="card card-pad">
               <AttendeeList
                 projectId={projectId}
-                workspaceId={workspaceId}
+                workspaceId={currentWorkspaceId}
                 canEdit={CAN.editProject(myRole)}
                 lumaUrl={project.eventMeta?.lumaUrl ?? project.eventMeta?.signupUrl ?? ''}
+                maxCapacity={project.eventMeta?.maxCapacity ?? 0}
+                onUpdateCapacity={async (cap) => {
+                  const newMeta = { ...(project.eventMeta ?? {}), maxCapacity: cap };
+                  const r = await updateProject({ projectId, workspaceId: currentWorkspaceId, patch: { eventMeta: newMeta } });
+                  if (r.ok) updateProjectInCache(projectId, { eventMeta: newMeta });
+                }}
               />
             </div>
           )}

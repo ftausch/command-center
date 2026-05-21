@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Sidebar, Topbar, MobileBottomNav } from '@/components/shell';
+import { BrowserNotifications } from '@/components/BrowserNotifications';
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
@@ -336,6 +337,7 @@ export function App() {
         <PAWelcome userId={me.id} onClose={() => setRoute('assisthub')} />
       )}
       <MobileBottomNav route={route} setRoute={setRoute} />
+      <BrowserNotifications />
     </div>
   );
 }

@@ -155,7 +155,7 @@ export function PodcastHubScreen({ setRoute }) {
       {tab === 'publishing'   && <PublishingDashboardTab episodes={episodes} workspaceId={currentWorkspaceId} onOpenEpisode={setDrawerEpId} />}
 
       <EpisodeDrawer episodeId={drawerEpId} onClose={() => setDrawerEpId(null)} />
-      {tab === 'analytics'    && <AnalyticsTab />}
+      {tab === 'analytics'    && <AnalyticsTab episodes={data.episodes ?? []} />}
       {tab === 'transcripts'  && <TranskriptKITab episodes={episodes} />}
       {tab === 'distribution' && <DistributionTab />}
       {tab === 'privatefeeds' && <PrivateFeedsTab episodes={episodes} />}
@@ -745,8 +745,28 @@ function McpTag({ tool }) {
 }
 // Tab 3 — Analytics (Geo · Apps · Device · OS)
 // ═══════════════════════════════════════════════════════════════════════════
-function AnalyticsTab() {
+function AnalyticsTab({ episodes = [] }) {
   const maxWeekly = Math.max(...ANALYTICS.weeklyDownloads);
+
+  // Cadence: episodes per month (last 12 months)
+  const cadence = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
+      const count = episodes.filter(e => (e.date ?? '').startsWith(key)).length;
+      months.push({ key, label, count });
+    }
+    return months;
+  }, [episodes]);
+  const maxCadence = Math.max(1, ...cadence.map(m => m.count));
+  const publishedEps = episodes.filter(e => e.status === 'published' || e.date);
+  const avgPerMonth = publishedEps.length > 0
+    ? (cadence.filter(m => m.count > 0).reduce((s, m) => s + m.count, 0) / Math.max(1, cadence.filter(m => m.count > 0).length)).toFixed(1)
+    : '—';
+
   return (
     <div className="col gap-4">
       <div className="row gap-2 mb-1 items-center">
@@ -789,6 +809,36 @@ function AnalyticsTab() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Veröffentlichungsfrequenz */}
+      <div className="card card-pad">
+        <div className="row between items-start mb-4">
+          <div>
+            <div className="h3">📅 Veröffentlichungsfrequenz</div>
+            <div className="meta mt-1">Episoden pro Monat · letzte 12 Monate · Ø {avgPerMonth}/Monat</div>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--brand)', letterSpacing: '-0.03em' }}>
+            {episodes.filter(e => e.status === 'published').length}
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-3)', marginLeft: 4 }}>Live</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 80 }}>
+          {cadence.map(({ key, label, count }) => (
+            <div key={key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: count > 0 ? 700 : 400 }}>
+                {count > 0 ? count : ''}
+              </div>
+              <div style={{
+                width: '100%', borderRadius: 4,
+                height: `${Math.max(4, (count / maxCadence) * 56)}px`,
+                background: count === 0 ? 'var(--bg-sunk)' : count >= 4 ? 'var(--success)' : count >= 2 ? 'var(--brand)' : 'var(--info)',
+                transition: 'height 0.3s',
+              }} />
+              <div style={{ fontSize: 9.5, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>{label}</div>
+            </div>
+          ))}
         </div>
       </div>
 
