@@ -383,6 +383,18 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
                 title="Datum entfernen"
               ><I.x size={11} /></button>
             )}
+            {[{ l: '+1T', d: 1 }, { l: '+3T', d: 3 }, { l: '+1W', d: 7 }, { l: '+2W', d: 14 }].map(({ l, d }) => (
+              <button key={l} type="button"
+                className="btn btn-quiet btn-sm"
+                style={{ fontSize: 11, padding: '1px 6px', height: 24 }}
+                disabled={fieldPending === 'due'}
+                onClick={() => {
+                  const dt = new Date();
+                  dt.setDate(dt.getDate() + d);
+                  saveField('due', dt.toISOString().slice(0, 10));
+                }}
+              >{l}</button>
+            ))}
           </DetailRow>
           <DetailRow label="Assignee">
             <select

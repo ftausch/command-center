@@ -1737,6 +1737,100 @@ const GUEST_STATUSES = ['prospect','contacted','confirmed','recorded','published
 const GUEST_STATUS_LABEL = { prospect:'Prospect', contacted:'Kontaktiert', confirmed:'Bestätigt', recorded:'Aufgenommen', published:'Veröffentlicht', recurring:'Stammgast' };
 const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'#712edd' };
 
+function GuestOutreachTemplates({ guest }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(null);
+
+  const templates = [
+    {
+      id: 'first',
+      label: '📩 Erste Anfrage',
+      subject: `Podcast-Einladung: Gast bei Unicorn Bakery`,
+      body: `Hallo ${guest.name.split(' ')[0]},
+
+mein Name ist [Dein Name] und ich bin [Deine Rolle] beim Unicorn Bakery Podcast.
+
+Ich verfolge deine Arbeit${guest.company ? ` bei ${guest.company}` : ''} mit großem Interesse und würde dich sehr gerne als Gast in unserem Podcast begrüßen. Wir sprechen über [Thema] und ich glaube, deine Perspektive wäre für unsere Hörer sehr wertvoll.
+
+Die Aufnahme dauert ca. 45–60 Minuten und ist remote per Zoom möglich.
+
+Hast du Interesse? Ich freue mich auf deine Antwort.
+
+Viele Grüße,
+[Dein Name]`,
+    },
+    {
+      id: 'followup',
+      label: '🔔 Follow-up',
+      subject: `Follow-up: Podcast-Einladung Unicorn Bakery`,
+      body: `Hallo ${guest.name.split(' ')[0]},
+
+ich wollte kurz nachhaken bezüglich meiner Einladung zum Unicorn Bakery Podcast von letzter Woche.
+
+Falls du Interesse hast oder noch Fragen hast, melde dich gerne — ich freue mich über eine Rückmeldung.
+
+Herzliche Grüße,
+[Dein Name]`,
+    },
+    {
+      id: 'confirm',
+      label: '✅ Terminbestätigung',
+      subject: `Aufnahme bestätigt – Unicorn Bakery Podcast`,
+      body: `Hallo ${guest.name.split(' ')[0]},
+
+super, freue mich sehr auf das Gespräch! Hier nochmal alle Infos zur Aufnahme:
+
+📅 Datum: [Datum]
+⏰ Uhrzeit: [Uhrzeit]
+🎙 Format: Zoom (Link folgt)
+⏱ Dauer: ca. 60 Minuten
+
+Bitte stelle sicher, dass du eine ruhige Umgebung und ein gutes Mikrofon hast. Ich schicke dir vorab einen kurzen Fragenkatalog zur Vorbereitung.
+
+Bis bald,
+[Dein Name]`,
+    },
+  ];
+
+  const copy = (t) => {
+    const text = `Betreff: ${t.subject}\n\n${t.body}`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(t.id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+        onClick={() => setOpen(!open)}>
+        📧 E-Mail Vorlagen {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <div className="col gap-2 mt-2 fade-in">
+          {templates.map((t) => (
+            <div key={t.id} style={{ background: 'var(--bg-sunk)', borderRadius: 8, padding: '10px 12px' }}>
+              <div className="row between items-center mb-2">
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{t.label}</span>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5 }}
+                  onClick={() => copy(t)}>
+                  {copied === t.id ? '✓ Kopiert!' : '📋 Kopieren'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginBottom: 4 }}>
+                Betreff: {t.subject}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-line', lineHeight: 1.5, maxHeight: 100, overflow: 'hidden', maskImage: 'linear-gradient(to bottom, black 70%, transparent)' }}>
+                {t.body}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GuestCRMTab({ workspaceId }) {
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1886,6 +1980,10 @@ function GuestCRMTab({ workspaceId }) {
                   {g.linkedinUrl && <div><div className="label mb-1">LinkedIn</div><a href={g.linkedinUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--brand)' }}>Profil öffnen →</a></div>}
                 </div>
                 {g.notes && <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>{g.notes}</div>}
+
+                {/* Outreach Templates */}
+                <GuestOutreachTemplates guest={g} />
+
                 <div className="row gap-2 items-center" style={{ flexWrap: 'wrap' }}>
                   {creatingEpisodeFor === g.id ? (
                     <>

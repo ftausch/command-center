@@ -290,22 +290,29 @@ export async function updateProject(input: {
     .eq('workspace_id', ctx.uuid);
   if (error) return { ok: false, error: error.message };
 
-  // Notify event Slack channel on key status transitions
+  // Notify Slack on key project status transitions (all divisions)
   if (
-    existing?.division === 'events' &&
     input.patch.status &&
-    input.patch.status !== existing.status
+    input.patch.status !== existing?.status
   ) {
     const newStatus  = input.patch.status;
-    const eventName  = existing.name as string;
+    const projName   = existing?.name as string ?? 'Projekt';
+    const division   = existing?.division as string ?? 'general';
     let text: string | null = null;
 
-    if (newStatus === 'In Progress') {
-      text = `🚀 *${eventName}* ist jetzt in Vorbereitung — alle Systeme go!`;
-    } else if (newStatus === 'Done') {
-      text = `🎉 *${eventName}* ist abgeschlossen. Zeit für den Recap!`;
-    } else if (newStatus === 'Blocked') {
-      text = `⚠️ *${eventName}* ist blockiert. Bitte prüfen!`;
+    if (division === 'events') {
+      if (newStatus === 'In Progress') text = `🚀 *${projName}* ist jetzt in Vorbereitung — alle Systeme go!`;
+      else if (newStatus === 'Done')   text = `🎉 *${projName}* ist abgeschlossen. Zeit für den Recap!`;
+      else if (newStatus === 'Blocked') text = `⛔ *${projName}* ist blockiert. Bitte prüfen!`;
+    } else {
+      // All non-event projects: alert on Blocked
+      if (newStatus === 'Blocked') {
+        const divIcon = division === 'podcast' ? '🎙' : '📁';
+        text = `⛔ ${divIcon} *${projName}* ist jetzt blockiert — bitte prüfen und Blocker lösen.`;
+      } else if (newStatus === 'Done') {
+        const divIcon = division === 'podcast' ? '🎙' : '📁';
+        text = `✅ ${divIcon} *${projName}* wurde als erledigt markiert.`;
+      }
     }
 
     if (text) {
