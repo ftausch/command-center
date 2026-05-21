@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Sidebar, Topbar, MobileBottomNav } from '@/components/shell';
 import { BrowserNotifications } from '@/components/BrowserNotifications';
+import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
@@ -60,6 +61,7 @@ export function App() {
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const gPending = useRef(false);
   const gTimer = useRef(null);
 
@@ -101,6 +103,9 @@ export function App() {
 
       // 'a' — assistant hub
       if (e.key === 'a') { e.preventDefault(); setRoute('assisthub'); return; }
+
+      // Shift+A — quick capture (new assistant item from anywhere)
+      if (e.key === 'A' && e.shiftKey) { e.preventDefault(); setQuickCaptureOpen(true); return; }
 
       // 'e' — event hub
       if (e.key === 'e') { e.preventDefault(); setRoute('eventhub'); return; }
@@ -338,6 +343,7 @@ export function App() {
       )}
       <MobileBottomNav route={route} setRoute={setRoute} />
       <BrowserNotifications />
+      {quickCaptureOpen && <QuickCaptureModal onClose={() => setQuickCaptureOpen(false)} />}
     </div>
   );
 }

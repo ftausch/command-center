@@ -40,7 +40,7 @@ function SectionHeader({ label }) {
   );
 }
 
-const KINDS = ['Alle', 'Tasks', 'Projekte', 'Episoden', 'Events'];
+const KINDS = ['Alle', 'Tasks', 'Projekte', 'Episoden', 'Events', 'Assistenz'];
 const KIND_TO_GROUP = { Tasks: 'Tasks', Projekte: 'Projekte', Episoden: 'Episoden' };
 
 export function CmdK({ open, onClose, setRoute, onOpenTask }) {
@@ -158,6 +158,21 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       action: () => { setRoute('podcast'); },
     }));
 
+    // Assistant items (fetched from sessionStorage cache written by AssistantHub)
+    const cachedAssist = (() => {
+      try { return JSON.parse(sessionStorage.getItem(`cc.assist.${data.members[0]?.workspaceId ?? ''}`) ?? '[]'); }
+      catch { return []; }
+    })();
+    const TYPE_ICON = { follow_up:'📩', scheduling:'📅', document_request:'📄', approval:'✅', reminder:'🔔', other:'📌' };
+    const assistItems = cachedAssist
+      .filter((i) => i.status !== 'done' && i.status !== 'cancelled')
+      .map((i) => ({
+        kind: 'Assistenz', id: i.id,
+        label: i.title,
+        sub: [TYPE_ICON[i.type] ?? '📌', i.contactName, i.dueDate].filter(Boolean).join(' · '),
+        action: () => setRoute('assisthub'),
+      }));
+
     const filtering = q.trim() !== '';
     const filtered = (items) => filtering ? items.filter((it) => matches(it, q)) : items;
 
@@ -170,18 +185,20 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       : projectItems;
 
     const allGroups = [
-      { label: 'Actions',  kind: null,       items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
-      { label: 'Projekte', kind: 'Projekte', items: filtered(filteredProjects).slice(0, filtering ? 10 : 3) },
-      { label: 'Events',   kind: 'Events',   items: kindFilter === 'Events' ? filtered(filteredProjects).slice(0, filtering ? 10 : 3) : [] },
-      { label: 'Tasks',    kind: 'Tasks',    items: filtered(taskItems).slice(0, filtering ? 12 : 4) },
-      { label: 'Episoden', kind: 'Episoden', items: filtered(episodeItems).slice(0, filtering ? 10 : 3) },
-      { label: 'Personen', kind: null,       items: filtered(personItems).slice(0, 5) },
+      { label: 'Actions',   kind: null,        items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
+      { label: 'Projekte',  kind: 'Projekte',  items: filtered(filteredProjects).slice(0, filtering ? 10 : 3) },
+      { label: 'Events',    kind: 'Events',    items: kindFilter === 'Events' ? filtered(filteredProjects).slice(0, filtering ? 10 : 3) : [] },
+      { label: 'Tasks',     kind: 'Tasks',     items: filtered(taskItems).slice(0, filtering ? 12 : 4) },
+      { label: 'Episoden',  kind: 'Episoden',  items: filtered(episodeItems).slice(0, filtering ? 10 : 3) },
+      { label: 'Assistenz', kind: 'Assistenz', items: filtering ? filtered(assistItems).slice(0, 6) : [] },
+      { label: 'Personen',  kind: null,        items: filtered(personItems).slice(0, 5) },
     ];
 
     const groups = allGroups.filter((g) => {
       if (g.items.length === 0) return false;
-      if (kindFilter === 'Alle') return g.label !== 'Events';
+      if (kindFilter === 'Alle') return g.label !== 'Events' && g.label !== 'Assistenz';
       if (kindFilter === 'Events') return g.label === 'Events';
+      if (kindFilter === 'Assistenz') return g.label === 'Assistenz';
       return g.kind === kindFilter || g.kind === null;
     });
 

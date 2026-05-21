@@ -23,6 +23,7 @@ const GROUPS = [
     title: 'Aktionen',
     shortcuts: [
       { keys: ['N'],         desc: 'Neue Task' },
+      { keys: ['⇧', 'A'],   desc: 'Schnell erfassen (Follow-up, Termin…)' },
       { keys: ['⌘', 'K'],   desc: 'Command Palette öffnen' },
       { keys: ['/'],         desc: 'Suche' },
       { keys: ['?'],         desc: 'Shortcuts anzeigen' },
