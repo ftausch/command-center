@@ -1832,13 +1832,16 @@ Bis bald,
 }
 
 function GuestCRMTab({ workspaceId }) {
-  const [guests, setGuests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [pending, setPending] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
-  const [draft, setDraft] = useState({ name:'', email:'', company:'', role:'', status:'prospect', notes:'' });
-  const [search, setSearch] = useState('');
+  const [guests,            setGuests]            = useState([]);
+  const [loading,           setLoading]           = useState(true);
+  const [adding,            setAdding]            = useState(false);
+  const [pending,           setPending]           = useState(null);
+  const [expandedId,        setExpandedId]        = useState(null);
+  const [draft,             setDraft]             = useState({ name:'', email:'', company:'', role:'', status:'prospect', notes:'' });
+  const [search,            setSearch]            = useState('');
+  const [creatingEpisodeFor, setCreatingEpisodeFor] = useState(null);
+  const [episodeTitle,      setEpisodeTitle]      = useState('');
+  const [episodePending,    setEpisodePending]    = useState(false);
 
   useEffect(() => {
     listGuests(workspaceId).then((d) => { setGuests(d); setLoading(false); });
@@ -1863,10 +1866,6 @@ function GuestCRMTab({ workspaceId }) {
     setPending(null);
     if (r.ok) setGuests((g) => g.filter((x) => x.id !== id));
   };
-
-  const [creatingEpisodeFor, setCreatingEpisodeFor] = useState(null);
-  const [episodeTitle, setEpisodeTitle] = useState('');
-  const [episodePending, setEpisodePending] = useState(false);
 
   const onCreateEpisode = async (guest) => {
     if (!episodeTitle.trim()) return;
