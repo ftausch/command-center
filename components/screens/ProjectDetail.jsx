@@ -10,7 +10,7 @@ import {
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo, eventHealthScore } from '@/lib/utils';
 import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject, postEventRecapToSlack } from '@/lib/actions/projects';
-import { bulkUpdateTasks, bulkDeleteTasks, createTask } from '@/lib/actions/tasks';
+import { bulkUpdateTasks, bulkDeleteTasks, createTask, changeTaskStatus } from '@/lib/actions/tasks';
 import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
 import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
@@ -822,16 +822,31 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                       const waiting = data.members.find((u) => u.id === t.waitingOn);
                       const td = dueLabel(t.due);
                       return (
-                        <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer', background: selectedIds.has(t.id) ? 'var(--bg-sunk)' : undefined }}>
+                        <tr key={t.id} onClick={() => setDrawerTaskId(t.id)} style={{ cursor: 'pointer', background: selectedIds.has(t.id) ? 'var(--bg-sunk)' : undefined, opacity: t.status === 'Done' ? 0.55 : 1 }}>
                           <td onClick={(e) => e.stopPropagation()}>
                             <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} />
                           </td>
                           <td>
-                            <div style={{ fontWeight: 500 }}>{t.title}</div>
+                            <div style={{ fontWeight: 500, textDecoration: t.status === 'Done' ? 'line-through' : 'none' }}>{t.title}</div>
                             {t.blocker && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 2 }}><I.block size={11} /> {t.blocker}</div>}
                             {waiting && <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>Wartet auf {waiting.name}</div>}
                           </td>
-                          <td><StatusBadge status={t.status} /></td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <select
+                              className="input"
+                              value={t.status}
+                              style={{ height: 26, fontSize: 11.5, padding: '0 4px', width: 110, color: STATUS_COLOR[t.status] ?? 'var(--text-3)' }}
+                              onChange={async (e) => {
+                                const next = e.target.value;
+                                updateTaskInCache(t.id, { status: next });
+                                await changeTaskStatus({ taskId: t.id, workspaceId: currentWorkspaceId, status: next });
+                              }}
+                            >
+                              {['Backlog','To Do','In Progress','Review','Blocked','Done'].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </td>
                           <td>
                             {a ? <div className="row gap-2"><Avatar user={a} /><span style={{ fontSize: 12.5 }}>{a.name.split(' ')[0]}</span></div>
                               : <span style={{ fontSize: 12, color: 'var(--text-4)' }}>—</span>}

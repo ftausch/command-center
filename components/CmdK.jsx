@@ -43,14 +43,28 @@ function SectionHeader({ label }) {
 const KINDS = ['Alle', 'Tasks', 'Projekte', 'Episoden', 'Events', 'Assistenz'];
 const KIND_TO_GROUP = { Tasks: 'Tasks', Projekte: 'Projekte', Episoden: 'Episoden' };
 
+const RECENT_KEY = 'cc.cmdk.recent';
+function getRecent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); } catch { return []; } }
+function pushRecent(item) {
+  try {
+    const prev = getRecent().filter(r => r.id !== item.id);
+    localStorage.setItem(RECENT_KEY, JSON.stringify([item, ...prev].slice(0, 6)));
+  } catch {}
+}
+
 export function CmdK({ open, onClose, setRoute, onOpenTask }) {
   const { currentWorkspace: brand, data } = useWorkspace();
   const [q, setQ]           = useState('');
   const [idx, setIdx]       = useState(0);
   const [kindFilter, setKindFilter] = useState('Alle');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [recentItems, setRecentItems] = useState([]);
   const inputRef = useRef(null);
   const activeRef = useRef(null);
+
+  useEffect(() => {
+    if (open) setRecentItems(getRecent());
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -184,7 +198,16 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
         })
       : projectItems;
 
+    const recentGroup = recentItems.map(r => ({
+      kind: 'Zuletzt', id: `recent-${r.id}`,
+      label: r.label, sub: r.sub ?? '',
+      action: r.taskId
+        ? () => { onOpenTask?.(r.taskId, r.projectId); }
+        : () => { setRoute(r.route); },
+    }));
+
     const allGroups = [
+      { label: 'Zuletzt',   kind: null,        items: !filtering && kindFilter === 'Alle' ? recentGroup.slice(0, 4) : [] },
       { label: 'Actions',   kind: null,        items: filtered(actionItems).slice(0, filtering ? 5 : 4) },
       { label: 'Projekte',  kind: 'Projekte',  items: filtered(filteredProjects).slice(0, filtering ? 10 : 3) },
       { label: 'Events',    kind: 'Events',    items: kindFilter === 'Events' ? filtered(filteredProjects).slice(0, filtering ? 10 : 3) : [] },
@@ -225,7 +248,17 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
       if (e.key === 'Enter') {
         e.preventDefault();
         const item = flat[idx];
-        if (item) { item.action(); if (item.kind !== 'Action' || item.id !== 'new-task') onClose(); }
+        if (item) {
+          if (item.kind && item.kind !== 'Action' && item.kind !== 'Zuletzt') {
+            pushRecent({ id: item.id, label: item.label, sub: item.sub,
+              route: item.kind === 'Task' ? undefined : (item.kind === 'Project' ? 'project:' + item.id : undefined),
+              taskId: item.kind === 'Task' ? item.id : undefined,
+              projectId: item.kind === 'Task' ? data.tasks.find(t => t.id === item.id)?.projectId : undefined,
+            });
+          }
+          item.action();
+          if (item.kind !== 'Action' || item.id !== 'new-task') onClose();
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -301,7 +334,16 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
                       key={it.kind + it.id}
                       ref={isActive ? activeRef : null}
                       onMouseEnter={() => setIdx(i)}
-                      onClick={() => { it.action(); if (it.id !== 'new-task') onClose(); }}
+                      onClick={() => {
+                        if (it.kind && it.kind !== 'Action' && it.kind !== 'Zuletzt') {
+                          pushRecent({ id: it.id, label: it.label, sub: it.sub,
+                            route: it.kind === 'Project' ? 'project:' + it.id : undefined,
+                            taskId: it.kind === 'Task' ? it.id : undefined,
+                            projectId: it.kind === 'Task' ? data.tasks.find(t => t.id === it.id)?.projectId : undefined,
+                          });
+                        }
+                        it.action(); if (it.id !== 'new-task') onClose();
+                      }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
