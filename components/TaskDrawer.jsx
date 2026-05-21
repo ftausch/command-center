@@ -13,6 +13,7 @@ import { Avatar, StatusBadge } from '@/components/ui';
 import { dueLabel, timeAgo } from '@/lib/utils';
 import {
   changeTaskStatus,
+  createTask,
   deleteTask,
   markTaskBlocked,
   markTaskDone,
@@ -37,6 +38,7 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     myRole,
     updateTaskInCache,
     removeTask,
+    addTask,
     addTaskComment: addTaskCommentToCache,
     addChecklistItem: addChecklistItemToCache,
     updateChecklistItemInCache,
@@ -661,6 +663,9 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
           </div>
         </div>
 
+        {/* ── Recurring / Next Occurrence ── */}
+        <RecurringHelper task={task} workspaceId={workspaceId} onAdd={addTask} />
+
         {/* ── Delete (manager+) ── */}
         {CAN.deleteTask(myRole) && (
           <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
@@ -681,6 +686,68 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function RecurringHelper({ task, workspaceId, onAdd }) {
+  const [open,    setOpen]    = useState(false);
+  const [title,   setTitle]   = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [pending, setPending] = useState(false);
+  const [done,    setDone]    = useState(false);
+
+  if (!task) return null;
+
+  const defaultDue = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const handleOpen = () => {
+    setTitle(task.title);
+    setDueDate(task.due ? (() => { const d = new Date(task.due); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })() : defaultDue());
+    setOpen(true);
+    setDone(false);
+  };
+
+  const create = async () => {
+    if (!title.trim()) return;
+    setPending(true);
+    const r = await createTask({
+      workspaceId,
+      projectId:  task.projectId,
+      title:      title.trim(),
+      assigneeId: task.assignee || undefined,
+      priority:   task.priority || undefined,
+      due:        dueDate || undefined,
+    });
+    setPending(false);
+    if (r.ok && r.data) { onAdd?.(r.data); setOpen(false); setDone(true); setTimeout(() => setDone(false), 3000); }
+  };
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
+      {done && <div style={{ fontSize: 12.5, color: 'var(--success)', marginBottom: 8 }}>✅ Nächste Occurrence angelegt!</div>}
+      {!open ? (
+        <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--text-3)' }} onClick={handleOpen}>
+          🔁 Wiederholen / Nächste Occurrence
+        </button>
+      ) : (
+        <div className="col gap-2">
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)', marginBottom: 2 }}>🔁 Nächste Occurrence anlegen</div>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)}
+            placeholder="Titel" style={{ fontSize: 13 }} autoFocus />
+          <div className="row gap-2">
+            <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ fontSize: 13, flex: 1 }} />
+            <button className="btn btn-brand btn-sm" onClick={create} disabled={!title.trim() || pending}>
+              {pending ? '…' : 'Erstellen'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

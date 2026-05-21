@@ -766,6 +766,10 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Mobile / Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
+  /* Mobile bottom nav */
+  .mobile-bottom-nav { display: flex !important; }
+  .main-content { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
   /* Layout */
   .app { grid-template-columns: 1fr; }
   .sidebar {

@@ -370,3 +370,37 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
     </div>
   );
 }
+
+// ── Mobile Bottom Navigation ───────────────────────────────────────────────
+
+export function MobileBottomNav({ route, setRoute }) {
+  const items = [
+    { id: 'dashboard', icon: '🏠', label: 'Home' },
+    { id: 'projects',  icon: '📁', label: 'Projekte' },
+    { id: 'calendar',  icon: '📅', label: 'Kalender' },
+    { id: 'podcast',   icon: '🎙', label: 'Podcast' },
+    { id: 'assisthub', icon: '🗂', label: 'Assistenz' },
+  ];
+  const active = (id) => route === id || route?.startsWith(id + ':');
+
+  return (
+    <nav style={{
+      display: 'none',
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: 'var(--bg-elev)', borderTop: '1px solid var(--border)',
+      padding: '6px 0 max(6px, env(safe-area-inset-bottom))',
+    }} className="mobile-bottom-nav">
+      {items.map(({ id, icon, label }) => (
+        <button key={id} onClick={() => setRoute(id)}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+            color: active(id) ? 'var(--brand)' : 'var(--text-3)',
+          }}>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>{icon}</span>
+          <span style={{ fontSize: 10, fontWeight: active(id) ? 700 : 400 }}>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}

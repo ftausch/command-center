@@ -27,7 +27,7 @@ const PUBLISH_ITEMS = [
 ];
 
 export function EpisodeDrawer({ episodeId, onClose }) {
-  const { currentWorkspaceId: workspaceId, data, updateEpisodeInCache } = useWorkspace();
+  const { currentWorkspaceId: workspaceId, data, updateEpisodeInCache, updateTaskInCache } = useWorkspace();
   const episode = data.episodes?.find((e) => e.id === episodeId) ?? null;
 
   const [tab, setTab] = useState('details');
@@ -85,6 +85,8 @@ export function EpisodeDrawer({ episodeId, onClose }) {
     return r;
   };
 
+  const [autoClosedCount, setAutoClosedCount] = useState(null);
+
   const saveField = async (key, value) => {
     setFieldPending(key);
     setError(null);
@@ -92,6 +94,18 @@ export function EpisodeDrawer({ episodeId, onClose }) {
     setFieldPending(null);
     if (!r.ok) { setError(r.error ?? 'Fehler'); return; }
     updateEpisodeInCache(episodeId, { [key]: value });
+
+    // When episode goes Live → auto-close all linked production tasks
+    if (key === 'status' && value === 'published') {
+      const linked = (data.tasks ?? []).filter(t => t.episodeId === episodeId && t.status !== 'Done');
+      if (linked.length > 0) {
+        const { bulkUpdateTasks } = await import('@/lib/actions/tasks');
+        await bulkUpdateTasks({ workspaceId, taskIds: linked.map(t => t.id), patch: { status: 'Done' } });
+        linked.forEach(t => updateTaskInCache(t.id, { status: 'Done' }));
+        setAutoClosedCount(linked.length);
+        setTimeout(() => setAutoClosedCount(null), 4000);
+      }
+    }
   };
 
   const saveShowNotes = async () => {
@@ -156,6 +170,13 @@ export function EpisodeDrawer({ episodeId, onClose }) {
           display: 'flex', flexDirection: 'column',
         }}
       >
+        {/* Auto-close banner */}
+        {autoClosedCount != null && (
+          <div style={{ background: 'var(--success-bg,#dcfce7)', borderBottom: '1px solid var(--border-soft)', padding: '10px 22px', fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
+            ✅ {autoClosedCount} verknüpfte Production-Task{autoClosedCount > 1 ? 's' : ''} automatisch als erledigt markiert.
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--border-soft)' }}>
           <div className="row between items-start mb-1">

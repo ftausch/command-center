@@ -16,7 +16,7 @@ import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
 import { NewTaskModal } from '@/components/NewTaskModal';
 import { TaskDrawer } from '@/components/TaskDrawer';
-import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, LumaUrlField, HealthBadge, LumaRsvpBadge } from '@/components/EventOps';
+import { RunOfShow, AttendeeList, PartnerSponsorList, RecapChecklist, ApprovalsPanel, DecisionLog, ResourcesPanel, LumaUrlField, HealthBadge, LumaRsvpBadge, BudgetPanel } from '@/components/EventOps';
 import { EventDayOf } from '@/components/EventDayOf';
 
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
@@ -581,6 +581,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className={`tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>Freigaben</div>
           <div className={`tab ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>Entscheidungen</div>
           <div className={`tab ${tab === 'resources' ? 'active' : ''}`} onClick={() => setTab('resources')}>Ressourcen <span className="count">{projectResources.length}</span></div>
+          <div className={`tab ${tab === 'budget' ? 'active' : ''}`} onClick={() => setTab('budget')}>💰 Budget</div>
           <div className={`tab ${tab === 'recap' ? 'active' : ''}`} onClick={() => setTab('recap')}>Recap</div>
         </>)}
       </div>
@@ -771,6 +772,18 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 workspaceId={workspaceId}
                 canEdit={CAN.editProject(myRole)}
                 lumaUrl={project.eventMeta?.lumaUrl ?? project.eventMeta?.signupUrl ?? ''}
+              />
+            </div>
+          )}
+
+          {tab === 'budget' && project.division === 'events' && (
+            <div className="card card-pad">
+              <div className="h3 mb-4">💰 Budget-Tracking</div>
+              <BudgetPanel
+                project={project}
+                workspaceId={currentWorkspaceId}
+                canEdit={CAN.editProject(myRole)}
+                onUpdate={(patch) => updateProjectInCache(projectId, patch)}
               />
             </div>
           )}

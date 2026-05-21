@@ -1480,3 +1480,87 @@ export function HealthBadge({ score, reasons = [], size = 'md' }) {
     </div>
   );
 }
+
+// ── I) Budget Panel ────────────────────────────────────────────────────────
+
+export function BudgetPanel({ project, workspaceId, canEdit, onUpdate }) {
+  const meta = project?.eventMeta ?? {};
+  const [planned,  setPlanned]  = useState(meta.budgetPlanned  ?? '');
+  const [actual,   setActual]   = useState(meta.budgetActual   ?? '');
+  const [currency, setCurrency] = useState(meta.budgetCurrency ?? 'EUR');
+  const [pending,  setPending]  = useState(false);
+
+  const save = async () => {
+    setPending(true);
+    const newMeta = { ...meta, budgetPlanned: planned, budgetActual: actual, budgetCurrency: currency };
+    const r = await updateProject({ projectId: project.id, workspaceId, patch: { eventMeta: newMeta } });
+    setPending(false);
+    if (r.ok) onUpdate?.({ eventMeta: newMeta });
+  };
+
+  const pNum  = parseFloat(String(planned).replace(/,/g, '.')) || 0;
+  const aNum  = parseFloat(String(actual).replace(/,/g, '.')) || 0;
+  const pct   = pNum > 0 ? Math.min(100, Math.round((aNum / pNum) * 100)) : 0;
+  const over  = aNum > pNum && pNum > 0;
+  const fmt   = (n) => n ? `${Number(n).toLocaleString('de-DE', { minimumFractionDigits: 0 })} ${currency}` : '—';
+
+  return (
+    <div className="col gap-3">
+      {/* Summary bar */}
+      {(pNum > 0 || aNum > 0) && (
+        <div style={{ background: 'var(--bg-sunk)', borderRadius: 10, padding: '14px 16px' }}>
+          <div className="row between mb-2">
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Budget-Übersicht</span>
+            <span style={{
+              fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 999,
+              background: over ? 'var(--danger-bg)' : '#f0fdf4',
+              color: over ? 'var(--danger)' : 'var(--success)',
+            }}>{over ? `⛔ ${pct}% ausgegeben` : `✅ ${pct}% ausgegeben`}</span>
+          </div>
+          <div style={{ background: 'var(--bg-elev)', borderRadius: 999, height: 8, overflow: 'hidden', marginBottom: 10 }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: over ? 'var(--danger)' : 'var(--success)', borderRadius: 999, transition: 'width 0.4s' }} />
+          </div>
+          <div className="row gap-4" style={{ fontSize: 13 }}>
+            <div><span style={{ color: 'var(--text-3)', fontSize: 12 }}>Geplant</span><br /><strong>{fmt(pNum)}</strong></div>
+            <div><span style={{ color: 'var(--text-3)', fontSize: 12 }}>Tatsächlich</span><br /><strong style={{ color: over ? 'var(--danger)' : 'inherit' }}>{fmt(aNum)}</strong></div>
+            {pNum > 0 && <div><span style={{ color: 'var(--text-3)', fontSize: 12 }}>Rest</span><br /><strong style={{ color: over ? 'var(--danger)' : 'var(--success)' }}>{fmt(pNum - aNum)}</strong></div>}
+          </div>
+        </div>
+      )}
+
+      {/* Inputs */}
+      {canEdit && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr auto' }}>
+          <div>
+            <div className="label mb-1">💰 Geplantes Budget</div>
+            <input className="input" type="number" min="0" step="100"
+              value={planned} onChange={(e) => setPlanned(e.target.value)}
+              placeholder="0" style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <div className="label mb-1">💸 Tatsächliche Kosten</div>
+            <input className="input" type="number" min="0" step="10"
+              value={actual} onChange={(e) => setActual(e.target.value)}
+              placeholder="0" style={{ fontSize: 13 }} />
+          </div>
+          <div>
+            <div className="label mb-1">Währung</div>
+            <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} style={{ fontSize: 13 }}>
+              <option>EUR</option><option>USD</option><option>CHF</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {!canEdit && pNum === 0 && aNum === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-4)', fontStyle: 'italic' }}>Noch kein Budget erfasst.</div>
+      )}
+
+      {canEdit && (
+        <button className="btn btn-brand btn-sm" onClick={save} disabled={pending} style={{ alignSelf: 'flex-start' }}>
+          {pending ? 'Speichert…' : 'Budget speichern'}
+        </button>
+      )}
+    </div>
+  );
+}
