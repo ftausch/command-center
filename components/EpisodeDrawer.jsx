@@ -51,6 +51,7 @@ export function EpisodeDrawer({ episodeId, onClose }) {
   // ── Clips ─────────────────────────────────────────────────────────────────
   const [clipTitle,    setClipTitle]    = useState('');
   const [clipPlatform, setClipPlatform] = useState('LinkedIn');
+  const [clipDate,     setClipDate]     = useState('');
   const [clipPending,  setClipPending]  = useState(false);
 
   useEffect(() => {
@@ -127,10 +128,11 @@ export function EpisodeDrawer({ episodeId, onClose }) {
   const addClip = async () => {
     if (!clipTitle.trim()) return;
     setClipPending(true);
-    const newClip = { id: crypto.randomUUID(), title: clipTitle.trim(), platform: clipPlatform, status: 'todo' };
+    const newClip = { id: crypto.randomUUID(), title: clipTitle.trim(), platform: clipPlatform, scheduledDate: clipDate || null, status: 'todo' };
     await patchMeta({ clips: [...clips, newClip] });
     setClipPending(false);
     setClipTitle('');
+    setClipDate('');
   };
 
   const toggleClip = async (id) => {
@@ -403,6 +405,14 @@ export function EpisodeDrawer({ episodeId, onClose }) {
                     <I.plus size={12} />
                   </button>
                 </div>
+                <div className="row gap-2 mb-2">
+                  <input type="date" className="input" value={clipDate}
+                    onChange={(e) => setClipDate(e.target.value)}
+                    disabled={clipPending}
+                    style={{ fontSize: 12, height: 30 }}
+                    placeholder="Geplantes Datum (optional)" />
+                  <span style={{ fontSize: 12, color: 'var(--text-4)', alignSelf: 'center' }}>Geplantes Post-Datum (optional)</span>
+                </div>
               </div>
 
               {clips.length === 0 ? (
@@ -431,6 +441,11 @@ export function EpisodeDrawer({ episodeId, onClose }) {
                         fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 12,
                         background: 'var(--bg-sunk)', color: 'var(--text-3)',
                       }}>{c.platform}</span>
+                      {c.scheduledDate && (
+                        <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>
+                          📅 {new Date(c.scheduledDate + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
                       <button className="btn btn-quiet btn-icon" style={{ width: 24, height: 24, color: 'var(--text-4)' }}
                         onClick={() => deleteClip(c.id)}><I.x size={10} /></button>
                     </div>

@@ -22,6 +22,129 @@ import { EventDayOf } from '@/components/EventDayOf';
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
+// ── Gantt / Timeline view ─────────────────────────────────────────────────
+
+function GanttView({ tasks, onOpenTask }) {
+  const withDue  = tasks.filter(t => t.due).sort((a, b) => a.due.localeCompare(b.due));
+  const noDue    = tasks.filter(t => !t.due);
+
+  if (withDue.length === 0) {
+    return (
+      <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-4)', fontSize: 13 }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+        Noch keine Tasks mit Fälligkeitsdatum.
+      </div>
+    );
+  }
+
+  const minDate = new Date(withDue[0].due + 'T00:00:00');
+  const maxDate = new Date(withDue[withDue.length - 1].due + 'T00:00:00');
+  maxDate.setDate(maxDate.getDate() + 2);
+  minDate.setDate(minDate.getDate() - 1);
+  const totalDays = Math.max(1, (maxDate - minDate) / 86400000);
+
+  const pct = (iso) => {
+    const d = new Date(iso + 'T00:00:00');
+    return Math.max(0, Math.min(100, ((d - minDate) / 86400000 / totalDays) * 100));
+  };
+
+  const STATUS_COLOR = {
+    'Done':        'var(--success)',
+    'In Progress': 'var(--brand)',
+    'Review':      'var(--warning)',
+    'Blocked':     'var(--danger)',
+    'Backlog':     'var(--text-4)',
+    'To Do':       'var(--info)',
+  };
+
+  // Week markers
+  const weeks = [];
+  const cur = new Date(minDate);
+  cur.setDate(cur.getDate() - cur.getDay() + 1); // start of week
+  while (cur <= maxDate) {
+    const p = Math.max(0, ((cur - minDate) / 86400000 / totalDays) * 100);
+    weeks.push({ p, label: cur.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' }) });
+    cur.setDate(cur.getDate() + 7);
+  }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayPct = Math.max(0, Math.min(100, ((today - minDate) / 86400000 / totalDays) * 100));
+
+  return (
+    <div style={{ padding: '16px 20px', minWidth: 600, overflowX: 'auto' }}>
+      {/* Week markers */}
+      <div style={{ position: 'relative', height: 24, marginBottom: 8, marginLeft: 220 }}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{ position: 'absolute', left: `${w.p}%`, fontSize: 10.5, color: 'var(--text-4)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+            {w.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Rows */}
+      <div className="col gap-1">
+        {withDue.map((t) => {
+          const color = STATUS_COLOR[t.status] ?? 'var(--text-3)';
+          const p = pct(t.due);
+          const isToday = t.due === today.toISOString().slice(0,10);
+          return (
+            <div key={t.id} className="row gap-2 items-center" style={{ minHeight: 30 }}>
+              {/* Label */}
+              <div style={{ width: 210, flexShrink: 0, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                color: t.status === 'Done' ? 'var(--text-4)' : 'var(--text-1)',
+                textDecoration: t.status === 'Done' ? 'line-through' : 'none',
+                cursor: 'pointer' }}
+                onClick={() => onOpenTask?.(t.id)}
+                title={t.title}>
+                {t.title}
+              </div>
+              {/* Bar */}
+              <div style={{ flex: 1, position: 'relative', height: 20, background: 'var(--bg-sunk)', borderRadius: 4 }}>
+                {/* Today line */}
+                <div style={{ position: 'absolute', left: `${todayPct}%`, top: 0, bottom: 0, width: 1, background: 'var(--danger)', opacity: 0.5, zIndex: 2 }} />
+                {/* Task marker */}
+                <div style={{
+                  position: 'absolute', left: `${Math.max(0, p - 0.5)}%`, top: 3, bottom: 3,
+                  width: 14, borderRadius: 3,
+                  background: color,
+                  cursor: 'pointer',
+                  transform: 'translateX(-50%)',
+                  zIndex: 3,
+                  boxShadow: isToday ? `0 0 0 2px var(--danger)` : undefined,
+                }}
+                  onClick={() => onOpenTask?.(t.id)}
+                  title={`${t.title} · ${t.due}`} />
+              </div>
+              {/* Date */}
+              <div style={{ fontSize: 11, color: 'var(--text-4)', width: 60, flexShrink: 0, textAlign: 'right' }}>
+                {new Date(t.due + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+              </div>
+            </div>
+          );
+        })}
+        {noDue.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 8, fontStyle: 'italic' }}>
+            + {noDue.length} Tasks ohne Datum
+          </div>
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="row gap-3 mt-4" style={{ flexWrap: 'wrap' }}>
+        {Object.entries(STATUS_COLOR).map(([s, c]) => (
+          <span key={s} className="row gap-1" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: c, display: 'inline-block', marginTop: 2 }} /> {s}
+          </span>
+        ))}
+        <span className="row gap-1" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+          <span style={{ width: 2, height: 10, background: 'var(--danger)', display: 'inline-block', opacity: 0.6 }} /> Heute
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ProjectDetailScreen({ projectId, setRoute }) {
   const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, addProject, addTask, currentWorkspaceId } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
@@ -571,6 +694,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>
+        <div className={`tab ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>📅 Timeline</div>
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
         <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
         <div className={`tab ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')}>Files <span className="count">{project.links?.length ?? 0}</span></div>
@@ -701,6 +825,16 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 </table>
               </div>
               )}
+            </div>
+          )}
+
+          {tab === 'timeline' && (
+            <div className="card" style={{ overflow: 'auto' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
+                <div className="h3">📅 Task-Timeline</div>
+                <div className="meta mt-1">Aufgaben nach Fälligkeitsdatum · {tasks.filter(t => t.due).length} mit Datum</div>
+              </div>
+              <GanttView tasks={tasks} onOpenTask={setDrawerTaskId} />
             </div>
           )}
 
