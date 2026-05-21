@@ -38,6 +38,24 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
   const defaultTab = (myRole === 'manager' || myRole === 'member') ? 'focus' : 'overview';
   const [dashTab, setDashTab] = useState(defaultTab);
 
+  // Build 7-day plan
+  const weekPlan = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      d.setHours(0, 0, 0, 0);
+      const iso = d.toISOString().slice(0, 10);
+      const tasks = allTasks.filter(t => t.due === iso && t.status !== 'Done');
+      const events = data.projects.filter(p =>
+        p.division === 'events' && p.eventMeta?.eventDate?.slice(0, 10) === iso
+      );
+      const episodes = (data.episodes ?? []).filter(e => e.date === iso);
+      days.push({ iso, label: i === 0 ? 'Heute' : i === 1 ? 'Morgen' : WEEKDAY_LABEL[d.getDay()], tasks, events, episodes, date: d });
+    }
+    return days;
+  }, [allTasks, data.projects, data.episodes]);
+
   const allTasks  = filterByDivision(data.tasks.map(t => ({
     ...t,
     division: data.projects.find(p => p.id === t.projectId)?.division ?? 'general',
@@ -103,7 +121,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
             <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>
             <DivisionSwitcher />
             <div style={{ display: 'flex', gap: 4, padding: '2px', background: 'var(--bg-sunk)', borderRadius: 10, marginLeft: 4 }}>
-              {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }].map((t) => (
+              {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }, { id: 'week', label: '📅 Wochenplan' }].map((t) => (
                 <button key={t.id} onClick={() => setDashTab(t.id)} style={{
                   padding: '4px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, transition: 'all 0.12s',
                   background: dashTab === t.id ? 'white' : 'transparent',
@@ -148,7 +166,70 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
         </div>
       )}
 
-      {dashTab !== 'focus' && (
+      {dashTab === 'week' && (
+        <div className="col gap-3">
+          {weekPlan.map(({ iso, label, tasks, events, episodes, date }) => {
+            const total = tasks.length + events.length + episodes.length;
+            const isToday = label === 'Heute';
+            return (
+              <div key={iso} style={{
+                borderRadius: 10,
+                border: `1px solid ${isToday ? 'var(--brand)' : 'var(--border-soft)'}`,
+                background: isToday ? 'var(--brand-soft)' : 'var(--bg-card)',
+                overflow: 'hidden',
+              }}>
+                <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: total > 0 ? '1px solid var(--border-soft)' : 'none' }}>
+                  <div style={{ minWidth: 90 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: isToday ? 'var(--brand)' : 'var(--text-1)' }}>{label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-4)' }}>
+                      {date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </div>
+                  </div>
+                  {total === 0
+                    ? <span style={{ fontSize: 12.5, color: 'var(--text-4)', fontStyle: 'italic' }}>Nichts geplant</span>
+                    : <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+                        {events.length > 0 && <span style={{ fontSize: 12, background: '#fff4e6', color: '#e8780a', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>🎪 {events.length} Event{events.length > 1 ? 's' : ''}</span>}
+                        {episodes.length > 0 && <span style={{ fontSize: 12, background: 'var(--brand-soft)', color: 'var(--brand)', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>🎙 {episodes.length} Episode{episodes.length > 1 ? 'n' : ''}</span>}
+                        {tasks.length > 0 && <span style={{ fontSize: 12, background: 'var(--bg-sunk)', color: 'var(--text-2)', borderRadius: 6, padding: '2px 8px' }}>✅ {tasks.length} Task{tasks.length > 1 ? 's' : ''} fällig</span>}
+                      </div>
+                  }
+                </div>
+                {total > 0 && (
+                  <div style={{ padding: '6px 16px 10px' }}>
+                    {events.map(p => (
+                      <div key={p.id} onClick={() => setRoute('project:' + p.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border-soft)' }}>
+                        <span>🎪</span>
+                        <span style={{ fontWeight: 500, flex: 1 }}>{p.name}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{p.eventMeta?.location ?? ''}</span>
+                      </div>
+                    ))}
+                    {episodes.map(e => (
+                      <div key={e.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13, borderBottom: '1px solid var(--border-soft)' }}>
+                        <span>🎙</span>
+                        <span style={{ flex: 1 }}>{e.title}</span>
+                        {e.num != null && <span style={{ fontSize: 11, color: 'var(--text-4)' }}>Ep. {e.num}</span>}
+                      </div>
+                    ))}
+                    {tasks.slice(0, 4).map(t => (
+                      <div key={t.id} onClick={() => onOpenTask?.(t.id, t.projectId)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-4)' }}>✅</span>
+                        <span style={{ flex: 1 }} className="truncate">{t.title}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{data.projects.find(p => p.id === t.projectId)?.name ?? ''}</span>
+                      </div>
+                    ))}
+                    {tasks.length > 4 && <div style={{ fontSize: 11.5, color: 'var(--text-4)', paddingTop: 4 }}>+{tasks.length - 4} weitere Tasks</div>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {dashTab !== 'focus' && dashTab !== 'week' && (
       <>
       {/* ── Schnellzugriff ──────────────────────────────────────────────── */}
       <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap' }}>

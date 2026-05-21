@@ -10,7 +10,7 @@ import {
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo, eventHealthScore } from '@/lib/utils';
 import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject, postEventRecapToSlack } from '@/lib/actions/projects';
-import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
+import { bulkUpdateTasks, bulkDeleteTasks, createTask } from '@/lib/actions/tasks';
 import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
 import { listEventPartners } from '@/lib/actions/event-ops';
 import { CAN } from '@/lib/roles';
@@ -23,10 +23,14 @@ const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
 export function ProjectDetailScreen({ projectId, setRoute }) {
-  const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, addProject, currentWorkspaceId } = useWorkspace();
+  const { currentWorkspace: brand, data, myRole, updateProjectInCache, updateTaskInCache, removeProject, removeTask, addProject, addTask, currentWorkspaceId } = useWorkspace();
   const project = data.projects.find((p) => p.id === projectId);
   const [tab, setTab] = useState('tasks');
-  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newTaskOpen,  setNewTaskOpen]  = useState(false);
+  const [bulkTaskOpen, setBulkTaskOpen] = useState(false);
+  const [bulkText,     setBulkText]     = useState('');
+  const [bulkPending2, setBulkPending2] = useState(false);
+  const [bulkResult,   setBulkResult]   = useState(null);
   const [drawerTaskId, setDrawerTaskId] = useState(null);
 
   // ── Inline name editing ───────────────────────────────────────────────────
@@ -388,6 +392,9 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </button>
             );
           })()}
+          <button className="btn btn-ghost btn-sm" onClick={() => { setBulkTaskOpen(true); setBulkText(''); setBulkResult(null); }} title="Mehrere Tasks auf einmal anlegen">
+            <I.plus size={13} /> Mehrere Tasks
+          </button>
           <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}><I.plus size={13} /> New Task</button>
         </div>
       </div>
@@ -399,6 +406,53 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         onClose={() => setNewTaskOpen(false)}
         initialProjectId={projectId}
       />
+
+      {bulkTaskOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,22,28,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={(e) => e.target === e.currentTarget && setBulkTaskOpen(false)}>
+          <div className="card card-pad col gap-3" style={{ width: '100%', maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="row between">
+              <div>
+                <div className="h3">📋 Mehrere Tasks anlegen</div>
+                <div className="meta mt-1">Einen Task pro Zeile — werden alle in diesem Projekt erstellt</div>
+              </div>
+              <button className="btn btn-quiet btn-icon" onClick={() => setBulkTaskOpen(false)}><I.x size={14} /></button>
+            </div>
+            <textarea className="input" rows={8} autoFocus
+              placeholder={"Aufnahme vorbereiten\nMikrofon testen\nGast briefen\n..."}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              disabled={bulkPending2}
+              style={{ fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }} />
+            {bulkResult && (
+              <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
+                ✓ {bulkResult} Tasks angelegt
+              </div>
+            )}
+            <div className="row gap-2">
+              <button className="btn btn-brand btn-sm"
+                disabled={!bulkText.trim() || bulkPending2}
+                onClick={async () => {
+                  const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
+                  if (!lines.length) return;
+                  setBulkPending2(true);
+                  setBulkResult(null);
+                  let created = 0;
+                  for (const title of lines) {
+                    const r = await createTask({ workspaceId: currentWorkspaceId, projectId, title });
+                    if (r.ok && r.data) { addTask(r.data); created++; }
+                  }
+                  setBulkPending2(false);
+                  setBulkResult(created);
+                  setBulkText('');
+                }}>
+                {bulkPending2 ? 'Anlegen…' : `${bulkText.split('\n').filter(l => l.trim()).length} Tasks erstellen`}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setBulkTaskOpen(false)}>Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TaskDrawer
         taskId={drawerTaskId}
