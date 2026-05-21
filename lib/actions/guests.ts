@@ -102,6 +102,16 @@ export async function updateGuest(input: {
     .eq('workspace_id', ctx.uuid)
     .select().single();
   if (error || !data) return { ok: false, error: error?.message ?? 'Fehler.' };
+
+  // Fire outbound webhook when guest is confirmed
+  if (input.patch.status === 'confirmed') {
+    const { OutboundEvents } = await import('@/lib/integrations/outbound');
+    OutboundEvents.guestConfirmed(ctx.uuid, {
+      id: input.guestId, name: data.name,
+      email: data.email ?? undefined, company: data.company ?? undefined,
+    }).catch(() => {});
+  }
+
   return { ok: true, data: rowToGuest(data) };
 }
 

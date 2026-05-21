@@ -332,6 +332,27 @@ export async function updateProject(input: {
     }
   }
 
+  // Fire outbound webhook for key status transitions
+  if (input.patch.status && input.patch.status !== existing?.status) {
+    const { OutboundEvents } = await import('@/lib/integrations/outbound');
+    const div = existing?.division as string ?? 'general';
+    if (input.patch.status === 'Done' && div === 'events') {
+      const em = (existing as any)?.event_meta ?? {};
+      OutboundEvents.eventCompleted(ctx.uuid, {
+        id:            input.projectId,
+        name:          (existing as any)?.name ?? '',
+        eventDate:     em.eventDate ?? undefined,
+      }).catch(() => {});
+    }
+    if (input.patch.status === 'Blocked') {
+      OutboundEvents.projectBlocked(ctx.uuid, {
+        id:       input.projectId,
+        name:     (existing as any)?.name ?? '',
+        division: div,
+      }).catch(() => {});
+    }
+  }
+
   return { ok: true, data: { id: input.projectId, ...input.patch } };
 }
 

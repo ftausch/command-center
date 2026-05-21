@@ -121,6 +121,20 @@ export async function updateEpisode(input: {
     .eq('workspace_id', ctx.uuid);
 
   if (error) return { ok: false, error: error.message };
+
+  // Fire outbound webhook when episode goes live
+  if (input.patch.status === 'published') {
+    const { OutboundEvents } = await import('@/lib/integrations/outbound');
+    const { data: ep } = await supabase.from('podcast_episodes').select('title, episode_number, guest, publish_date').eq('id', input.episodeId).maybeSingle();
+    OutboundEvents.episodePublished(ctx.uuid, {
+      id:    input.episodeId,
+      title: ep?.title ?? '',
+      num:   ep?.episode_number ?? null,
+      guest: ep?.guest ?? undefined,
+      date:  ep?.publish_date ?? undefined,
+    }).catch(() => {});
+  }
+
   return { ok: true, data: { id: input.episodeId } };
 }
 

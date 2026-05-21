@@ -319,6 +319,19 @@ export async function markTaskDone(input: {
     text: `✅ ${name} completed task: "${task?.title ?? input.taskId}"`,
   });
 
+  // Fire outbound webhook for automation (e.g. Aufnahme done → create next tasks)
+  if (task?.title) {
+    const { OutboundEvents } = await import('@/lib/integrations/outbound');
+    const { data: fullTask } = await supabase.from('tasks').select('project_id, episode_id, assignee_id').eq('id', input.taskId).maybeSingle();
+    OutboundEvents.taskDone(ctx.uuid, {
+      id:        input.taskId,
+      title:     task.title,
+      projectId: fullTask?.project_id ?? undefined,
+      episodeId: fullTask?.episode_id ?? undefined,
+      assignee:  fullTask?.assignee_id ?? undefined,
+    }).catch(() => {});
+  }
+
   return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
 }
 
