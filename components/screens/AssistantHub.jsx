@@ -792,6 +792,38 @@ function ContactsTab({ items, workspaceId, onUpdate, onDelete, selectedIds, onSe
 
 // ── Scheduling Tab ────────────────────────────────────────────────────────
 
+function downloadICS(title, dateStr, participants, location, duration) {
+  const start = new Date(dateStr);
+  const end   = new Date(start);
+  end.setMinutes(end.getMinutes() + (duration ? parseInt(duration) || 60 : 60));
+
+  const fmt = (d) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const esc = (s) => (s ?? '').replace(/[,;\\]/g, (c) => '\\' + c).replace(/\n/g, '\\n');
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Command Center//Unicorn Bakery//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    `SUMMARY:${esc(title)}`,
+    participants ? `DESCRIPTION:Teilnehmer: ${esc(participants)}` : '',
+    location     ? `LOCATION:${esc(location)}` : '',
+    `UID:${Date.now()}@unicornbakery.de`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+
+  const blob = new Blob([lines], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function countdownText(dateStr) {
   if (!dateStr) return null;
   const today = new Date();
@@ -920,10 +952,17 @@ function SchedulingCard({ item, workspaceId, onUpdate, onDelete }) {
               </button>
             )}
             {meta.confirmedDate && item.status !== 'done' && (
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--success)' }}
-                onClick={markDone} disabled={!!pending}>
-                🏁 Stattgefunden
-              </button>
+              <>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--success)' }}
+                  onClick={markDone} disabled={!!pending}>
+                  🏁 Stattgefunden
+                </button>
+                <button className="btn btn-quiet btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                  onClick={() => downloadICS(item.title, meta.confirmedDate, meta.participants, meta.location, meta.duration)}
+                  title="Als .ics herunterladen und in Kalender importieren">
+                  📅 .ics
+                </button>
+              </>
             )}
             <button className="btn btn-quiet btn-icon" style={{ width: 28, height: 28 }}
               onClick={() => setEditing(true)} title="Bearbeiten">

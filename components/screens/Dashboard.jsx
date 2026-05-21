@@ -33,9 +33,10 @@ function greeting(name) {
 }
 
 export function DashboardScreen({ setRoute, onOpenTask }) {
-  const { currentWorkspace: brand, data, me } = useWorkspace();
+  const { currentWorkspace: brand, data, me, myRole } = useWorkspace();
   const filterByDivision = useDivisionFilter();
-  const [dashTab, setDashTab] = useState('overview'); // 'overview' | 'focus'
+  const defaultTab = (myRole === 'manager' || myRole === 'member') ? 'focus' : 'overview';
+  const [dashTab, setDashTab] = useState(defaultTab);
 
   const allTasks  = filterByDivision(data.tasks.map(t => ({
     ...t,
@@ -149,6 +150,31 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
 
       {dashTab !== 'focus' && (
       <>
+      {/* ── Schnellzugriff ──────────────────────────────────────────────── */}
+      <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
+        {[
+          { icon: '📋', label: 'Projekte',       onClick: () => setRoute('projects')   },
+          { icon: '📅', label: 'Kalender',        onClick: () => setRoute('calendar')  },
+          { icon: '🎙', label: 'Podcast Hub',     onClick: () => setRoute('podcast')   },
+          { icon: '🎪', label: 'Event Hub',       onClick: () => setRoute('eventhub')  },
+          { icon: '🗂', label: 'Assistant Hub',   onClick: () => setRoute('assisthub') },
+        ].map(({ icon, label, onClick }) => (
+          <button key={label} onClick={onClick}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', borderRadius: 8,
+              background: 'var(--bg-elev)', border: '1px solid var(--border)',
+              cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-2)',
+              transition: 'border-color 0.1s, color 0.1s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            <span style={{ fontSize: 15 }}>{icon}</span> {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Morning Briefing strip ───────────────────────────────────────── */}
       {(() => {
         const todayEvents = data.projects.filter(p =>

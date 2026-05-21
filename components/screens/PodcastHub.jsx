@@ -1770,6 +1770,21 @@ function GuestCRMTab({ workspaceId }) {
     if (r.ok) setGuests((g) => g.filter((x) => x.id !== id));
   };
 
+  const [creatingEpisodeFor, setCreatingEpisodeFor] = useState(null);
+  const [episodeTitle, setEpisodeTitle] = useState('');
+  const [episodePending, setEpisodePending] = useState(false);
+
+  const onCreateEpisode = async (guest) => {
+    if (!episodeTitle.trim()) return;
+    setEpisodePending(true);
+    const r = await createEpisode({ workspaceId, title: episodeTitle.trim(), status: 'idea', guest: guest.name });
+    setEpisodePending(false);
+    if (r.ok) {
+      setCreatingEpisodeFor(null);
+      setEpisodeTitle('');
+    }
+  };
+
   const filtered = guests.filter((g) =>
     g.name.toLowerCase().includes(search.toLowerCase()) ||
     (g.company ?? '').toLowerCase().includes(search.toLowerCase())
@@ -1871,10 +1886,31 @@ function GuestCRMTab({ workspaceId }) {
                   {g.linkedinUrl && <div><div className="label mb-1">LinkedIn</div><a href={g.linkedinUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--brand)' }}>Profil öffnen →</a></div>}
                 </div>
                 {g.notes && <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>{g.notes}</div>}
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', fontSize: 12 }}
-                  onClick={() => onDelete(g.id)} disabled={pending === g.id}>
-                  <I.x size={11} /> Entfernen
-                </button>
+                <div className="row gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+                  {creatingEpisodeFor === g.id ? (
+                    <>
+                      <input className="input" autoFocus
+                        placeholder="Episodentitel z.B. Ep. 47 — Name"
+                        value={episodeTitle}
+                        onChange={(e) => setEpisodeTitle(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') onCreateEpisode(g); if (e.key === 'Escape') { setCreatingEpisodeFor(null); setEpisodeTitle(''); }}}
+                        style={{ fontSize: 13, maxWidth: 280 }} />
+                      <button className="btn btn-brand btn-sm" onClick={() => onCreateEpisode(g)} disabled={!episodeTitle.trim() || episodePending}>
+                        {episodePending ? '…' : 'Erstellen'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setCreatingEpisodeFor(null); setEpisodeTitle(''); }}>Abbrechen</button>
+                    </>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+                      onClick={() => { setCreatingEpisodeFor(g.id); setEpisodeTitle(`${g.name}`); }}>
+                      🎙 Episode erstellen
+                    </button>
+                  )}
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', fontSize: 12 }}
+                    onClick={() => onDelete(g.id)} disabled={pending === g.id}>
+                    <I.x size={11} /> Entfernen
+                  </button>
+                </div>
               </div>
             )}
           </div>
