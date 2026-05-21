@@ -764,7 +764,7 @@ export function RecapChecklist({ project, workspaceId, canEdit, onUpdate }) {
         }} />
       </div>
 
-      <div className="col gap-2">
+      <div className="col gap-2 mb-5">
         {RECAP_ITEMS.map((item) => {
           const checked = !!checklist[item.id];
           return (
@@ -788,6 +788,57 @@ export function RecapChecklist({ project, workspaceId, canEdit, onUpdate }) {
           );
         })}
       </div>
+
+      <PostMortemSection project={project} workspaceId={workspaceId} canEdit={canEdit} onUpdate={onUpdate} />
+    </div>
+  );
+}
+
+function PostMortemSection({ project, workspaceId, canEdit, onUpdate }) {
+  const meta = project?.eventMeta ?? {};
+  const QUESTIONS = [
+    { id: 'went_well',    label: '✅ Was lief gut?' },
+    { id: 'went_wrong',   label: '⚠️ Was lief nicht so gut?' },
+    { id: 'lessons',      label: '💡 Lessons Learned' },
+    { id: 'next_time',    label: '🔁 Was würden wir nächstes Mal anders machen?' },
+  ];
+  const [drafts,  setDrafts]  = useState(() => meta.postMortem ?? {});
+  const [saving,  setSaving]  = useState(null);
+  const [open,    setOpen]    = useState(!!Object.values(meta.postMortem ?? {}).some(v => v));
+
+  const save = async (id, value) => {
+    setSaving(id);
+    const newMortem = { ...(meta.postMortem ?? {}), [id]: value };
+    const newMeta   = { ...meta, postMortem: newMortem };
+    const r = await updateProject({ projectId: project.id, workspaceId, patch: { eventMeta: newMeta } });
+    setSaving(null);
+    if (r.ok) onUpdate?.({ eventMeta: newMeta });
+  };
+
+  return (
+    <div>
+      <button type="button"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 12px', width: '100%', textAlign: 'left' }}
+        onClick={() => setOpen(!open)}>
+        <div className="h3" style={{ margin: 0 }}>📋 Post-Mortem</div>
+        <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 'auto' }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="col gap-4">
+          {QUESTIONS.map(({ id, label }) => (
+            <div key={id}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+              <textarea className="input" rows={3}
+                value={drafts[id] ?? ''}
+                onChange={(e) => setDrafts(d => ({ ...d, [id]: e.target.value }))}
+                onBlur={(e) => { if (canEdit && e.target.value !== (meta.postMortem?.[id] ?? '')) save(id, e.target.value); }}
+                disabled={!canEdit || saving === id}
+                placeholder={canEdit ? 'Hier eintragen…' : '—'}
+                style={{ fontSize: 13, resize: 'vertical' }} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

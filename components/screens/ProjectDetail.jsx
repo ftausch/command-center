@@ -22,6 +22,25 @@ import { EventDayOf } from '@/components/EventDayOf';
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
+// ── Copy project link ─────────────────────────────────────────────────────
+
+function CopyLinkButton({ projectId }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const url = `${window.location.origin}?project=${projectId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button className="btn btn-ghost btn-sm" onClick={copy} title="Link zum Projekt kopieren"
+      style={{ fontSize: 12 }}>
+      {copied ? '✓ Kopiert!' : '🔗 Link'}
+    </button>
+  );
+}
+
 // ── Gantt / Timeline view ─────────────────────────────────────────────────
 
 function GanttView({ tasks, onOpenTask }) {
@@ -515,6 +534,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </button>
             );
           })()}
+          <CopyLinkButton projectId={projectId} />
           <button className="btn btn-ghost btn-sm" title="Tasks als CSV exportieren"
             onClick={() => {
               const rows = [['Titel','Status','Priorität','Zugewiesen','Fälligkeit','Phase']];

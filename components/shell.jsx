@@ -42,6 +42,23 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const unreadActivity = useActivityUnread(currentWorkspaceId, route);
 
+  const COLLAPSIBLE = ['podcast', 'events', 'assistenz', 'operations', 'team'];
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('cc.sidebar.collapsed') ?? '{}'); } catch { return {}; }
+  });
+  const toggleSection = (id) => {
+    const next = { ...collapsed, [id]: !collapsed[id] };
+    setCollapsed(next);
+    try { localStorage.setItem('cc.sidebar.collapsed', JSON.stringify(next)); } catch {}
+  };
+  const SectionLabel = ({ id, label }) => (
+    <div className="nav-section" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
+      onClick={() => toggleSection(id)}>
+      <span>{label}</span>
+      <span style={{ fontSize: 10, color: 'var(--text-4)', marginRight: 4 }}>{collapsed[id] ? '▸' : '▾'}</span>
+    </div>
+  );
+
   if (!brand) return (
     <>
       {mobileOpen && <div className="sidebar-backdrop" onClick={onMobileClose} />}
@@ -115,74 +132,72 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         {/* ── Podcast ───────────────────────────────────────────── */}
         {brand.capabilities?.podcast !== false && (
           <>
-            <div className="nav-section">Podcast</div>
-            <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => closeAndNav('podcast')}>
-              <I.mic size={16} />
-              <span>Podcast Hub</span>
-            </div>
-            <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
-              <I.kanban size={16} />
-              <span>Episode Pipeline</span>
-            </div>
+            <SectionLabel id="podcast" label="Podcast" />
+            {!collapsed.podcast && <>
+              <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => closeAndNav('podcast')}>
+                <I.mic size={16} /><span>Podcast Hub</span>
+              </div>
+              <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
+                <I.kanban size={16} /><span>Episode Pipeline</span>
+              </div>
+            </>}
           </>
         )}
 
         {/* ── Events ────────────────────────────────────────────── */}
         {brand.capabilities?.events && (
           <>
-            <div className="nav-section">Events</div>
-            <div className={`nav-item ${route === 'eventhub' ? 'active' : ''}`} onClick={() => closeAndNav('eventhub')}>
-              <I.calendar size={16} />
-              <span>Event Hub</span>
-            </div>
-            <div className={`nav-item ${route === 'eventpipeline' ? 'active' : ''}`} onClick={() => closeAndNav('eventpipeline')}>
-              <I.kanban size={16} />
-              <span>Event Pipeline</span>
-            </div>
-            <div className={`nav-item ${route === 'partners' ? 'active' : ''}`} onClick={() => closeAndNav('partners')}>
-              <I.team size={16} />
-              <span>Partner & Sponsoren</span>
-            </div>
+            <SectionLabel id="events" label="Events" />
+            {!collapsed.events && <>
+              <div className={`nav-item ${route === 'eventhub' ? 'active' : ''}`} onClick={() => closeAndNav('eventhub')}>
+                <I.calendar size={16} /><span>Event Hub</span>
+              </div>
+              <div className={`nav-item ${route === 'eventpipeline' ? 'active' : ''}`} onClick={() => closeAndNav('eventpipeline')}>
+                <I.kanban size={16} /><span>Event Pipeline</span>
+              </div>
+              <div className={`nav-item ${route === 'partners' ? 'active' : ''}`} onClick={() => closeAndNav('partners')}>
+                <I.team size={16} /><span>Partner & Sponsoren</span>
+              </div>
+            </>}
           </>
         )}
 
-        {/* ── Assistenz — owner/admin/manager (Fabian, Malik, Kashiri) ─ */}
+        {/* ── Assistenz ─────────────────────────────────────────── */}
         {(myRole === 'owner' || myRole === 'admin' || myRole === 'manager') && (
           <>
-            <div className="nav-section">Assistenz</div>
-            <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
-              <span style={{ fontSize: 15 }}>🗂</span>
-              <span>Assistant Hub</span>
-            </div>
+            <SectionLabel id="assistenz" label="Assistenz" />
+            {!collapsed.assistenz && (
+              <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
+                <span style={{ fontSize: 15 }}>🗂</span><span>Assistant Hub</span>
+              </div>
+            )}
           </>
         )}
 
-        {/* ── Operations — nur owner/admin (Fabian, Malik, Tim) ─── */}
+        {/* ── Operations ────────────────────────────────────────── */}
         {(myRole === 'owner' || myRole === 'admin') && (
           <>
-            <div className="nav-section">Operations</div>
-            <div className={`nav-item ${route === 'ops-health' ? 'active' : ''}`} onClick={() => closeAndNav('ops-health')}>
-              <I.shield size={16} />
-              <span>Health</span>
-            </div>
-            <div className={`nav-item ${route === 'approvals' ? 'active' : ''}`} onClick={() => closeAndNav('approvals')}>
-              <I.check size={16} />
-              <span>Approvals</span>
-            </div>
-            <div className={`nav-item ${route === 'decisions' ? 'active' : ''}`} onClick={() => closeAndNav('decisions')}>
-              <I.log size={16} />
-              <span>Decisions</span>
-            </div>
-            <div className={`nav-item ${route === 'risks' ? 'active' : ''}`} onClick={() => closeAndNav('risks')}>
-              <I.alert size={16} />
-              <span>Risks & Blockers</span>
-            </div>
+            <SectionLabel id="operations" label="Operations" />
+            {!collapsed.operations && <>
+              <div className={`nav-item ${route === 'ops-health' ? 'active' : ''}`} onClick={() => closeAndNav('ops-health')}>
+                <I.shield size={16} /><span>Health</span>
+              </div>
+              <div className={`nav-item ${route === 'approvals' ? 'active' : ''}`} onClick={() => closeAndNav('approvals')}>
+                <I.check size={16} /><span>Approvals</span>
+              </div>
+              <div className={`nav-item ${route === 'decisions' ? 'active' : ''}`} onClick={() => closeAndNav('decisions')}>
+                <I.log size={16} /><span>Decisions</span>
+              </div>
+              <div className={`nav-item ${route === 'risks' ? 'active' : ''}`} onClick={() => closeAndNav('risks')}>
+                <I.alert size={16} /><span>Risks & Blockers</span>
+              </div>
+            </>}
           </>
         )}
 
         {/* ── Team ──────────────────────────────────────────────── */}
-        <div className="nav-section">Team</div>
-        {navWork.map(n => (
+        <SectionLabel id="team" label="Team" />
+        {!collapsed.team && navWork.map(n => (
           <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
             {n.icon}
             <span>{n.label}</span>

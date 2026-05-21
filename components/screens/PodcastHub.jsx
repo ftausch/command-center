@@ -311,6 +311,11 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
     });
     cancelEdit();
   };
+  const nextEpNum = useMemo(() => {
+    const nums = episodes.map(e => e.num).filter(n => n != null && !isNaN(n));
+    return nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  }, [episodes]);
+
   const [newTitle, setNewTitle] = useState('');
   const [newGuest, setNewGuest] = useState('');
   const [newNum, setNewNum] = useState('');
@@ -403,7 +408,13 @@ function EpisodenTab({ episodes, workspaceId, addEpisode, setTab, onOpenEpisode 
             </div>
             <div className="col gap-1">
               <label className="label">Episoden-Nr.</label>
-              <input className="input" type="number" value={newNum} onChange={(e) => setNewNum(e.target.value)} placeholder="z.B. 143" min="1" />
+              <div className="row gap-2 items-center">
+                <input className="input" type="number" value={newNum} onChange={(e) => setNewNum(e.target.value)} placeholder={`z.B. ${nextEpNum}`} min="1" style={{ flex: 1 }} />
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                  onClick={() => setNewNum(String(nextEpNum))}>
+                  → {nextEpNum} vorschlagen
+                </button>
+              </div>
             </div>
             <div className="col gap-1">
               <label className="label">Veröffentlichungsdatum</label>
