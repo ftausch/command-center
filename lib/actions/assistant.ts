@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { currentUser, getWorkspaceContext, canWriteAsRole } from '@/lib/auth';
+import { postSlackNotification } from '@/lib/integrations/slack';
 import type { ActionResult, AssistantItem, AssistantItemStatus, AssistantItemType, AssistantPriority } from '@/lib/types';
 
 const MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
@@ -173,4 +174,33 @@ export async function snoozeItem(input: {
     itemId: input.itemId,
     patch: { status: 'waiting', snoozedUntil: until.toISOString() },
   });
+}
+
+// Slack notification when a meeting is confirmed in the Scheduling tab
+export async function notifyMeetingConfirmed(input: {
+  workspaceId: string;
+  title: string;
+  participants?: string;
+  confirmedDate: string;
+}): Promise<void> {
+  try {
+    const ctx = await getWorkspaceContext(input.workspaceId);
+    if (!ctx) return;
+
+    const d = new Date(input.confirmedDate);
+    const dateStr = d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const timeStr = input.confirmedDate.includes('T')
+      ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      : '';
+
+    const who = input.participants ? ` mit ${input.participants}` : '';
+    const when = timeStr ? `${dateStr} um ${timeStr} Uhr` : dateStr;
+
+    await postSlackNotification({
+      workspaceUuid: ctx.uuid,
+      text: `📅 Termin bestätigt: *${input.title}*${who} — ${when}`,
+    });
+  } catch (e) {
+    console.error('[assistant] notifyMeetingConfirmed failed:', e);
+  }
 }

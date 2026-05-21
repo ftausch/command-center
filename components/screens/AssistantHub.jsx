@@ -11,6 +11,7 @@ import { dueLabel, timeAgo } from '@/lib/utils';
 import {
   listAssistantItems, createAssistantItem,
   updateAssistantItem, deleteAssistantItem, snoozeItem,
+  notifyMeetingConfirmed,
 } from '@/lib/actions/assistant';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -846,6 +847,12 @@ function SchedulingCard({ item, workspaceId, onUpdate, onDelete }) {
       { confirmedDate: confirmDateInput },
       { status: 'waiting', dueDate: confirmDateInput.split('T')[0] },
     );
+    notifyMeetingConfirmed({
+      workspaceId,
+      title:         item.title,
+      participants:  meta.participants,
+      confirmedDate: confirmDateInput,
+    });
     setShowConfirmInput(false);
     setConfirmDateInput('');
   };

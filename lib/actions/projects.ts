@@ -730,3 +730,35 @@ export async function deleteProjectResource(input: {
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: null };
 }
+
+export async function postEventRecapToSlack(input: {
+  workspaceId: string;
+  projectId:   string;
+  projectName: string;
+  tasksTotal:  number;
+  tasksDone:   number;
+  notes?:      string;
+}): Promise<ActionResult<null>> {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
+  const ctx = await getWorkspaceContext(input.workspaceId);
+  if (!ctx) return { ok: false, error: 'Workspace nicht gefunden.' };
+
+  const progress = input.tasksTotal > 0
+    ? `${input.tasksDone}/${input.tasksTotal} Tasks erledigt`
+    : '';
+  const notesLine = input.notes?.trim() ? `\n📝 ${input.notes.trim()}` : '';
+  const siteUrl = 'https://team.unicornbakery.de';
+
+  await postSlackNotification({
+    workspaceUuid: ctx.uuid,
+    text: [
+      `🎉 Event abgeschlossen: *${input.projectName}*`,
+      progress ? `✅ ${progress}` : '',
+      notesLine,
+      `<${siteUrl}|Recap im Command Center öffnen →>`,
+    ].filter(Boolean).join('\n'),
+  });
+
+  return { ok: true, data: null };
+}

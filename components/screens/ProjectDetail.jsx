@@ -9,7 +9,7 @@ import {
   PhaseTracker, PriorityBadge, Progress, StatusBadge,
 } from '@/components/ui';
 import { dueLabel, formatDateLong, projectProgress, timeAgo, eventHealthScore } from '@/lib/utils';
-import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject } from '@/lib/actions/projects';
+import { updateProject, deleteProject, addProjectMember, removeProjectMember, updateProjectMemberRole, duplicateEventProject, postEventRecapToSlack } from '@/lib/actions/projects';
 import { bulkUpdateTasks, bulkDeleteTasks } from '@/lib/actions/tasks';
 import { listProjectMembers, listProjectResources } from '@/lib/db/supabase';
 import { listEventPartners } from '@/lib/actions/event-ops';
@@ -149,6 +149,8 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
   };
 
   const [showRecapPrompt, setShowRecapPrompt] = useState(false);
+  const [recapSlackPending, setRecapSlackPending] = useState(false);
+  const [recapSlackSent,    setRecapSlackSent]    = useState(false);
 
   const saveField = async (key, value) => {
     setFieldPending(key);
@@ -464,12 +466,34 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               Fotos, Clips, LinkedIn-Post, Sponsor Report — öffne die Recap-Checkliste um nichts zu vergessen.
             </div>
           </div>
-          <div className="row gap-2" style={{ flexShrink: 0 }}>
+          <div className="row gap-2" style={{ flexShrink: 0, flexWrap: 'wrap' }}>
             <button className="btn btn-sm"
               style={{ background: '#e8780a', color: 'white', border: 'none', fontWeight: 600 }}
               onClick={() => { setTab('recap'); setShowRecapPrompt(false); }}>
               Recap öffnen →
             </button>
+            {project.slackConnected && !recapSlackSent && (
+              <button className="btn btn-ghost btn-sm"
+                disabled={recapSlackPending}
+                onClick={async () => {
+                  setRecapSlackPending(true);
+                  const done  = tasks.filter(t => t.status === 'Done').length;
+                  await postEventRecapToSlack({
+                    workspaceId:  workspaceId,
+                    projectId:    projectId,
+                    projectName:  project.name,
+                    tasksTotal:   tasks.length,
+                    tasksDone:    done,
+                  });
+                  setRecapSlackPending(false);
+                  setRecapSlackSent(true);
+                }}>
+                <I.slack size={12} /> {recapSlackPending ? 'Sendet…' : 'Auf Slack posten'}
+              </button>
+            )}
+            {recapSlackSent && (
+              <span style={{ fontSize: 12, color: 'var(--success)', alignSelf: 'center' }}>✓ Auf Slack gepostet</span>
+            )}
             <button className="btn btn-quiet btn-icon" onClick={() => setShowRecapPrompt(false)}>
               <I.x size={12} />
             </button>
