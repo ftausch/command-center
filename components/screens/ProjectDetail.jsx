@@ -22,6 +22,15 @@ import { EventDayOf } from '@/components/EventDayOf';
 const PROJECT_STATUSES = ['Planning', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 
+const STATUS_COLOR = {
+  'Done':        'var(--success)',
+  'In Progress': 'var(--brand)',
+  'Review':      'var(--warning)',
+  'Blocked':     'var(--danger)',
+  'Backlog':     'var(--text-4)',
+  'To Do':       'var(--info)',
+};
+
 // ── Copy project link ─────────────────────────────────────────────────────
 
 function CopyLinkButton({ projectId }) {
@@ -65,15 +74,6 @@ function GanttView({ tasks, onOpenTask }) {
   const pct = (iso) => {
     const d = new Date(iso + 'T00:00:00');
     return Math.max(0, Math.min(100, ((d - minDate) / 86400000 / totalDays) * 100));
-  };
-
-  const STATUS_COLOR = {
-    'Done':        'var(--success)',
-    'In Progress': 'var(--brand)',
-    'Review':      'var(--warning)',
-    'Blocked':     'var(--danger)',
-    'Backlog':     'var(--text-4)',
-    'To Do':       'var(--info)',
   };
 
   // Week markers
