@@ -11,11 +11,12 @@ import { NewProjectModal } from '@/components/NewProjectModal';
 import { SavedViewsButton } from '@/components/SavedViews';
 import { QuickActions } from '@/components/QuickActions';
 import { CAN } from '@/lib/roles';
+import { updateProject } from '@/lib/actions/projects';
 
 const DIVISION_DOT = { podcast: 'var(--brand)', events: '#e8780a', general: 'var(--text-4)' };
 
 export function ProjectsScreen({ setRoute }) {
-  const { currentWorkspace: brand, currentWorkspaceId, data, myRole } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data, myRole, updateProjectInCache } = useWorkspace();
   const filterByDivision = useDivisionFilter();
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
@@ -165,7 +166,22 @@ export function ProjectsScreen({ setRoute }) {
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2 }}>{p.type}</div>
                   </td>
-                  <td><StatusBadge status={p.status} /></td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <select
+                      className="input"
+                      value={p.status}
+                      style={{ height: 26, fontSize: 11.5, padding: '0 4px', width: 120 }}
+                      onChange={async (e) => {
+                        const next = e.target.value;
+                        updateProjectInCache(p.id, { status: next });
+                        await updateProject({ projectId: p.id, workspaceId: currentWorkspaceId, patch: { status: next } });
+                      }}
+                    >
+                      {['Planning','In Progress','Review','Blocked','Done'].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td>
                     {health ? (
                       <span
@@ -190,11 +206,24 @@ export function ProjectsScreen({ setRoute }) {
                       <span style={{ color: 'var(--text-4)' }}> · {p.phaseIdx + 1}/{phases.length}</span>
                     </span>
                   </td>
-                  <td style={{ minWidth: 140 }}>
+                  <td style={{ minWidth: 140 }} onClick={(e) => e.stopPropagation()}>
                     <div className="row gap-2 items-center">
                       <div style={{ flex: 1 }}><Progress value={pProgress} brand /></div>
                       <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 30, textAlign: 'right' }}>{pProgress}%</span>
                     </div>
+                    {pProgress === 100 && p.status !== 'Done' && CAN.editProject(myRole) && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontSize: 11, marginTop: 4, color: 'var(--success)', whiteSpace: 'nowrap' }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          updateProjectInCache(p.id, { status: 'Done' });
+                          await updateProject({ projectId: p.id, workspaceId: currentWorkspaceId, patch: { status: 'Done' } });
+                        }}
+                      >
+                        📦 Archivieren
+                      </button>
+                    )}
                   </td>
                   <td><PriorityBadge priority={p.priority} /></td>
                   <td>
