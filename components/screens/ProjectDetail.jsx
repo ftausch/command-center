@@ -1,7 +1,7 @@
 'use client';
 // Project Detail page
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import {
@@ -215,6 +215,9 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
   // ── Bulk task selection ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [taskSearch,    setTaskSearch]    = useState('');
+  const [taskPrioFilter, setTaskPrioFilter] = useState('all');
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
   const [bulkPending, setBulkPending] = useState(false);
   const [bulkError, setBulkError] = useState(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -390,9 +393,20 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     setRoute('project:' + r.data.id);
   };
 
-  const phases = data.phases;
+  const phases = data.phases ?? [];
   const tasks = data.tasks.filter((t) => t.projectId === projectId);
   const progress = projectProgress(tasks);
+
+  const filteredTasks = useMemo(() => {
+    let r = tasks;
+    if (taskSearch.trim()) {
+      const q = taskSearch.toLowerCase();
+      r = r.filter(t => t.title.toLowerCase().includes(q));
+    }
+    if (taskPrioFilter !== 'all') r = r.filter(t => t.priority === taskPrioFilter);
+    if (taskAssigneeFilter !== 'all') r = r.filter(t => t.assignee === taskAssigneeFilter);
+    return r;
+  }, [tasks, taskSearch, taskPrioFilter, taskAssigneeFilter]);
 
   const toggleSelect = (id) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleSelectAll = () => {
@@ -734,6 +748,36 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className="col gap-4">
           {tab === 'tasks' && (
             <div className="col gap-2">
+              {/* Task filter bar */}
+              <div className="row gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+                <input className="input" placeholder="Tasks suchen…" value={taskSearch}
+                  onChange={(e) => setTaskSearch(e.target.value)}
+                  style={{ maxWidth: 200, height: 28, fontSize: 13 }} />
+                <select className="input" value={taskPrioFilter} onChange={(e) => setTaskPrioFilter(e.target.value)}
+                  style={{ height: 28, fontSize: 12.5, width: 120 }}>
+                  <option value="all">Alle Prios</option>
+                  <option value="High">🔴 High</option>
+                  <option value="Medium">🟡 Medium</option>
+                  <option value="Low">⚪ Low</option>
+                </select>
+                <select className="input" value={taskAssigneeFilter} onChange={(e) => setTaskAssigneeFilter(e.target.value)}
+                  style={{ height: 28, fontSize: 12.5, width: 140 }}>
+                  <option value="all">Alle Personen</option>
+                  {data.members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name.split(' ')[0]}</option>
+                  ))}
+                </select>
+                {(taskSearch || taskPrioFilter !== 'all' || taskAssigneeFilter !== 'all') && (
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+                    onClick={() => { setTaskSearch(''); setTaskPrioFilter('all'); setTaskAssigneeFilter('all'); }}>
+                    ✕ Filter zurücksetzen
+                  </button>
+                )}
+                {filteredTasks.length !== tasks.length && (
+                  <span style={{ fontSize: 12, color: 'var(--text-4)' }}>{filteredTasks.length}/{tasks.length} Tasks</span>
+                )}
+              </div>
+
               {/* Bulk action bar */}
               {selectedIds.size > 0 && (
                 <div className="card row gap-2" style={{ padding: '8px 14px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -759,12 +803,12 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                 </div>
               )}
               {/* Phase-grouped view for event projects */}
-              {project.division === 'events' && tasks.some((t) => t.tags?.length) ? (() => {
-                const phases = [...new Set(tasks.map((t) => t.tags?.[0] ?? 'Allgemein'))];
+              {project.division === 'events' && filteredTasks.some((t) => t.tags?.length) ? (() => {
+                const phases = [...new Set(filteredTasks.map((t) => t.tags?.[0] ?? 'Allgemein'))];
                 return (
                   <div className="col gap-3">
                     {phases.map((phase) => {
-                      const phaseTasks = tasks.filter((t) => (t.tags?.[0] ?? 'Allgemein') === phase);
+                      const phaseTasks = filteredTasks.filter((t) => (t.tags?.[0] ?? 'Allgemein') === phase);
                       const done = phaseTasks.filter((t) => t.status === 'Done').length;
                       const pct  = Math.round((done / phaseTasks.length) * 100);
                       return (
@@ -817,7 +861,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {tasks.map((t) => {
+                    {filteredTasks.map((t) => {
                       const a = data.members.find((u) => u.id === t.assignee);
                       const waiting = data.members.find((u) => u.id === t.waitingOn);
                       const td = dueLabel(t.due);

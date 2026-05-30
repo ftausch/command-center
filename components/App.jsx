@@ -64,6 +64,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [focusArea, setFocusArea] = useState('all');
+  const [showFocusModal, setShowFocusModal] = useState(false);
   const gPending = useRef(false);
   const gTimer = useRef(null);
 
@@ -159,12 +160,19 @@ export function App() {
     else delete document.body.dataset.brand;
   }, [workspace]);
 
-  // Focus preference — load from localStorage
+  // Focus preference — load from localStorage, show modal if not set
   useEffect(() => {
-    if (!workspace || !me?.id) return;
+    // Wait until workspace is fully loaded (data.members populated = supabase ready)
+    if (!workspace || !me?.id || loading) return;
     const stored = getFocusPreference(workspace, me.id);
-    setFocusArea(stored ?? 'all');
-  }, [workspace, me?.id]);
+    if (stored) {
+      setFocusArea(stored);
+    } else if (myRole === 'member' || myRole === 'manager') {
+      // Show once for non-admin members who haven't chosen yet
+      setShowFocusModal(true);
+    }
+    // Owners/admins default to 'all' — no modal needed
+  }, [workspace, me?.id, loading, myRole]);
 
   // Sidebar counts
   const counts = useMemo(() => {
@@ -354,6 +362,13 @@ export function App() {
       <MobileBottomNav route={route} setRoute={setRoute} />
       <BrowserNotifications />
       {quickCaptureOpen && <QuickCaptureModal onClose={() => setQuickCaptureOpen(false)} />}
+      {showFocusModal && workspace && me?.id && (
+        <FocusOnboarding onDone={(focus) => {
+          setFocusPreference(workspace, me.id, focus);
+          setFocusArea(focus);
+          setShowFocusModal(false);
+        }} />
+      )}
     </div>
   );
 }

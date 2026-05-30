@@ -62,21 +62,14 @@ const OPTIONS = [
 ];
 
 export function FocusOnboarding({ onDone }) {
-  const { currentWorkspaceId, me } = useWorkspace();
   const [selected, setSelected] = useState(null);
   const [saving,   setSaving]   = useState(false);
 
-  const save = async () => {
+  const save = () => {
     if (!selected) return;
     setSaving(true);
-    setFocusPreference(currentWorkspaceId, me?.id, selected);
-    // Best-effort sync to profile specialty metadata
-    try {
-      const { updateMyProfile } = await import('@/lib/actions/profile');
-      await updateMyProfile({ workspaceId: currentWorkspaceId, focusArea: selected });
-    } catch {}
-    setSaving(false);
-    onDone(selected);
+    // Storage is handled by the parent (App.jsx) via onDone callback
+    setTimeout(() => { setSaving(false); onDone(selected); }, 200);
   };
 
   return (
