@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 import { TODAY, dueLabel, eventColor, formatDate, parseDate } from '@/lib/utils';
+import { createTask } from '@/lib/actions/tasks';
 
 const TODAY_STR = [
   TODAY.getFullYear(),
@@ -30,11 +31,15 @@ function nextMonth(m) {
 }
 
 export function CalendarScreen({ setRoute }) {
-  const { currentWorkspace: brand, data } = useWorkspace();
+  const { currentWorkspace: brand, currentWorkspaceId, data } = useWorkspace();
   const filterByDivision = useDivisionFilter();
   const [month, setMonth] = useState({ year: TODAY.getFullYear(), mo: TODAY.getMonth() });
-  const [drawerTask, setDrawerTask] = useState(null);
-  const [drawerEpId, setDrawerEpId] = useState(null);
+  const [drawerTask,   setDrawerTask]   = useState(null);
+  const [drawerEpId,   setDrawerEpId]   = useState(null);
+  const [quickTaskDay,  setQuickTaskDay]  = useState(null); // YYYY-MM-DD
+  const [quickTitle,    setQuickTitle]    = useState('');
+  const [quickProject,  setQuickProject]  = useState('');
+  const [quickSaving,   setQuickSaving]   = useState(false);
 
   const monthLabel = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][month.mo];
 
@@ -120,6 +125,27 @@ export function CalendarScreen({ setRoute }) {
       });
     }
 
+    // Confirmed meetings from AssistantHub scheduling tab
+    const assistCache = (() => {
+      try { return JSON.parse(sessionStorage.getItem(`cc.assist.${data.members[0]?.workspaceId ?? ''}`) ?? '[]'); }
+      catch { return []; }
+    })();
+    assistCache.forEach((item) => {
+      const cd = item.metadata?.confirmedDate;
+      if (!cd || item.status === 'done' || item.status === 'cancelled') return;
+      const dateStr = cd.slice(0, 10);
+      evs.push({
+        date: dateStr,
+        type: 'meeting',
+        title: `📅 ${item.title}`,
+        projectId: null,
+        taskId: null,
+        episodeId: null,
+        division: 'general',
+        participants: item.metadata?.participants,
+      });
+    });
+
     return evs.sort((a, b) => a.date.localeCompare(b.date));
   }, [data.tasks, data.projects, data.episodes, filterByDivision]);
 
@@ -145,6 +171,23 @@ export function CalendarScreen({ setRoute }) {
   const todayDay = TODAY.getMonth() === month.mo && TODAY.getFullYear() === month.year
     ? TODAY.getDate()
     : null;
+
+  const saveQuickTask = async () => {
+    if (!quickTitle.trim() || !quickTaskDay) return;
+    const pid = quickProject || data.projects[0]?.id;
+    if (!pid) { setQuickSaving(false); return; }
+    setQuickSaving(true);
+    await createTask({
+      workspaceId: currentWorkspaceId ?? '',
+      projectId: pid,
+      title: quickTitle.trim(),
+      due: quickTaskDay,
+    });
+    setQuickTitle('');
+    setQuickProject('');
+    setQuickTaskDay(null);
+    setQuickSaving(false);
+  };
 
   const onEventClick = (ev, e) => {
     e.stopPropagation();
@@ -191,6 +234,7 @@ export function CalendarScreen({ setRoute }) {
           { t: 'deadline',      label: 'Deadline / Task' },
           { t: 'review',        label: 'Review' },
           { t: 'publish',       label: 'Episode' },
+          { t: 'meeting',       label: 'Meeting' },
         ].map((l) => (
           <div key={l.t} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
             <span className="dot-indicator" style={{ background: eventColor(l.t) }} />
@@ -213,14 +257,28 @@ export function CalendarScreen({ setRoute }) {
             const evs = (d && evByDay[d]) || [];
             const isToday = d === todayDay;
             const isWeekend = i % 7 >= 5;
+            const dayStr = d ? [
+              month.year,
+              String(month.mo + 1).padStart(2, '0'),
+              String(d).padStart(2, '0'),
+            ].join('-') : null;
+            const isQuickDay = dayStr && quickTaskDay === dayStr;
             return (
-              <div key={i} style={{
-                minHeight: 100,
-                borderRight: i % 7 !== 6 ? '1px solid var(--border-soft)' : 'none',
-                borderBottom: i < cells.length - 7 ? '1px solid var(--border-soft)' : 'none',
-                padding: 8,
-                background: isToday ? 'var(--brand-soft)' : isWeekend ? 'var(--bg)' : 'var(--bg-elev)',
-              }}>
+              <div
+                key={i}
+                onClick={() => { if (d) setQuickTaskDay(isQuickDay ? null : dayStr); }}
+                style={{
+                  minHeight: 100,
+                  borderRight: i % 7 !== 6 ? '1px solid var(--border-soft)' : 'none',
+                  borderBottom: i < cells.length - 7 ? '1px solid var(--border-soft)' : 'none',
+                  padding: 8,
+                  background: isQuickDay ? 'var(--brand-soft)' : isToday ? 'var(--brand-soft)' : isWeekend ? 'var(--bg)' : 'var(--bg-elev)',
+                  cursor: d ? 'pointer' : 'default',
+                  outline: isQuickDay ? '2px solid var(--brand)' : 'none',
+                  outlineOffset: -2,
+                  position: 'relative',
+                }}
+              >
                 {d && (
                   <div className="mono" style={{ fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? 'var(--brand)' : 'var(--text-2)', marginBottom: 5 }}>
                     {String(d).padStart(2, '0')}
@@ -247,6 +305,42 @@ export function CalendarScreen({ setRoute }) {
                   ))}
                   {evs.length > 3 && (
                     <div style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 2 }}>+{evs.length - 3} weitere</div>
+                  )}
+                  {isQuickDay && (
+                    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <input
+                        autoFocus
+                        className="input"
+                        placeholder="Task-Titel…"
+                        value={quickTitle}
+                        onChange={(e) => setQuickTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveQuickTask();
+                          if (e.key === 'Escape') { setQuickTaskDay(null); setQuickTitle(''); setQuickProject(''); }
+                        }}
+                        style={{ fontSize: 11, height: 24, padding: '0 6px', width: '100%' }}
+                        disabled={quickSaving}
+                      />
+                      <select
+                        className="input"
+                        value={quickProject}
+                        onChange={(e) => setQuickProject(e.target.value)}
+                        style={{ fontSize: 11, height: 22, padding: '0 4px', width: '100%' }}
+                        disabled={quickSaving}
+                      >
+                        {data.projects.filter(p => p.status !== 'Done').map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn btn-brand btn-sm"
+                        style={{ fontSize: 10, height: 20, padding: '0 6px' }}
+                        onClick={saveQuickTask}
+                        disabled={quickSaving || !quickTitle.trim()}
+                      >
+                        {quickSaving ? '…' : '+ Task'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
