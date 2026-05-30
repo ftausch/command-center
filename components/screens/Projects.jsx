@@ -149,7 +149,8 @@ export function ProjectsScreen({ setRoute }) {
               const due = dueLabel(p.due);
               const projTasks = allTasks.filter((t) => t.projectId === p.id);
               const pProgress = projectProgress(projTasks);
-              const health = p.status !== 'Done' ? projectHealthScore(p, projTasks) : null;
+              const allDone = projTasks.length > 0 && projTasks.every(t => t.status === 'Done');
+              const health = (p.status !== 'Done' && !allDone) ? projectHealthScore(p, projTasks) : null;
               return (
                 <tr key={p.id} onClick={() => setRoute('project:' + p.id)} style={{ cursor: 'pointer' }}>
                   <td style={{ minWidth: 240 }}>
@@ -196,6 +197,8 @@ export function ProjectsScreen({ setRoute }) {
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: eventHealthColor(health.score), display: 'inline-block', flexShrink: 0 }} />
                         {health.score === 'green' ? 'Gut' : health.score === 'yellow' ? 'Warnung' : 'Kritisch'}
                       </span>
+                    ) : allDone ? (
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--success)' }}>✅ Fertig</span>
                     ) : (
                       <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>—</span>
                     )}

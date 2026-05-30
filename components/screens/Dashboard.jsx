@@ -231,6 +231,37 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
 
       {dashTab !== 'focus' && dashTab !== 'week' && (
       <>
+      {/* ── Jetzt wichtig ───────────────────────────────────────────────── */}
+      {(() => {
+        const urgent = myOpen.filter(t => daysUntil(t.due) <= 0);
+        const blocked = allTasks.filter(t => t.status === 'Blocked');
+        const done100 = data.projects.filter(p => {
+          const pt = data.tasks.filter(x => x.projectId === p.id);
+          return pt.length > 0 && pt.every(x => x.status === 'Done') && p.status !== 'Done';
+        });
+        if (urgent.length === 0 && blocked.length === 0 && done100.length === 0) return null;
+        return (
+          <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap', padding: '10px 14px', background: 'var(--danger-bg,#fef2f2)', borderRadius: 10, border: '1px solid #fca5a520' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)', alignSelf: 'center' }}>⚡ Jetzt:</span>
+            {urgent.length > 0 && (
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--danger)' }} onClick={() => setDashTab('focus')}>
+                🔴 {urgent.length} Task{urgent.length > 1 ? 's' : ''} überfällig
+              </button>
+            )}
+            {blocked.length > 0 && (
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--warning)' }} onClick={() => setRoute('projects')}>
+                ⛔ {blocked.length} Task{blocked.length > 1 ? 's' : ''} blockiert
+              </button>
+            )}
+            {done100.map(p => (
+              <button key={p.id} className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--success)' }} onClick={() => setRoute('project:' + p.id)}>
+                📦 {p.name} — bereit zum Archivieren
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* ── Schnellzugriff ──────────────────────────────────────────────── */}
       <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
         {[

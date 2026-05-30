@@ -31,6 +31,50 @@ const STATUS_COLOR = {
   'To Do':       'var(--info)',
 };
 
+// ── Project Notes ─────────────────────────────────────────────────────────
+
+function ProjectNotes({ projectId }) {
+  const KEY = `cc.notes.${projectId}`;
+  const [text, setText] = useState(() => {
+    try { return localStorage.getItem(KEY) ?? ''; } catch { return ''; }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    try { localStorage.setItem(KEY, text); } catch {}
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
+  return (
+    <div className="card card-pad col gap-3">
+      <div className="row between items-center">
+        <div>
+          <div className="h3">📝 Projekt-Notizen</div>
+          <div className="meta mt-1">Freitext-Notizen, Links, Ideen — nur auf diesem Gerät gespeichert</div>
+        </div>
+        {saved && <span style={{ fontSize: 12.5, color: 'var(--success)', fontWeight: 500 }}>✓ Gespeichert</span>}
+      </div>
+      <textarea
+        className="input"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        placeholder={'Notizen, Links, offene Fragen, Ideen...\n\nMarkdown möglich:\n# Überschrift\n- Aufzählung\n**Fett** / *Kursiv*'}
+        style={{ resize: 'vertical', minHeight: 300, fontSize: 13, lineHeight: 1.6, fontFamily: 'var(--font-mono)' }}
+      />
+      <div className="row gap-2">
+        <button className="btn btn-brand btn-sm" onClick={save}>Speichern</button>
+        {text && (
+          <button className="btn btn-ghost btn-sm" onClick={() => {
+            navigator.clipboard.writeText(text).catch(() => {});
+          }}>📋 Kopieren</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Copy project link ─────────────────────────────────────────────────────
 
 function CopyLinkButton({ projectId }) {
@@ -750,6 +794,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
 
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>
+        <div className={`tab ${tab === 'notes' ? 'active' : ''}`} onClick={() => setTab('notes')}>📝 Notizen</div>
         <div className={`tab ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>📅 Timeline</div>
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
         <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
@@ -933,6 +978,10 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
               </div>
               )}
             </div>
+          )}
+
+          {tab === 'notes' && (
+            <ProjectNotes projectId={projectId} />
           )}
 
           {tab === 'timeline' && (
