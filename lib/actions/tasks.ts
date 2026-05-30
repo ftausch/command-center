@@ -319,10 +319,15 @@ export async function markTaskDone(input: {
     text: `✅ ${name} completed task: "${task?.title ?? input.taskId}"`,
   });
 
-  // Fire outbound webhook for automation (e.g. Aufnahme done → create next tasks)
+  // Fire outbound webhook + auto-archive project if all tasks done
+  const { data: fullTask } = await supabase
+    .from('tasks')
+    .select('project_id, episode_id, assignee_id')
+    .eq('id', input.taskId)
+    .maybeSingle();
+
   if (task?.title) {
     const { OutboundEvents } = await import('@/lib/integrations/outbound');
-    const { data: fullTask } = await supabase.from('tasks').select('project_id, episode_id, assignee_id').eq('id', input.taskId).maybeSingle();
     OutboundEvents.taskDone(ctx.uuid, {
       id:        input.taskId,
       title:     task.title,
@@ -332,7 +337,37 @@ export async function markTaskDone(input: {
     }).catch(() => {});
   }
 
-  return { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
+  // Auto-archive: if all project tasks are Done, set project status to Done
+  let archivedProjectId: string | null = null;
+  if (fullTask?.project_id) {
+    const { count } = await supabase
+      .from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', fullTask.project_id)
+      .neq('status', 'Done');
+
+    if (count === 0) {
+      // All tasks done — archive the project
+      const { error: archErr } = await supabase
+        .from('projects')
+        .update({ status: 'Done' })
+        .eq('id', fullTask.project_id)
+        .eq('workspace_id', ctx.uuid)
+        .neq('status', 'Done');
+
+      if (!archErr) {
+        archivedProjectId = fullTask.project_id;
+        await postSlackNotification({
+          workspaceUuid: ctx.uuid,
+          text: `📦 Projekt automatisch archiviert — alle Tasks erledigt!`,
+        });
+      }
+    }
+  }
+
+  const result: any = { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
+  if (archivedProjectId) result.archivedProjectId = archivedProjectId;
+  return result;
 }
 
 export async function markTaskBlocked(input: {

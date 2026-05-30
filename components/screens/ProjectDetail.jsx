@@ -297,7 +297,8 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
     setEditingDesc(false);
   };
 
-  const [showRecapPrompt, setShowRecapPrompt] = useState(false);
+  const [showRecapPrompt,   setShowRecapPrompt]   = useState(false);
+  const [showArchivedBanner, setShowArchivedBanner] = useState(false);
   const [recapSlackPending, setRecapSlackPending] = useState(false);
   const [recapSlackSent,    setRecapSlackSent]    = useState(false);
 
@@ -676,6 +677,27 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         />
       </div>
 
+      {/* ── Auto-archive banner ──────────────────────────────────────── */}
+      {showArchivedBanner && (
+        <div style={{
+          marginBottom: 16, padding: '12px 18px', borderRadius: 10,
+          background: '#f0fdf4', border: '1px solid #86efac',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--success)', marginBottom: 2 }}>
+              📦 Projekt automatisch archiviert
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              Alle Tasks erledigt — das Projekt wurde auf "Done" gesetzt. Es bleibt für Korrekturen erhalten.
+            </div>
+          </div>
+          <button className="btn btn-quiet btn-icon" onClick={() => setShowArchivedBanner(false)}>
+            <I.x size={12} />
+          </button>
+        </div>
+      )}
+
       {/* ── Recap Automation Prompt ─────────────────────────────────── */}
       {showRecapPrompt && (
         <div style={{
@@ -883,7 +905,13 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
                               onChange={async (e) => {
                                 const next = e.target.value;
                                 updateTaskInCache(t.id, { status: next });
-                                await changeTaskStatus({ taskId: t.id, workspaceId: currentWorkspaceId, status: next });
+                                if (next === 'Done') {
+                                  const { markTaskDone } = await import('@/lib/actions/tasks');
+                                  const r = await markTaskDone({ taskId: t.id, workspaceId: currentWorkspaceId, from: t.status });
+                                  if (r.archivedProjectId) { updateProjectInCache(r.archivedProjectId, { status: 'Done' }); setShowArchivedBanner(true); }
+                                } else {
+                                  await changeTaskStatus({ taskId: t.id, workspaceId: currentWorkspaceId, status: next });
+                                }
                               }}
                             >
                               {['Backlog','To Do','In Progress','Review','Blocked','Done'].map(s => (
