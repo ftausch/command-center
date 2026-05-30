@@ -9,6 +9,8 @@ const VALID_SPECIALTIES = ['host','editor','thumbnail','shownotes','social','aud
 export async function updateMyProfile(input: {
   fullName?: string;
   specialty?: string;
+  workspaceId?: string;
+  focusArea?: string;
 }): Promise<ActionResult<{ fullName: string }>> {
   const supabase = createClient();
   if (!supabase) return { ok: false, error: 'Nicht konfiguriert.' };
@@ -18,6 +20,15 @@ export async function updateMyProfile(input: {
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.fullName  !== undefined) row.full_name = input.fullName.trim() || null;
   if (input.specialty !== undefined) row.specialty = input.specialty || null;
+
+  // Store focusArea in metadata jsonb if the column exists, otherwise best-effort
+  if (input.focusArea !== undefined) {
+    try {
+      const { data: existing } = await supabase.from('profiles').select('metadata').eq('id', u.id).maybeSingle();
+      const meta = (existing?.metadata as Record<string, unknown>) ?? {};
+      row.metadata = { ...meta, focusArea: input.focusArea };
+    } catch { /* metadata column may not exist yet */ }
+  }
 
   const { error } = await supabase.from('profiles').update(row).eq('id', u.id);
   if (error) return { ok: false, error: error.message };

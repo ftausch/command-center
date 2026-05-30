@@ -36,7 +36,7 @@ function useActivityUnread(workspaceId, route) {
   }).length;
 }
 
-export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose }) {
+export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen, onMobileClose, focusArea = 'all' }) {
   const { currentWorkspace: brand, currentWorkspaceId, data, myRole, division, setDivision, me } = useWorkspace();
   const canCreateTask = myRole === 'owner' || myRole === 'admin' || myRole === 'manager' || myRole === 'member';
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -67,6 +67,14 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   );
 
   const closeAndNav = (id) => { setRoute(id); onMobileClose?.(); };
+
+  // Focus-based visibility
+  const showPodcast   = focusArea === 'all' || focusArea === 'podcast' || focusArea === 'both';
+  const showEvents    = focusArea === 'all' || focusArea === 'events'  || focusArea === 'both';
+  const showAssistenz = focusArea === 'all' || focusArea === 'assistenz' || myRole === 'owner' || myRole === 'admin' || myRole === 'manager';
+  const showOps       = myRole === 'owner' || myRole === 'admin';
+  const showWork      = focusArea !== 'assistenz' || myRole === 'owner' || myRole === 'admin' || myRole === 'manager';
+  const showTeam      = focusArea === 'all' || myRole === 'owner' || myRole === 'admin';
 
   const navMain = [
     { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
@@ -130,7 +138,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         ))}
 
         {/* ── Podcast ───────────────────────────────────────────── */}
-        {brand.capabilities?.podcast !== false && (
+        {brand.capabilities?.podcast !== false && showPodcast && (
           <>
             <SectionLabel id="podcast" label="Podcast" />
             {!collapsed.podcast && <>
@@ -145,7 +153,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         )}
 
         {/* ── Events ────────────────────────────────────────────── */}
-        {brand.capabilities?.events && (
+        {brand.capabilities?.events && showEvents && (
           <>
             <SectionLabel id="events" label="Events" />
             {!collapsed.events && <>
@@ -163,7 +171,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         )}
 
         {/* ── Assistenz ─────────────────────────────────────────── */}
-        {(myRole === 'owner' || myRole === 'admin' || myRole === 'manager') && (
+        {(myRole === 'owner' || myRole === 'admin' || myRole === 'manager') && showAssistenz && (
           <>
             <SectionLabel id="assistenz" label="Assistenz" />
             {!collapsed.assistenz && (
@@ -175,7 +183,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         )}
 
         {/* ── Operations ────────────────────────────────────────── */}
-        {(myRole === 'owner' || myRole === 'admin') && (
+        {showOps && (
           <>
             <SectionLabel id="operations" label="Operations" />
             {!collapsed.operations && <>
@@ -196,8 +204,8 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         )}
 
         {/* ── Team ──────────────────────────────────────────────── */}
-        <SectionLabel id="team" label="Team" />
-        {!collapsed.team && navWork.map(n => (
+        {showTeam && <SectionLabel id="team" label="Team" />}
+        {showTeam && !collapsed.team && navWork.map(n => (
           <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
             {n.icon}
             <span>{n.label}</span>

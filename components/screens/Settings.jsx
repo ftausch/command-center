@@ -14,14 +14,18 @@ import { updateWorkspace } from '@/lib/actions/workspaces';
 import { updateProject } from '@/lib/actions/projects';
 import { updateMyProfile } from '@/lib/actions/profile';
 import { CAN } from '@/lib/roles';
+import { getFocusPreference, setFocusPreference, FocusOnboarding, FOCUS_KEY } from '@/components/FocusOnboarding';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand, myRole, me } = useWorkspace();
   const [section, setSection] = useState('profile');
 
+  const [showFocusChange, setShowFocusChange] = useState(false);
+
   const sections = [
     { id: 'profile',    label: 'Mein Profil',   icon: <I.user size={14} /> },
     { id: 'appearance', label: 'Darstellung',   icon: <I.zap size={14} /> },
+    { id: 'focus',      label: 'Mein Fokus',    icon: <span style={{ fontSize: 14 }}>🎯</span> },
     { id: 'workspace',  label: 'Workspace',     icon: <I.folder size={14} /> },
     { id: 'members',    label: 'Team & Roles',  icon: <I.team size={14} /> },
     { id: 'slack',      label: 'Slack',         icon: <I.slack size={14} /> },
@@ -55,6 +59,18 @@ export function SettingsScreen() {
         <div>
           {section === 'profile'    && <ProfileSection me={me} />}
           {section === 'appearance' && <AppearanceSection />}
+          {section === 'focus' && (
+            <div className="col gap-4">
+              <div>
+                <div className="h3 mb-1">🎯 Mein Fokus</div>
+                <div className="meta">Legt fest welche Bereiche du in der Sidebar siehst.</div>
+              </div>
+              <FocusOnboarding onDone={(focus) => {
+                setFocusPreference(workspace, me?.id, focus);
+                window.location.reload();
+              }} />
+            </div>
+          )}
           {section === 'slack'      && <SlackSection />}
           {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
           {section === 'members'   && <MembersSection myRole={myRole} />}

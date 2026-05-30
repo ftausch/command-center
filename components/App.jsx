@@ -10,6 +10,7 @@ import { useWorkspace } from '@/components/WorkspaceProvider';
 import { Sidebar, Topbar, MobileBottomNav } from '@/components/shell';
 import { BrowserNotifications } from '@/components/BrowserNotifications';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
+import { FocusOnboarding, getFocusPreference, setFocusPreference } from '@/components/FocusOnboarding';
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
@@ -62,6 +63,8 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [focusArea, setFocusArea] = useState(null);
+  const [showFocusOnboarding, setShowFocusOnboarding] = useState(false);
   const gPending = useRef(false);
   const gTimer = useRef(null);
 
@@ -156,6 +159,21 @@ export function App() {
     if (workspace) document.body.dataset.brand = workspace;
     else delete document.body.dataset.brand;
   }, [workspace]);
+
+  // Focus preference — load from localStorage, show onboarding if not set
+  useEffect(() => {
+    if (!currentWorkspaceId || !me?.id) return;
+    const stored = getFocusPreference(currentWorkspaceId, me.id);
+    if (stored) {
+      setFocusArea(stored);
+    } else if (myRole === 'member' || myRole === 'manager') {
+      // Only show onboarding for non-admin members (owners/admins see everything)
+      setShowFocusOnboarding(true);
+    } else {
+      // Owners and admins default to 'all'
+      setFocusArea('all');
+    }
+  }, [currentWorkspaceId, me?.id, myRole]);
 
   // Sidebar counts
   const counts = useMemo(() => {
@@ -290,6 +308,7 @@ export function App() {
         counts={counts}
         mobileOpen={sidebarOpen}
         onMobileClose={() => setSidebarOpen(false)}
+        focusArea={focusArea ?? 'all'}
       />
       <main className="main">
         <Topbar
@@ -344,6 +363,9 @@ export function App() {
       <MobileBottomNav route={route} setRoute={setRoute} />
       <BrowserNotifications />
       {quickCaptureOpen && <QuickCaptureModal onClose={() => setQuickCaptureOpen(false)} />}
+      {showFocusOnboarding && (
+        <FocusOnboarding onDone={(focus) => { setFocusArea(focus); setShowFocusOnboarding(false); }} />
+      )}
     </div>
   );
 }
