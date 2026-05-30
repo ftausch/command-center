@@ -63,8 +63,7 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
-  const [focusArea, setFocusArea] = useState(null);
-  const [showFocusOnboarding, setShowFocusOnboarding] = useState(false);
+  const [focusArea, setFocusArea] = useState('all');
   const gPending = useRef(false);
   const gTimer = useRef(null);
 
@@ -160,18 +159,12 @@ export function App() {
     else delete document.body.dataset.brand;
   }, [workspace]);
 
-  // Focus preference — load from localStorage, show onboarding if not set
+  // Focus preference — load from localStorage
   useEffect(() => {
     if (!workspace || !me?.id) return;
     const stored = getFocusPreference(workspace, me.id);
-    if (stored) {
-      setFocusArea(stored);
-    } else if (myRole === 'member' || myRole === 'manager') {
-      setShowFocusOnboarding(true);
-    } else {
-      setFocusArea('all');
-    }
-  }, [workspace, me?.id, myRole]);
+    setFocusArea(stored ?? 'all');
+  }, [workspace, me?.id]);
 
   // Sidebar counts
   const counts = useMemo(() => {
@@ -361,9 +354,6 @@ export function App() {
       <MobileBottomNav route={route} setRoute={setRoute} />
       <BrowserNotifications />
       {quickCaptureOpen && <QuickCaptureModal onClose={() => setQuickCaptureOpen(false)} />}
-      {showFocusOnboarding && (
-        <FocusOnboarding onDone={(focus) => { setFocusArea(focus); setShowFocusOnboarding(false); }} />
-      )}
     </div>
   );
 }
