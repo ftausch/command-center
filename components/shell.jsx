@@ -148,6 +148,9 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
               <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
                 <I.kanban size={16} /><span>Episode Pipeline</span>
               </div>
+              <div className={`nav-item ${route === 'newsletter' ? 'active' : ''}`} onClick={() => closeAndNav('newsletter')}>
+                <span style={{ fontSize: 15 }}>✉️</span><span>Newsletter</span>
+              </div>
             </>}
           </>
         )}

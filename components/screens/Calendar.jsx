@@ -14,6 +14,7 @@ import { TaskDrawer } from '@/components/TaskDrawer';
 import { EpisodeDrawer } from '@/components/EpisodeDrawer';
 import { TODAY, dueLabel, eventColor, formatDate, parseDate } from '@/lib/utils';
 import { createTask } from '@/lib/actions/tasks';
+import { getMilestones } from '@/components/screens/ProjectDetail';
 
 const TODAY_STR = [
   TODAY.getFullYear(),
@@ -125,6 +126,23 @@ export function CalendarScreen({ setRoute }) {
       });
     }
 
+    // Milestones from localStorage
+    filteredProjects.forEach((p) => {
+      const ms = getMilestones(p.id);
+      ms.forEach((m) => {
+        if (m.done) return;
+        evs.push({
+          date: m.date,
+          type: 'milestone',
+          title: `🏁 ${m.title}`,
+          projectId: p.id,
+          taskId: null,
+          episodeId: null,
+          division: p.division ?? 'general',
+        });
+      });
+    });
+
     // Confirmed meetings from AssistantHub scheduling tab
     const assistCache = (() => {
       try { return JSON.parse(sessionStorage.getItem(`cc.assist.${data.members[0]?.workspaceId ?? ''}`) ?? '[]'); }
@@ -235,6 +253,7 @@ export function CalendarScreen({ setRoute }) {
           { t: 'review',        label: 'Review' },
           { t: 'publish',       label: 'Episode' },
           { t: 'meeting',       label: 'Meeting' },
+          { t: 'milestone',     label: 'Meilenstein' },
         ].map((l) => (
           <div key={l.t} className="row gap-2" style={{ fontSize: 12, color: 'var(--text-2)' }}>
             <span className="dot-indicator" style={{ background: eventColor(l.t) }} />

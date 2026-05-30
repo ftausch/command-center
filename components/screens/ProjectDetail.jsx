@@ -96,11 +96,12 @@ function CopyLinkButton({ projectId }) {
 
 // ── Gantt / Timeline view ─────────────────────────────────────────────────
 
-function GanttView({ tasks, onOpenTask }) {
+function GanttView({ tasks, onOpenTask, projectId }) {
+  const milestones = projectId ? getMilestones(projectId) : [];
   const withDue  = tasks.filter(t => t.due).sort((a, b) => a.due.localeCompare(b.due));
   const noDue    = tasks.filter(t => !t.due);
 
-  if (withDue.length === 0) {
+  if (withDue.length === 0 && milestones.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-4)', fontSize: 13 }}>
         <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
@@ -109,8 +110,12 @@ function GanttView({ tasks, onOpenTask }) {
     );
   }
 
-  const minDate = new Date(withDue[0].due + 'T00:00:00');
-  const maxDate = new Date(withDue[withDue.length - 1].due + 'T00:00:00');
+  const allDates = [
+    ...withDue.map(t => t.due),
+    ...milestones.map(m => m.date),
+  ].filter(Boolean).sort();
+  const minDate = new Date((allDates[0] ?? withDue[0]?.due ?? new Date().toISOString().slice(0,10)) + 'T00:00:00');
+  const maxDate = new Date((allDates[allDates.length - 1] ?? withDue[withDue.length - 1]?.due ?? new Date().toISOString().slice(0,10)) + 'T00:00:00');
   maxDate.setDate(maxDate.getDate() + 2);
   minDate.setDate(minDate.getDate() - 1);
   const totalDays = Math.max(1, (maxDate - minDate) / 86400000);
@@ -191,6 +196,37 @@ function GanttView({ tasks, onOpenTask }) {
             + {noDue.length} Tasks ohne Datum
           </div>
         )}
+
+        {milestones.length > 0 && (
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-4)', marginBottom: 6, paddingLeft: 0, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Meilensteine</div>
+            {milestones.map((m) => {
+              const p = pct(m.date);
+              const isToday = m.date === today.toISOString().slice(0,10);
+              return (
+                <div key={m.id} className="row gap-2 items-center" style={{ minHeight: 28, opacity: m.done ? 0.5 : 1 }}>
+                  <div style={{ width: 210, flexShrink: 0, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: m.done ? 'var(--text-4)' : 'var(--brand)', textDecoration: m.done ? 'line-through' : 'none' }}>
+                    🏁 {m.title}
+                  </div>
+                  <div style={{ flex: 1, position: 'relative', height: 20, background: 'var(--bg-sunk)', borderRadius: 4 }}>
+                    <div style={{ position: 'absolute', left: `${todayPct}%`, top: 0, bottom: 0, width: 1, background: 'var(--danger)', opacity: 0.5, zIndex: 2 }} />
+                    <div style={{
+                      position: 'absolute', left: `${p}%`, top: '50%',
+                      width: 10, height: 10,
+                      background: m.done ? 'var(--text-4)' : 'var(--brand)',
+                      transform: 'translate(-50%, -50%) rotate(45deg)',
+                      zIndex: 3,
+                      boxShadow: isToday ? '0 0 0 2px var(--danger)' : undefined,
+                    }} title={`${m.title} · ${m.date}`} />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-4)', width: 60, flexShrink: 0, textAlign: 'right' }}>
+                    {new Date(m.date + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Legend */}
@@ -202,6 +238,9 @@ function GanttView({ tasks, onOpenTask }) {
         ))}
         <span className="row gap-1" style={{ fontSize: 11, color: 'var(--text-3)' }}>
           <span style={{ width: 2, height: 10, background: 'var(--danger)', display: 'inline-block', opacity: 0.6 }} /> Heute
+        </span>
+        <span className="row gap-1" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+          <span style={{ width: 8, height: 8, background: 'var(--brand)', transform: 'rotate(45deg)', display: 'inline-block', marginTop: 1 }} /> Meilenstein
         </span>
       </div>
     </div>
@@ -795,6 +834,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
       <div className="tabs mb-4">
         <div className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>Tasks <span className="count">{tasks.length}</span></div>
         <div className={`tab ${tab === 'notes' ? 'active' : ''}`} onClick={() => setTab('notes')}>📝 Notizen</div>
+        <div className={`tab ${tab === 'milestones' ? 'active' : ''}`} onClick={() => setTab('milestones')}>🏁 Meilensteine</div>
         <div className={`tab ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>📅 Timeline</div>
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
         <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
@@ -984,13 +1024,17 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             <ProjectNotes projectId={projectId} />
           )}
 
+          {tab === 'milestones' && (
+            <ProjectMilestones projectId={projectId} />
+          )}
+
           {tab === 'timeline' && (
             <div className="card" style={{ overflow: 'auto' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
                 <div className="h3">📅 Task-Timeline</div>
                 <div className="meta mt-1">Aufgaben nach Fälligkeitsdatum · {tasks.filter(t => t.due).length} mit Datum</div>
               </div>
-              <GanttView tasks={tasks} onOpenTask={setDrawerTaskId} />
+              <GanttView tasks={tasks} onOpenTask={setDrawerTaskId} projectId={projectId} />
             </div>
           )}
 
@@ -1607,6 +1651,130 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Project Milestones (localStorage) ────────────────────────────────────────
+
+const MS_KEY = (pid) => `cc.milestones.${pid}`;
+
+export function getMilestones(pid) {
+  try { return JSON.parse(localStorage.getItem(MS_KEY(pid)) ?? '[]'); } catch { return []; }
+}
+function saveMilestones(pid, items) {
+  try { localStorage.setItem(MS_KEY(pid), JSON.stringify(items)); } catch {}
+}
+
+function ProjectMilestones({ projectId }) {
+  const [items, setItems]     = useState(() => getMilestones(projectId));
+  const [title, setTitle]     = useState('');
+  const [date, setDate]       = useState('');
+  const [adding, setAdding]   = useState(false);
+
+  const add = () => {
+    if (!title.trim() || !date) return;
+    const next = [...items, { id: crypto.randomUUID(), title: title.trim(), date, done: false }]
+      .sort((a, b) => a.date.localeCompare(b.date));
+    saveMilestones(projectId, next);
+    setItems(next);
+    setTitle(''); setDate(''); setAdding(false);
+  };
+
+  const toggle = (id) => {
+    const next = items.map(m => m.id === id ? { ...m, done: !m.done } : m);
+    saveMilestones(projectId, next);
+    setItems(next);
+  };
+
+  const remove = (id) => {
+    const next = items.filter(m => m.id !== id);
+    saveMilestones(projectId, next);
+    setItems(next);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="card">
+      <div className="row gap-3 items-center" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
+        <div className="h3" style={{ flex: 1 }}>🏁 Meilensteine</div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setAdding(a => !a)}>
+          {adding ? 'Abbrechen' : '+ Meilenstein'}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="row gap-2 items-center" style={{ padding: '10px 18px', borderBottom: '1px solid var(--border-soft)', flexWrap: 'wrap' }}>
+          <input
+            autoFocus
+            className="input"
+            placeholder="Meilenstein-Titel…"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }}
+            style={{ flex: 2, minWidth: 180 }}
+          />
+          <input
+            type="date"
+            className="input"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            style={{ flex: 1, minWidth: 130 }}
+          />
+          <button className="btn btn-brand btn-sm" onClick={add} disabled={!title.trim() || !date}>Speichern</button>
+        </div>
+      )}
+
+      {items.length === 0 && !adding && (
+        <div style={{ padding: '32px 18px', textAlign: 'center', color: 'var(--text-4)', fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🏁</div>
+          Noch keine Meilensteine. Klicke "+ Meilenstein" um den ersten hinzuzufügen.
+        </div>
+      )}
+
+      <div className="col gap-0">
+        {items.map((m, i) => {
+          const daysLeft = Math.round((new Date(m.date + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
+          const overdue  = !m.done && daysLeft < 0;
+          const soon     = !m.done && daysLeft >= 0 && daysLeft <= 7;
+          return (
+            <div
+              key={m.id}
+              className="row gap-3 items-center"
+              style={{ padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)', opacity: m.done ? 0.6 : 1 }}
+            >
+              <button
+                onClick={() => toggle(m.id)}
+                style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+                  border: `2px solid ${m.done ? 'var(--success)' : overdue ? 'var(--danger)' : 'var(--border)'}`,
+                  background: m.done ? 'var(--success)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {m.done && <I.check size={10} color="white" />}
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 500, textDecoration: m.done ? 'line-through' : 'none', color: m.done ? 'var(--text-3)' : 'var(--text-1)' }}>
+                  {m.title}
+                </div>
+                <div className="meta mt-1">
+                  {new Date(m.date + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+              </div>
+              <span style={{
+                fontSize: 11.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
+                background: m.done ? 'var(--bg-sunk)' : overdue ? 'rgba(239,68,68,0.1)' : soon ? 'rgba(245,158,11,0.1)' : 'var(--bg-sunk)',
+                color: m.done ? 'var(--text-4)' : overdue ? 'var(--danger)' : soon ? 'var(--warning)' : 'var(--text-3)',
+              }}>
+                {m.done ? 'Erledigt' : overdue ? `${Math.abs(daysLeft)}d überfällig` : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`}
+              </span>
+              <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11, color: 'var(--text-4)' }} onClick={() => remove(m.id)}>✕</button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

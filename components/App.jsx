@@ -41,6 +41,7 @@ import { OpsHealthScreen } from '@/components/screens/OpsHealth';
 import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
 import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
 import { RiskBoardScreen } from '@/components/screens/RiskBoard';
+import { NewsletterScreen } from '@/components/screens/Newsletter';
 
 export function App() {
   const {
@@ -287,6 +288,10 @@ export function App() {
         break;
       case 'risks':
         screen = <RiskBoardScreen setRoute={setRoute} />;
+        break;
+      case 'newsletter':
+        screen = <NewsletterScreen />;
+        breadcrumb = 'Newsletter';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;
