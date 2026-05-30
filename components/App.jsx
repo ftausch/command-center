@@ -162,18 +162,16 @@ export function App() {
 
   // Focus preference — load from localStorage, show onboarding if not set
   useEffect(() => {
-    if (!currentWorkspaceId || !me?.id) return;
-    const stored = getFocusPreference(currentWorkspaceId, me.id);
+    if (!workspace || !me?.id) return;
+    const stored = getFocusPreference(workspace, me.id);
     if (stored) {
       setFocusArea(stored);
     } else if (myRole === 'member' || myRole === 'manager') {
-      // Only show onboarding for non-admin members (owners/admins see everything)
       setShowFocusOnboarding(true);
     } else {
-      // Owners and admins default to 'all'
       setFocusArea('all');
     }
-  }, [currentWorkspaceId, me?.id, myRole]);
+  }, [workspace, me?.id, myRole]);
 
   // Sidebar counts
   const counts = useMemo(() => {
