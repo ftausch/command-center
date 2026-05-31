@@ -311,6 +311,8 @@ export interface TaskView {
   episodeId?: string;
   blockedByTaskId?: string;
   recurrence?: Recurrence;
+  estimate?: number;
+  sprintId?: string;
 }
 
 export interface ActivityView {

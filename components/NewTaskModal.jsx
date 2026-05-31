@@ -41,6 +41,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
   const [priority, setPriority] = useState('Medium');
   const [due, setDue] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
+  const [estimate, setEstimate] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [recType, setRecType] = useState('weekly');
   const [status, setStatus] = useState('idle'); // idle | submitting | error
@@ -55,6 +56,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
     setPriority('Medium');
     setDue('');
     setAssigneeId(me?.id ?? '');
+    setEstimate('');
     setRecurring(false);
     setRecType('weekly');
     setStatus('idle');
@@ -97,6 +99,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
       priority,
       assigneeId: assigneeId || undefined,
       recurrence: recurring ? { type: recType } : undefined,
+      estimate: estimate !== '' ? Number(estimate) : undefined,
     });
     if (!result.ok || !result.data) {
       setErrorMsg(result.error ?? 'Task konnte nicht angelegt werden');
@@ -195,7 +198,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
               maxLength={300}
             />
 
-            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 80px' }}>
               <select
                 className="input"
                 value={priority}
@@ -214,6 +217,16 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
                 onChange={(e) => setDue(e.target.value)}
                 disabled={status === 'submitting'}
                 title="Deadline (optional)"
+              />
+              <input
+                type="number"
+                className="input"
+                placeholder="SP"
+                min={1} max={99}
+                value={estimate}
+                onChange={(e) => setEstimate(e.target.value)}
+                disabled={status === 'submitting'}
+                title="Story Points (optional)"
               />
             </div>
 

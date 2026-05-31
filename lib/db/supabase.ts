@@ -92,6 +92,9 @@ export function rowToTask(row: any, workspaceSlug: string): TaskView {
     blocker: row.blocker ?? undefined,
     episodeId: row.episode_id ?? undefined,
     blockedByTaskId: row.blocked_by_task_id ?? undefined,
+    recurrence: row.recurrence ?? undefined,
+    estimate: row.estimate ?? undefined,
+    sprintId: row.sprint_id ?? undefined,
   };
 }
 

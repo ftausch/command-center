@@ -44,6 +44,8 @@ import { RiskBoardScreen } from '@/components/screens/RiskBoard';
 import { NewsletterScreen } from '@/components/screens/Newsletter';
 import { RoadmapScreen } from '@/components/screens/Roadmap';
 import { StandupScreen } from '@/components/screens/Standup';
+import { SprintBoardScreen } from '@/components/screens/SprintBoard';
+import { SocialPlannerScreen } from '@/components/screens/SocialPlanner';
 
 export function App() {
   const {
@@ -302,6 +304,14 @@ export function App() {
       case 'standup':
         screen = <StandupScreen />;
         breadcrumb = 'Team Standup';
+        break;
+      case 'sprints':
+        screen = <SprintBoardScreen setRoute={setRoute} />;
+        breadcrumb = 'Sprint-Planung';
+        break;
+      case 'social':
+        screen = <SocialPlannerScreen />;
+        breadcrumb = 'Social Media';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

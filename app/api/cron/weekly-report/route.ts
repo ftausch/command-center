@@ -108,6 +108,39 @@ export async function GET(req: NextRequest) {
         .eq('workspace_id', workspace_id)
         .eq('status', 'Blocked');
 
+      // Active sprint progress
+      const { data: activeSprints } = await admin
+        .from('sprints')
+        .select('id, name, end_date')
+        .eq('workspace_id', workspace_id)
+        .eq('status', 'active')
+        .limit(1);
+      let sprintLine = '';
+      if (activeSprints?.length) {
+        const sp = activeSprints[0];
+        const { count: spTotal } = await admin.from('tasks').select('id', { count: 'exact', head: true }).eq('sprint_id', sp.id);
+        const { count: spDone  } = await admin.from('tasks').select('id', { count: 'exact', head: true }).eq('sprint_id', sp.id).eq('status', 'Done');
+        sprintLine = `🏃 Sprint *${sp.name}*: ${spDone ?? 0}/${spTotal ?? 0} Tasks erledigt (endet ${sp.end_date})`;
+      }
+
+      // Top contributors this week (per-member completions)
+      const { data: completions } = await admin
+        .from('activity_logs')
+        .select('actor_id')
+        .eq('workspace_id', workspace_id)
+        .eq('kind', 'task_completed')
+        .gte('created_at', mondayIso)
+        .lte('created_at', sundayIso + 'T23:59:59Z');
+      const countByActor: Record<string, number> = {};
+      (completions ?? []).forEach((c: any) => { countByActor[c.actor_id] = (countByActor[c.actor_id] ?? 0) + 1; });
+      const { data: profiles } = await admin.from('profiles').select('id, display_name').in('id', Object.keys(countByActor));
+      const topLines = Object.entries(countByActor)
+        .sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([id, n]) => {
+          const name = (profiles ?? []).find((p: any) => p.id === id)?.display_name ?? id.slice(0, 8);
+          return `   • ${name}: ${n} Tasks`;
+        });
+
       const lines: string[] = [
         `📊 *Wochenbericht — ${workspace_name ?? 'Workspace'}*`,
         `_KW ${mondayIso} – ${sundayIso}_`,
@@ -117,8 +150,10 @@ export async function GET(req: NextRequest) {
         openCount ? `📋 ${openCount} Tasks noch offen` : '',
         doneEvents.length ? `🎪 ${doneEvents.map((e: any) => e.name).join(', ')} stattgefunden` : '',
         blockerCount ? `⛔ ${blockerCount} Blocker offen` : '',
+        sprintLine,
+        topLines.length ? `*Top diese Woche:*\n${topLines.join('\n')}` : '',
         '',
-      ].filter((l) => l !== undefined);
+      ].filter(Boolean);
 
       if (nextWeekEvents.length || (nextEpisodes ?? []).length) {
         lines.push('*Nächste Woche:*');

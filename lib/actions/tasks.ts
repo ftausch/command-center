@@ -85,6 +85,7 @@ export async function createTask(input: {
   tags?: string[];
   episodeId?: string;
   recurrence?: Recurrence;
+  estimate?: number;
 }): Promise<ActionResult<TaskView>> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: 'Title is required' };
@@ -136,6 +137,7 @@ export async function createTask(input: {
       tags: input.tags ?? [],
       episode_id: input.episodeId || null,
       recurrence: input.recurrence ?? null,
+      estimate:   input.estimate   ?? null,
     })
     .select()
     .single();
@@ -167,6 +169,7 @@ export async function createTask(input: {
     due: data.due_date ?? '',
     tags: data.tags ?? [],
     recurrence: data.recurrence ?? undefined,
+    estimate:   data.estimate   ?? undefined,
   };
   return {
     ok: true,

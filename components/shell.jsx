@@ -81,6 +81,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
     { id: 'mytasks',   label: 'My Tasks',  icon: <I.task size={16} />, count: counts.myTasks },
     { id: 'projects',  label: 'Projects',  icon: <I.folder size={16} />, count: counts.projects },
     { id: 'roadmap',   label: 'Roadmap',   icon: <I.trend size={16} /> },
+    { id: 'sprints',   label: 'Sprints',   icon: <I.zap size={16} /> },
     { id: 'kanban',    label: 'Board',     icon: <I.kanban size={16} /> },
     { id: 'calendar',  label: 'Calendar',  icon: <I.calendar size={16} /> },
   ];
@@ -152,6 +153,9 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
               </div>
               <div className={`nav-item ${route === 'newsletter' ? 'active' : ''}`} onClick={() => closeAndNav('newsletter')}>
                 <span style={{ fontSize: 15 }}>✉️</span><span>Newsletter</span>
+              </div>
+              <div className={`nav-item ${route === 'social' ? 'active' : ''}`} onClick={() => closeAndNav('social')}>
+                <span style={{ fontSize: 15 }}>📱</span><span>Social Media</span>
               </div>
             </>}
           </>
