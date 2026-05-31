@@ -292,6 +292,9 @@ export interface ProjectView {
   eventMeta?: EventMeta;
 }
 
+export type RecurrenceType = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+export interface Recurrence { type: RecurrenceType; interval?: number; }
+
 export interface TaskView {
   id: string;
   workspace: string;
@@ -307,6 +310,7 @@ export interface TaskView {
   blocker?: string;
   episodeId?: string;
   blockedByTaskId?: string;
+  recurrence?: Recurrence;
 }
 
 export interface ActivityView {

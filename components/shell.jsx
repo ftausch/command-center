@@ -80,11 +80,13 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
     { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
     { id: 'mytasks',   label: 'My Tasks',  icon: <I.task size={16} />, count: counts.myTasks },
     { id: 'projects',  label: 'Projects',  icon: <I.folder size={16} />, count: counts.projects },
+    { id: 'roadmap',   label: 'Roadmap',   icon: <I.trend size={16} /> },
     { id: 'kanban',    label: 'Board',     icon: <I.kanban size={16} /> },
     { id: 'calendar',  label: 'Calendar',  icon: <I.calendar size={16} /> },
   ];
   const navWork = [
     { id: 'team',      label: 'Team',       icon: <I.team size={16} /> },
+    { id: 'standup',   label: 'Standup',    icon: <span style={{ fontSize: 14 }}>☀️</span> },
     { id: 'templates', label: 'Templates',  icon: <I.template size={16} /> },
     { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
   ];

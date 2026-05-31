@@ -42,6 +42,8 @@ import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
 import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
 import { RiskBoardScreen } from '@/components/screens/RiskBoard';
 import { NewsletterScreen } from '@/components/screens/Newsletter';
+import { RoadmapScreen } from '@/components/screens/Roadmap';
+import { StandupScreen } from '@/components/screens/Standup';
 
 export function App() {
   const {
@@ -292,6 +294,14 @@ export function App() {
       case 'newsletter':
         screen = <NewsletterScreen />;
         breadcrumb = 'Newsletter';
+        break;
+      case 'roadmap':
+        screen = <RoadmapScreen setRoute={setRoute} />;
+        breadcrumb = 'Roadmap';
+        break;
+      case 'standup':
+        screen = <StandupScreen />;
+        breadcrumb = 'Team Standup';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

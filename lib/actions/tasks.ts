@@ -23,6 +23,7 @@ import type {
   TaskPriority,
   TaskStatus,
   TaskView,
+  Recurrence,
 } from '@/lib/types';
 
 const ASSIGNEE_ROLES = ['owner', 'admin', 'manager', 'member'] as const;
@@ -59,6 +60,21 @@ function synthActivity(params: {
   };
 }
 
+function nextDueDate(due: string, rec: Recurrence): string {
+  const d = new Date(due + 'T00:00:00');
+  const days = rec.type === 'daily'    ? 1
+             : rec.type === 'weekly'   ? 7
+             : rec.type === 'biweekly' ? 14
+             : rec.type === 'monthly'  ? 0
+             : 7;
+  if (rec.type === 'monthly') {
+    d.setMonth(d.getMonth() + 1);
+  } else {
+    d.setDate(d.getDate() + days);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 export async function createTask(input: {
   workspaceId: string;
   projectId: string;
@@ -68,6 +84,7 @@ export async function createTask(input: {
   priority?: TaskPriority;
   tags?: string[];
   episodeId?: string;
+  recurrence?: Recurrence;
 }): Promise<ActionResult<TaskView>> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: 'Title is required' };
@@ -118,6 +135,7 @@ export async function createTask(input: {
       priority: input.priority ?? 'Medium',
       tags: input.tags ?? [],
       episode_id: input.episodeId || null,
+      recurrence: input.recurrence ?? null,
     })
     .select()
     .single();
@@ -148,6 +166,7 @@ export async function createTask(input: {
     priority: data.priority,
     due: data.due_date ?? '',
     tags: data.tags ?? [],
+    recurrence: data.recurrence ?? undefined,
   };
   return {
     ok: true,
@@ -365,8 +384,40 @@ export async function markTaskDone(input: {
     }
   }
 
+  // Auto-spawn next recurrence if task has a recurrence rule
+  let spawnedTask: TaskView | null = null;
+  const { data: recTask } = await supabase
+    .from('tasks')
+    .select('title, project_id, assignee_id, priority, due_date, recurrence, episode_id')
+    .eq('id', input.taskId).maybeSingle();
+
+  if (recTask?.recurrence && recTask.due_date) {
+    const rec: Recurrence = recTask.recurrence as Recurrence;
+    const nextDue = nextDueDate(recTask.due_date, rec);
+    const { data: newTask } = await supabase.from('tasks').insert({
+      workspace_id: ctx.uuid,
+      project_id:   recTask.project_id,
+      title:        recTask.title,
+      assignee_id:  recTask.assignee_id ?? userId,
+      due_date:     nextDue,
+      priority:     recTask.priority ?? 'Medium',
+      recurrence:   rec,
+      episode_id:   recTask.episode_id ?? null,
+    }).select().single();
+    if (newTask) {
+      spawnedTask = {
+        id: newTask.id, workspace: input.workspaceId,
+        projectId: newTask.project_id, title: newTask.title,
+        assignee: newTask.assignee_id ?? '', status: newTask.status,
+        priority: newTask.priority, due: newTask.due_date ?? '',
+        recurrence: rec,
+      };
+    }
+  }
+
   const result: any = { ok: true, data: { id: input.taskId, status: 'Done' }, activity };
   if (archivedProjectId) result.archivedProjectId = archivedProjectId;
+  if (spawnedTask) result.spawnedTask = spawnedTask;
   return result;
 }
 

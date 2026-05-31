@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, parseDate, projectProgress } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
+import { StandupWidget } from '@/components/screens/Standup';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
@@ -373,6 +374,11 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
           bg={blocked.length > 0 ? 'var(--danger-bg)' : 'var(--success-bg)'}
           onClick={() => setRoute('kanban')}
         />
+      </div>
+
+      {/* ── Team Standup ──────────────────────────────────────────────────── */}
+      <div className="mb-5">
+        <StandupWidget compact={true} />
       </div>
 
       <div className="grid gap-5" style={{ gridTemplateColumns: '1.55fr 1fr' }}>

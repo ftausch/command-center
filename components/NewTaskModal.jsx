@@ -41,6 +41,8 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
   const [priority, setPriority] = useState('Medium');
   const [due, setDue] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
+  const [recurring, setRecurring] = useState(false);
+  const [recType, setRecType] = useState('weekly');
   const [status, setStatus] = useState('idle'); // idle | submitting | error
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -53,6 +55,8 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
     setPriority('Medium');
     setDue('');
     setAssigneeId(me?.id ?? '');
+    setRecurring(false);
+    setRecType('weekly');
     setStatus('idle');
     setErrorMsg(null);
   }, [open, defaultProjectId, me?.id]);
@@ -92,6 +96,7 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
       due: due || undefined,
       priority,
       assigneeId: assigneeId || undefined,
+      recurrence: recurring ? { type: recType } : undefined,
     });
     if (!result.ok || !result.data) {
       setErrorMsg(result.error ?? 'Task konnte nicht angelegt werden');
@@ -228,6 +233,32 @@ export function NewTaskModal({ open, onClose, initialProjectId, onCreated, onNee
                 ))}
               </select>
             )}
+
+            <div className="row gap-2 items-center">
+              <label className="row gap-2 items-center" style={{ cursor: 'pointer', fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={recurring}
+                  onChange={e => setRecurring(e.target.checked)}
+                  disabled={status === 'submitting'}
+                />
+                Wiederkehrend
+              </label>
+              {recurring && (
+                <select
+                  className="input"
+                  value={recType}
+                  onChange={e => setRecType(e.target.value)}
+                  disabled={status === 'submitting'}
+                  style={{ flex: 1 }}
+                >
+                  <option value="daily">Täglich</option>
+                  <option value="weekly">Wöchentlich</option>
+                  <option value="biweekly">Alle 2 Wochen</option>
+                  <option value="monthly">Monatlich</option>
+                </select>
+              )}
+            </div>
 
             <button
               type="submit"

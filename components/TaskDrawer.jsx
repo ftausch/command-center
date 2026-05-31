@@ -219,10 +219,8 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
       if (!r.ok) return setActionError(r.error ?? 'Status konnte nicht geändert werden');
       updateTaskInCache(taskId, { status: 'Done' });
       if (r.activity) pushActivity(r.activity);
-      // Auto-archive: if all project tasks done, update project status in cache
-      if (r.archivedProjectId) {
-        updateProjectInCache(r.archivedProjectId, { status: 'Done' });
-      }
+      if (r.archivedProjectId) updateProjectInCache(r.archivedProjectId, { status: 'Done' });
+      if (r.spawnedTask) addTask(r.spawnedTask);
       return;
     }
     if (next === 'Blocked') {

@@ -839,6 +839,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
         <div className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>Activity <span className="count">{activity.length}</span></div>
         <div className={`tab ${tab === 'comments' ? 'active' : ''}`} onClick={() => setTab('comments')}>Comments <span className="count">{projectComments.length}</span></div>
         <div className={`tab ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')}>Files <span className="count">{project.links?.length ?? 0}</span></div>
+        <div className={`tab ${tab === 'budget' ? 'active' : ''}`} onClick={() => setTab('budget')}>💰 Budget</div>
         {project.division === 'events' && (<>
           <div className={`tab ${tab === 'agenda' ? 'active' : ''}`} onClick={() => setTab('agenda')}>Ablaufplan</div>
           <div className={`tab ${tab === 'attendees' ? 'active' : ''}`} onClick={() => setTab('attendees')}>Gäste</div>
@@ -846,7 +847,6 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
           <div className={`tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>Freigaben</div>
           <div className={`tab ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>Entscheidungen</div>
           <div className={`tab ${tab === 'resources' ? 'active' : ''}`} onClick={() => setTab('resources')}>Ressourcen <span className="count">{projectResources.length}</span></div>
-          <div className={`tab ${tab === 'budget' ? 'active' : ''}`} onClick={() => setTab('budget')}>💰 Budget</div>
           <div className={`tab ${tab === 'recap' ? 'active' : ''}`} onClick={() => setTab('recap')}>Recap</div>
         </>)}
       </div>
@@ -1116,7 +1116,7 @@ export function ProjectDetailScreen({ projectId, setRoute }) {
             </div>
           )}
 
-          {tab === 'budget' && project.division === 'events' && (
+          {tab === 'budget' && (
             <div className="card card-pad">
               <div className="h3 mb-4">💰 Budget-Tracking</div>
               <BudgetPanel

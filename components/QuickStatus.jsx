@@ -18,7 +18,7 @@ const STATUS_COLOR = {
 };
 
 export function QuickStatusPicker({ task, onUpdated, disabled }) {
-  const { currentWorkspaceId, updateTaskInCache, pushActivity } = useWorkspace();
+  const { currentWorkspaceId, updateTaskInCache, pushActivity, addTask, updateProjectInCache } = useWorkspace();
   const [open, setOpen]       = useState(false);
   const [pending, setPending] = useState(false);
   const ref = useRef(null);
@@ -43,6 +43,8 @@ export function QuickStatusPicker({ task, onUpdated, disabled }) {
       if (r.ok) {
         updateTaskInCache(task.id, { status: 'Done' });
         if (r.activity) pushActivity(r.activity);
+        if (r.archivedProjectId) updateProjectInCache(r.archivedProjectId, { status: 'Done' });
+        if (r.spawnedTask) addTask(r.spawnedTask);
         onUpdated?.({ ...task, status: 'Done' });
       }
     } else {
