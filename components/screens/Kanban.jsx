@@ -41,6 +41,7 @@ export function KanbanScreen({ setRoute }) {
   const filterByDivision = useDivisionFilter();
 
   const [projectFilter, setProjectFilter] = useState('all');
+  const [sprintFilter,  setSprintFilter]  = useState('all');
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [drawerTask, setDrawerTask] = useState(null);
   const [activeFilters, setActiveFilters] = useState(new Set());
@@ -111,8 +112,11 @@ export function KanbanScreen({ setRoute }) {
       const slackProjects = new Set(data.projects.filter((p) => p.slackConnected).map((p) => p.id));
       r = r.filter((t) => slackProjects.has(t.projectId));
     }
+    if (sprintFilter !== 'all') {
+      r = sprintFilter === 'none' ? r.filter(t => !t.sprintId) : r.filter(t => t.sprintId === sprintFilter);
+    }
     return r;
-  }, [data.tasks, data.projects, projectFilter, activeFilters, me]);
+  }, [data.tasks, data.projects, projectFilter, activeFilters, me, sprintFilter]);
 
   const grouped = useMemo(() => {
     const g = {};
@@ -178,7 +182,25 @@ export function KanbanScreen({ setRoute }) {
         <button className={`chip ${activeFilters.has('slack') ? 'active' : ''}`} onClick={() => toggleFilter('slack')}>
           Has Slack
         </button>
-        <button className="chip" disabled title="Noch nicht verfügbar"><I.filter size={11} /> Mehr</button>
+        {(() => {
+          const activeSprints = data.tasks
+            .filter(t => t.sprintId)
+            .map(t => t.sprintId)
+            .filter((v, i, a) => a.indexOf(v) === i);
+          if (activeSprints.length === 0) return null;
+          return (
+            <>
+              <div style={{ width: 1, height: 20, background: 'var(--border-soft)' }} />
+              <button className={`chip ${sprintFilter === 'all' ? 'active' : ''}`} onClick={() => setSprintFilter('all')}>Alle Sprints</button>
+              <button className={`chip ${sprintFilter === 'none' ? 'active' : ''}`} onClick={() => setSprintFilter('none')}>Kein Sprint</button>
+              {activeSprints.map(sid => (
+                <button key={sid} className={`chip ${sprintFilter === sid ? 'active' : ''}`} onClick={() => setSprintFilter(sid)}>
+                  Sprint: {sid.slice(0, 6)}…
+                </button>
+              ))}
+            </>
+          );
+        })()}
       </div>
 
       {/* Board */}

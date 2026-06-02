@@ -88,6 +88,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   const navWork = [
     { id: 'team',      label: 'Team',       icon: <I.team size={16} /> },
     { id: 'standup',   label: 'Standup',    icon: <span style={{ fontSize: 14 }}>☀️</span> },
+    { id: 'goals',     label: 'Ziele',      icon: <I.flag size={16} /> },
     { id: 'templates', label: 'Templates',  icon: <I.template size={16} /> },
     { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
   ];

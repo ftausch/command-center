@@ -46,6 +46,7 @@ import { RoadmapScreen } from '@/components/screens/Roadmap';
 import { StandupScreen } from '@/components/screens/Standup';
 import { SprintBoardScreen } from '@/components/screens/SprintBoard';
 import { SocialPlannerScreen } from '@/components/screens/SocialPlanner';
+import { GoalsScreen } from '@/components/screens/Goals';
 
 export function App() {
   const {
@@ -312,6 +313,10 @@ export function App() {
       case 'social':
         screen = <SocialPlannerScreen />;
         breadcrumb = 'Social Media';
+        break;
+      case 'goals':
+        screen = <GoalsScreen />;
+        breadcrumb = 'Ziele & OKRs';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

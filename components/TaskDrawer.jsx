@@ -26,6 +26,8 @@ import {
   listTaskChecklist,
   toggleChecklistItem,
 } from '@/lib/actions/checklist';
+import { listTimeLogs, logTime, deleteTimeLog } from '@/lib/actions/time';
+import { listSprints, assignTaskToSprint } from '@/lib/actions/sprints';
 
 const STATUS_OPTIONS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -93,6 +95,17 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
   // ── Field edits (priority / due / assignee) ───────────────────────────────
   const [fieldPending, setFieldPending] = useState(null);
 
+  // ── Time tracking ────────────────────────────────────────────────────────
+  const [timeLogs,    setTimeLogs]    = useState([]);
+  const [timeInput,   setTimeInput]   = useState('');
+  const [timeNote,    setTimeNote]    = useState('');
+  const [timePending, setTimePending] = useState(false);
+  const [showTimeLog, setShowTimeLog] = useState(false);
+
+  // ── Sprint ────────────────────────────────────────────────────────────────
+  const [sprints,       setSprints]       = useState([]);
+  const [sprintPending, setSprintPending] = useState(false);
+
   // ── Delete ────────────────────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -104,19 +117,24 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     if (!taskId || !workspaceId) {
       setComments([]);
       setChecklist([]);
+      setTimeLogs([]);
       return;
     }
     setCommentsLoading(true);
     setCommentError(null);
     let cancelled = false;
     (async () => {
-      const [c, cl] = await Promise.all([
+      const [c, cl, tl, sp] = await Promise.all([
         listTaskComments({ workspaceId, taskId }),
         listTaskChecklist({ workspaceId, taskId }),
+        listTimeLogs(workspaceId, taskId),
+        listSprints(workspaceId),
       ]);
       if (cancelled || taskIdRef.current !== taskId) return;
       setComments(c.ok && c.data ? c.data : []);
       setChecklist(cl.ok && cl.data ? cl.data : []);
+      setTimeLogs(tl);
+      setSprints(sp);
       setCommentsLoading(false);
       if (!c.ok) setCommentError(c.error ?? 'Kommentare konnten nicht geladen werden');
     })();
@@ -464,6 +482,52 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
                 ))}
             </select>
           </DetailRow>
+
+          <DetailRow label="Story Points">
+            <input
+              type="number" min={1} max={99}
+              className="input"
+              value={task.estimate ?? ''}
+              onChange={(e) => {
+                const v = e.target.value === '' ? null : Number(e.target.value);
+                saveField('estimate', v);
+              }}
+              disabled={fieldPending === 'estimate'}
+              placeholder="—"
+              style={{ height: 28, fontSize: 12.5, width: 70 }}
+            />
+          </DetailRow>
+
+          {sprints.length > 0 && (
+            <DetailRow label="Sprint">
+              <select
+                className="input"
+                value={task.sprintId || ''}
+                onChange={async (e) => {
+                  const sid = e.target.value || null;
+                  setSprintPending(true);
+                  await assignTaskToSprint({ workspaceId, taskId, sprintId: sid });
+                  updateTaskInCache(taskId, { sprintId: sid ?? undefined });
+                  setSprintPending(false);
+                }}
+                disabled={sprintPending}
+                style={{ height: 28, fontSize: 12.5, flex: 1 }}
+              >
+                <option value="">— Kein Sprint —</option>
+                {sprints.filter(s => s.status !== 'completed').map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </DetailRow>
+          )}
+
+          {task.recurrence && (
+            <DetailRow label="Wiederholt">
+              <span style={{ fontSize: 12.5, color: 'var(--brand)' }}>
+                🔁 {{daily:'Täglich',weekly:'Wöchentlich',biweekly:'Alle 2 Wochen',monthly:'Monatlich'}[task.recurrence.type] ?? task.recurrence.type}
+              </span>
+            </DetailRow>
+          )}
         </div>
 
         {/* ── Description ── */}
@@ -612,6 +676,65 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
               <I.plus size={12} /> Add
             </button>
           </div>
+        </div>
+
+        {/* ── Time Tracking ── */}
+        <div className="col gap-2" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14 }}>
+          <div className="row between">
+            <div className="label">Zeit erfassen</div>
+            <div className="row gap-2 items-center">
+              {timeLogs.length > 0 && (
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                  {Math.floor(timeLogs.reduce((s, l) => s + l.minutes, 0) / 60)}h {timeLogs.reduce((s, l) => s + l.minutes, 0) % 60}min gesamt
+                </span>
+              )}
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setShowTimeLog(o => !o)}>
+                {showTimeLog ? 'Schließen' : '+ Zeit'}
+              </button>
+            </div>
+          </div>
+          {showTimeLog && (
+            <div className="row gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+              <input
+                type="number" min={1} max={999} className="input" placeholder="Min." value={timeInput}
+                onChange={e => setTimeInput(e.target.value)} style={{ width: 80, height: 28, fontSize: 12.5 }}
+              />
+              <input
+                className="input" placeholder="Notiz (optional)" value={timeNote}
+                onChange={e => setTimeNote(e.target.value)} style={{ flex: 1, height: 28, fontSize: 12.5 }}
+              />
+              <button
+                className="btn btn-brand btn-sm"
+                disabled={timePending || !timeInput || Number(timeInput) < 1}
+                onClick={async () => {
+                  setTimePending(true);
+                  const r = await logTime({ workspaceId, taskId, minutes: Number(timeInput), note: timeNote || undefined });
+                  if (r.ok && r.data) { setTimeLogs(prev => [r.data, ...prev]); setTimeInput(''); setTimeNote(''); setShowTimeLog(false); }
+                  setTimePending(false);
+                }}
+              >{timePending ? '…' : 'Speichern'}</button>
+            </div>
+          )}
+          {timeLogs.length > 0 && (
+            <div className="col gap-1">
+              {timeLogs.slice(0, 5).map(l => {
+                const user = data.members.find(m => m.id === l.userId);
+                return (
+                  <div key={l.id} className="row gap-2 items-center" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                    <span className="mono" style={{ minWidth: 50 }}>{Math.floor(l.minutes/60) > 0 ? `${Math.floor(l.minutes/60)}h ` : ''}{l.minutes%60 > 0 ? `${l.minutes%60}min` : ''}</span>
+                    <span style={{ color: 'var(--text-4)' }}>{l.loggedDate}</span>
+                    {user && <span>{user.name.split(' ')[0]}</span>}
+                    {l.note && <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>{l.note}</span>}
+                    <button style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}
+                      onClick={async () => {
+                        await deleteTimeLog({ workspaceId, logId: l.id });
+                        setTimeLogs(prev => prev.filter(x => x.id !== l.id));
+                      }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Comments ── */}
