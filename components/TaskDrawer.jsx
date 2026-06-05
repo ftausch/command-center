@@ -28,6 +28,8 @@ import {
 } from '@/lib/actions/checklist';
 import { listTimeLogs, logTime, deleteTimeLog } from '@/lib/actions/time';
 import { listSprints, assignTaskToSprint } from '@/lib/actions/sprints';
+import { createNotification } from '@/lib/actions/notifications';
+import { listTags } from '@/lib/actions/tags';
 
 const STATUS_OPTIONS = ['Backlog', 'To Do', 'In Progress', 'Review', 'Blocked', 'Done'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
@@ -106,6 +108,9 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
   const [sprints,       setSprints]       = useState([]);
   const [sprintPending, setSprintPending] = useState(false);
 
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const [workspaceTags, setWorkspaceTags] = useState([]);
+
   // ── Delete ────────────────────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -124,17 +129,19 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     setCommentError(null);
     let cancelled = false;
     (async () => {
-      const [c, cl, tl, sp] = await Promise.all([
+      const [c, cl, tl, sp, wt] = await Promise.all([
         listTaskComments({ workspaceId, taskId }),
         listTaskChecklist({ workspaceId, taskId }),
         listTimeLogs(workspaceId, taskId),
         listSprints(workspaceId),
+        listTags(workspaceId),
       ]);
       if (cancelled || taskIdRef.current !== taskId) return;
       setComments(c.ok && c.data ? c.data : []);
       setChecklist(cl.ok && cl.data ? cl.data : []);
       setTimeLogs(tl);
       setSprints(sp);
+      setWorkspaceTags(wt);
       setCommentsLoading(false);
       if (!c.ok) setCommentError(c.error ?? 'Kommentare konnten nicht geladen werden');
     })();
@@ -208,6 +215,15 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     setFieldPending(null);
     if (!r.ok) { setActionError(r.error ?? 'Feld konnte nicht gespeichert werden'); return; }
     updateTaskInCache(taskId, { [key]: value });
+    // Notify new assignee
+    if (key === 'assignee' && value && value !== me?.id) {
+      createNotification({
+        workspaceId, userId: value, type: 'assigned',
+        title: `${me?.name ?? 'Jemand'} hat dir einen Task zugewiesen`,
+        body: task?.title ?? '',
+        linkRoute: project ? 'project:' + project.id : 'mytasks',
+      }).catch(() => {});
+    }
   };
 
   const submitComment = async () => {
@@ -224,6 +240,21 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
     setComments((prev) => [...prev, result.data]);
     addTaskCommentToCache(result.data);
     if (result.activity) pushActivity(result.activity);
+    // @mention detection — notify each mentioned member
+    const mentionMatches = body.match(/@([\wÀ-ž]+)/g) ?? [];
+    if (mentionMatches.length > 0) {
+      const names = mentionMatches.map(m => m.slice(1).toLowerCase());
+      data.members
+        .filter(m => names.some(n => m.name.toLowerCase().startsWith(n)) && m.id !== me?.id)
+        .forEach(m => {
+          createNotification({
+            workspaceId, userId: m.id, type: 'mention',
+            title: `${me?.name ?? 'Jemand'} hat dich erwähnt`,
+            body: body.slice(0, 100),
+            linkRoute: project ? 'project:' + project.id : 'mytasks',
+          }).catch(() => {});
+        });
+    }
     setCommentText('');
   };
 
@@ -526,6 +557,35 @@ export function TaskDrawer({ taskId, projectId, onClose }) {
               <span style={{ fontSize: 12.5, color: 'var(--brand)' }}>
                 🔁 {{daily:'Täglich',weekly:'Wöchentlich',biweekly:'Alle 2 Wochen',monthly:'Monatlich'}[task.recurrence.type] ?? task.recurrence.type}
               </span>
+            </DetailRow>
+          )}
+
+          {workspaceTags.length > 0 && (
+            <DetailRow label="Tags">
+              <div className="row gap-1" style={{ flexWrap: 'wrap', flex: 1 }}>
+                {workspaceTags.map(wt => {
+                  const active = (task.tags ?? []).includes(wt.name);
+                  return (
+                    <button
+                      key={wt.id}
+                      onClick={() => {
+                        const cur = task.tags ?? [];
+                        const next = active ? cur.filter(t => t !== wt.name) : [...cur, wt.name];
+                        saveField('tags', next);
+                      }}
+                      style={{
+                        padding: '2px 8px', borderRadius: 999, fontSize: 11.5, cursor: 'pointer',
+                        border: `1px solid ${wt.color}`,
+                        background: active ? wt.color + '33' : 'transparent',
+                        color: active ? 'var(--text-1)' : 'var(--text-3)',
+                        fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {wt.name}
+                    </button>
+                  );
+                })}
+              </div>
             </DetailRow>
           )}
         </div>

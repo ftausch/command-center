@@ -158,6 +158,9 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
               <div className={`nav-item ${route === 'social' ? 'active' : ''}`} onClick={() => closeAndNav('social')}>
                 <span style={{ fontSize: 15 }}>📱</span><span>Social Media</span>
               </div>
+              <div className={`nav-item ${route === 'editorial' ? 'active' : ''}`} onClick={() => closeAndNav('editorial')}>
+                <span style={{ fontSize: 15 }}>🗓</span><span>Redaktionsplan</span>
+              </div>
             </>}
           </>
         )}
@@ -300,8 +303,18 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
   const { currentWorkspace: brand, currentWorkspaceId, myRole, realtimeStatus } = useWorkspace();
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [notifOpen, setNotifOpen]     = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    try { return localStorage.getItem('cc.surface') === 'carbon'; } catch { return false; }
+  });
   const bellRef = useRef(null);
   const notifCount = useNotificationCount();
+
+  const toggleDark = () => {
+    const next = !isDark;
+    setIsDark(next);
+    try { localStorage.setItem('cc.surface', next ? 'carbon' : ''); } catch {}
+    document.body.dataset.ccSurface = next ? 'carbon' : '';
+  };
 
   return (
     <div className="topbar">
@@ -395,6 +408,14 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
           />
         )}
       </div>
+      <button
+        className="btn btn-icon btn-quiet"
+        title={isDark ? 'Light Mode' : 'Dark Mode'}
+        onClick={toggleDark}
+        style={{ fontSize: 16 }}
+      >
+        {isDark ? '☀️' : '🌙'}
+      </button>
       {(myRole !== 'viewer') && (
         <button className="btn btn-brand btn-sm" onClick={() => setNewTaskOpen(true)}>
           <I.plus size={14} /> New

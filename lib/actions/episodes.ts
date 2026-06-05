@@ -91,7 +91,7 @@ export async function createEpisode(input: {
 export async function updateEpisode(input: {
   episodeId: string;
   workspaceId: string;
-  patch: Partial<Pick<EpisodeView, 'title' | 'guest' | 'date' | 'duration' | 'status' | 'hasVideo' | 'num' | 'description' | 'showNotes' | 'episodeMeta'>>;
+  patch: Partial<Pick<EpisodeView, 'title' | 'guest' | 'date' | 'duration' | 'status' | 'hasVideo' | 'num' | 'description' | 'showNotes' | 'episodeMeta'>> & { downloads?: number | null; plays?: number | null; rating?: number | null; spotifyUrl?: string | null; appleUrl?: string | null; };
 }): Promise<ActionResult<{ id: string }>> {
   const supabase = createClient();
   if (!supabase) return { ok: true, data: { id: input.episodeId } };
@@ -113,6 +113,11 @@ export async function updateEpisode(input: {
   if (input.patch.description  !== undefined) row.description   = input.patch.description || null;
   if (input.patch.showNotes    !== undefined) row.show_notes    = input.patch.showNotes || null;
   if (input.patch.episodeMeta  !== undefined) row.episode_meta  = input.patch.episodeMeta ?? null;
+  if (input.patch.downloads    !== undefined) row.downloads     = input.patch.downloads ?? null;
+  if (input.patch.plays        !== undefined) row.plays         = input.patch.plays ?? null;
+  if (input.patch.rating       !== undefined) row.rating        = input.patch.rating ?? null;
+  if (input.patch.spotifyUrl   !== undefined) row.spotify_url   = input.patch.spotifyUrl || null;
+  if (input.patch.appleUrl     !== undefined) row.apple_url     = input.patch.appleUrl || null;
 
   const { error } = await supabase
     .from('podcast_episodes')

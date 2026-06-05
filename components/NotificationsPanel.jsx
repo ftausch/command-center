@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/WorkspaceProvider';
 import { I } from '@/components/icons';
 import { timeAgo } from '@/lib/utils';
+import { listNotifications, markNotificationsRead } from '@/lib/actions/notifications';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const SEVERITY_COLOR = {
 export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
   const { currentWorkspaceId, data, me } = useWorkspace();
   const panelRef = useRef(null);
+  const [dbNotifs, setDbNotifs] = useState([]);
 
   const storageKey = currentWorkspaceId ? `cc.notifs.read.${currentWorkspaceId}` : null;
 
@@ -43,6 +45,11 @@ export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
     try { return new Set(JSON.parse(localStorage.getItem(storageKey) ?? '[]')); }
     catch { return new Set(); }
   });
+
+  useEffect(() => {
+    if (!currentWorkspaceId) return;
+    listNotifications(currentWorkspaceId).then(setDbNotifs);
+  }, [currentWorkspaceId]);
 
   // Close on outside click
   useEffect(() => {
@@ -153,8 +160,24 @@ export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
       }
     } catch {}
 
-    return result.sort((a, b) => a.sortKey - b.sortKey || (a.time < b.time ? -1 : 1));
-  }, [me?.id, currentWorkspaceId, data.tasks, data.activity]);
+    // DB-backed notifications (mentions, assignments)
+    dbNotifs.forEach(n => {
+      if (result.some(r => r.id === n.id)) return;
+      const iconMap = { mention: '💬', assigned: '👤', deadline: '📅', comment: '💬', blocked: '⛔' };
+      result.push({
+        id: n.id, type: n.type,
+        icon: iconMap[n.type] ?? '🔔',
+        title: n.title, sub: n.body ?? '',
+        sortKey: n.read ? 3 : 0,
+        time: n.createdAt,
+        severity: n.type === 'mention' ? 'info' : n.type === 'blocked' ? 'danger' : 'warning',
+        route: n.linkRoute,
+        dbId: n.id, dbRead: n.read,
+      });
+    });
+
+    return result.sort((a, b) => a.sortKey - b.sortKey || (b.time < a.time ? -1 : 1));
+  }, [me?.id, currentWorkspaceId, data.tasks, data.activity, dbNotifs]);
 
   const unread = notifications.filter((n) => !readIds.has(n.id));
 
@@ -176,6 +199,8 @@ export function NotificationsPanel({ onClose, onOpenTask, setRoute }) {
     if (storageKey) {
       try { localStorage.setItem(storageKey, JSON.stringify(ids)); } catch {}
     }
+    if (currentWorkspaceId) markNotificationsRead(currentWorkspaceId).catch(() => {});
+    setDbNotifs(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   const handleClick = (notif) => {

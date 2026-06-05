@@ -15,6 +15,7 @@ import { updateProject } from '@/lib/actions/projects';
 import { updateMyProfile } from '@/lib/actions/profile';
 import { CAN } from '@/lib/roles';
 import { getFocusPreference, setFocusPreference, FocusOnboarding, FOCUS_KEY } from '@/components/FocusOnboarding';
+import { listTags, createTag, deleteTag } from '@/lib/actions/tags';
 
 export function SettingsScreen() {
   const { currentWorkspaceId: workspace, currentWorkspace: brand, myRole, me } = useWorkspace();
@@ -23,14 +24,16 @@ export function SettingsScreen() {
   const [showFocusChange, setShowFocusChange] = useState(false);
 
   const sections = [
-    { id: 'profile',    label: 'Mein Profil',   icon: <I.user size={14} /> },
-    { id: 'appearance', label: 'Darstellung',   icon: <I.zap size={14} /> },
-    { id: 'focus',      label: 'Mein Fokus',    icon: <span style={{ fontSize: 14 }}>🎯</span> },
-    { id: 'workspace',  label: 'Workspace',     icon: <I.folder size={14} /> },
-    { id: 'members',    label: 'Team & Roles',  icon: <I.team size={14} /> },
-    { id: 'slack',      label: 'Slack',         icon: <I.slack size={14} /> },
-    { id: 'notifs',     label: 'Notifications', icon: <I.bell size={14} /> },
-    { id: 'brand',      label: 'Brand Colors',  icon: <I.flag size={14} /> },
+    { id: 'profile',      label: 'Mein Profil',    icon: <I.user size={14} /> },
+    { id: 'appearance',   label: 'Darstellung',    icon: <I.zap size={14} /> },
+    { id: 'focus',        label: 'Mein Fokus',     icon: <span style={{ fontSize: 14 }}>🎯</span> },
+    { id: 'workspace',    label: 'Workspace',      icon: <I.folder size={14} /> },
+    { id: 'members',      label: 'Team & Roles',   icon: <I.team size={14} /> },
+    { id: 'tags',         label: 'Tags',           icon: <I.bookmark size={14} /> },
+    { id: 'integrations', label: 'Integrationen',  icon: <I.link size={14} /> },
+    { id: 'slack',        label: 'Slack',          icon: <I.slack size={14} /> },
+    { id: 'notifs',       label: 'Notifications',  icon: <I.bell size={14} /> },
+    { id: 'brand',        label: 'Brand Colors',   icon: <I.flag size={14} /> },
   ];
 
   if (!brand) return null;
@@ -71,11 +74,13 @@ export function SettingsScreen() {
               }} />
             </div>
           )}
-          {section === 'slack'      && <SlackSection />}
-          {section === 'workspace' && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
-          {section === 'members'   && <MembersSection myRole={myRole} />}
-          {section === 'notifs'    && <NotifsSection />}
-          {section === 'brand'     && <BrandSection brand={brand} workspace={workspace} myRole={myRole} />}
+          {section === 'slack'        && <SlackSection />}
+          {section === 'workspace'   && <WorkspaceSection brand={brand} workspace={workspace} myRole={myRole} />}
+          {section === 'members'     && <MembersSection myRole={myRole} />}
+          {section === 'notifs'      && <NotifsSection />}
+          {section === 'brand'       && <BrandSection brand={brand} workspace={workspace} myRole={myRole} />}
+          {section === 'tags'        && <TagsSection workspaceId={workspace} />}
+          {section === 'integrations' && <IntegrationsSection />}
         </div>
       </div>
     </div>
@@ -692,6 +697,147 @@ function AppearanceSection() {
 
       <div className="meta" style={{ background: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12 }}>
         💡 Änderungen werden sofort übernommen und beim nächsten Öffnen wiederhergestellt.
+      </div>
+    </div>
+  );
+}
+
+const TAG_PRESETS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#06b6d4'];
+
+function TagsSection({ workspaceId }) {
+  const [tags, setTags] = useState([]);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(TAG_PRESETS[0]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    listTags(workspaceId).then(setTags);
+  }, [workspaceId]);
+
+  const add = async () => {
+    if (!newName.trim()) return;
+    setSaving(true);
+    const r = await createTag({ workspaceId, name: newName.trim(), color: newColor });
+    if (r.ok && r.data) { setTags(prev => [...prev, r.data]); setNewName(''); }
+    setSaving(false);
+  };
+
+  const remove = async (id) => {
+    await deleteTag({ workspaceId, tagId: id });
+    setTags(prev => prev.filter(t => t.id !== id));
+  };
+
+  return (
+    <div className="col gap-4">
+      <div>
+        <div className="h3 mb-1">🏷 Tags</div>
+        <div className="meta">Workspace-weite Labels für Tasks. Frei definierbar.</div>
+      </div>
+      <div className="card card-pad col gap-3">
+        <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+          <input autoFocus className="input" placeholder="Tag-Name" value={newName} onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && add()} style={{ flex: 1, minWidth: 140 }} />
+          <div className="row gap-1">
+            {TAG_PRESETS.map(c => (
+              <button key={c} onClick={() => setNewColor(c)} style={{
+                width: 22, height: 22, borderRadius: '50%', background: c, border: `2px solid ${newColor === c ? 'var(--text-1)' : 'transparent'}`, cursor: 'pointer',
+              }} />
+            ))}
+          </div>
+          <button className="btn btn-brand btn-sm" onClick={add} disabled={saving || !newName.trim()}>{saving ? '…' : '+ Tag'}</button>
+        </div>
+        <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+          {tags.length === 0 && <span className="meta">Noch keine Tags. Erstelle deinen ersten Tag.</span>}
+          {tags.map(tag => (
+            <div key={tag.id} className="row gap-1 items-center" style={{
+              padding: '3px 10px 3px 8px', borderRadius: 999, background: tag.color + '22', border: `1px solid ${tag.color}`,
+              fontSize: 12.5, fontWeight: 500,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: tag.color, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-1)' }}>{tag.name}</span>
+              <button onClick={() => remove(tag.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-4)', marginLeft: 2 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsSection() {
+  const { currentWorkspace: brand } = useWorkspace();
+  const integrations = [
+    {
+      name: 'Slack',
+      icon: '💬',
+      desc: 'Benachrichtigungen, Slash-Commands (/cc task), Wochenberichte',
+      status: brand?.slackConnected ? 'connected' : 'not_connected',
+      route: 'settings',
+      configNote: brand?.slackConnected ? `#${brand.slackChannel || 'allgemein'}` : 'In Settings → Slack konfigurieren',
+    },
+    {
+      name: 'n8n Webhooks',
+      icon: '🔗',
+      desc: 'Outbound-Events (task.done, episode.published, event.completed) + Inbound-Aktionen',
+      status: typeof process !== 'undefined' ? 'configured' : 'not_connected',
+      configNote: 'N8N_WEBHOOK_URL in Vercel env vars setzen',
+    },
+    {
+      name: 'Luma',
+      icon: '🎟',
+      desc: 'Event-RSVPs und Teilnehmerlisten automatisch synchronisieren',
+      status: 'configured',
+      configNote: 'Cron läuft täglich 06:00 UTC · LUMA_API_KEY setzen',
+    },
+    {
+      name: 'Vercel Crons',
+      icon: '⏰',
+      desc: 'Täglicher Digest, Overdue-Reminder, Event-Reminder, Weekly Report',
+      status: 'configured',
+      configNote: 'CRON_SECRET + SITE_URL in Vercel env setzen',
+    },
+    {
+      name: 'Supabase Realtime',
+      icon: '⚡',
+      desc: 'Live-Sync von Tasks, Projekten und Episoden über alle Browser-Tabs',
+      status: 'configured',
+      configNote: 'Automatisch aktiv wenn NEXT_PUBLIC_SUPABASE_URL gesetzt',
+    },
+  ];
+
+  const statusConfig = {
+    connected:     { color: 'var(--success)', label: 'Verbunden' },
+    configured:    { color: 'var(--success)', label: 'Aktiv' },
+    not_connected: { color: 'var(--text-4)',  label: 'Nicht verbunden' },
+    error:         { color: 'var(--danger)',  label: 'Fehler' },
+  };
+
+  return (
+    <div className="col gap-4">
+      <div>
+        <div className="h3 mb-1">🔌 Integrationen</div>
+        <div className="meta">Alle verbundenen Dienste im Überblick.</div>
+      </div>
+      <div className="col gap-3">
+        {integrations.map(int => {
+          const sc = statusConfig[int.status];
+          return (
+            <div key={int.name} className="card card-pad row gap-4 items-start">
+              <div style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>{int.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div className="row gap-2 items-center mb-1">
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{int.name}</div>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: sc.color, background: sc.color + '22', padding: '1px 8px', borderRadius: 999 }}>
+                    {sc.label}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 4 }}>{int.desc}</div>
+                <div className="mono" style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{int.configNote}</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

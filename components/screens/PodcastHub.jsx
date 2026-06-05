@@ -895,6 +895,97 @@ function AnalyticsTab({ episodes = [] }) {
           </div>
         </div>
       </div>
+
+      {/* Per-episode stats (editable) */}
+      <EpisodeStatsTable episodes={episodes} />
+    </div>
+  );
+}
+
+function EpisodeStatsTable({ episodes }) {
+  const { currentWorkspaceId, updateEpisodeInCache } = useWorkspace();
+  const [editing, setEditing] = useState(null); // episodeId
+  const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const published = episodes.filter(e => e.status === 'published' || e.downloads > 0).slice(0, 20);
+
+  const startEdit = (ep) => {
+    setEditing(ep.id);
+    setDraft({ downloads: ep.downloads ?? '', plays: ep.plays ?? '', rating: ep.rating ?? '', spotifyUrl: ep.spotifyUrl ?? '', appleUrl: ep.appleUrl ?? '' });
+  };
+
+  const save = async (epId) => {
+    setSaving(true);
+    const { updateEpisode } = await import('@/lib/actions/episodes');
+    const r = await updateEpisode({ episodeId: epId, workspaceId: currentWorkspaceId, patch: {
+      downloads: draft.downloads !== '' ? Number(draft.downloads) : null,
+      plays: draft.plays !== '' ? Number(draft.plays) : null,
+      rating: draft.rating !== '' ? Number(draft.rating) : null,
+      spotifyUrl: draft.spotifyUrl || null,
+      appleUrl: draft.appleUrl || null,
+    }});
+    if (r.ok) {
+      updateEpisodeInCache?.(epId, { downloads: draft.downloads !== '' ? Number(draft.downloads) : undefined, plays: draft.plays !== '' ? Number(draft.plays) : undefined, rating: draft.rating !== '' ? Number(draft.rating) : undefined });
+    }
+    setSaving(false);
+    setEditing(null);
+  };
+
+  if (published.length === 0) return null;
+
+  return (
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border-soft)', fontSize: 13, fontWeight: 600 }}>
+        📊 Episode-Stats (manuell)
+        <span className="meta" style={{ fontWeight: 400, marginLeft: 8 }}>Downloads und Bewertungen direkt eintragen</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>#</th><th>Episode</th><th>Downloads</th><th>Plays</th><th>Rating</th><th>Links</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {published.map(ep => (
+            <tr key={ep.id}>
+              <td className="mono" style={{ fontSize: 12, color: 'var(--text-4)' }}>{ep.num ?? '—'}</td>
+              <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 500 }}>{ep.title}</td>
+              {editing === ep.id ? (
+                <>
+                  <td><input type="number" className="input" value={draft.downloads} onChange={e => setDraft(d => ({...d, downloads: e.target.value}))} style={{ width: 90, height: 26, fontSize: 12 }} placeholder="—" /></td>
+                  <td><input type="number" className="input" value={draft.plays}     onChange={e => setDraft(d => ({...d, plays: e.target.value}))}     style={{ width: 80, height: 26, fontSize: 12 }} placeholder="—" /></td>
+                  <td><input type="number" step="0.1" min="0" max="5" className="input" value={draft.rating} onChange={e => setDraft(d => ({...d, rating: e.target.value}))} style={{ width: 65, height: 26, fontSize: 12 }} placeholder="—" /></td>
+                  <td style={{ minWidth: 200 }}>
+                    <div className="col gap-1">
+                      <input className="input" value={draft.spotifyUrl} onChange={e => setDraft(d => ({...d, spotifyUrl: e.target.value}))} placeholder="Spotify URL" style={{ height: 22, fontSize: 11 }} />
+                      <input className="input" value={draft.appleUrl}   onChange={e => setDraft(d => ({...d, appleUrl: e.target.value}))}   placeholder="Apple URL" style={{ height: 22, fontSize: 11 }} />
+                    </div>
+                  </td>
+                  <td>
+                    <div className="row gap-1">
+                      <button className="btn btn-brand btn-sm" style={{ fontSize: 11 }} onClick={() => save(ep.id)} disabled={saving}>{saving ? '…' : '✓'}</button>
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setEditing(null)}>✕</button>
+                    </div>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td className="mono" style={{ fontSize: 12 }}>{ep.downloads ? ep.downloads.toLocaleString('de') : '—'}</td>
+                  <td className="mono" style={{ fontSize: 12 }}>{ep.plays ? ep.plays.toLocaleString('de') : '—'}</td>
+                  <td style={{ fontSize: 12 }}>{ep.rating ? `⭐ ${ep.rating}` : '—'}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {ep.spotifyUrl && <a href={ep.spotifyUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1DB954', marginRight: 6 }}>Spotify</a>}
+                    {ep.appleUrl && <a href={ep.appleUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand)' }}>Apple</a>}
+                    {!ep.spotifyUrl && !ep.appleUrl && <span style={{ color: 'var(--text-4)' }}>—</span>}
+                  </td>
+                  <td><button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => startEdit(ep)}>✎</button></td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

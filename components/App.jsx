@@ -47,6 +47,7 @@ import { StandupScreen } from '@/components/screens/Standup';
 import { SprintBoardScreen } from '@/components/screens/SprintBoard';
 import { SocialPlannerScreen } from '@/components/screens/SocialPlanner';
 import { GoalsScreen } from '@/components/screens/Goals';
+import { EditorialCalendarScreen } from '@/components/screens/EditorialCalendar';
 
 export function App() {
   const {
@@ -317,6 +318,10 @@ export function App() {
       case 'goals':
         screen = <GoalsScreen />;
         breadcrumb = 'Ziele & OKRs';
+        break;
+      case 'editorial':
+        screen = <EditorialCalendarScreen setRoute={setRoute} />;
+        breadcrumb = 'Redaktionskalender';
         break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;

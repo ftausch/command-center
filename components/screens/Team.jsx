@@ -66,6 +66,7 @@ export function TeamScreen({ setRoute }) {
   const hasEvents = currentWorkspace?.capabilities?.events;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [manageMember, setManageMember] = useState(null);
+  const [teamTab, setTeamTab] = useState('members'); // members | performance
 
   const { currentWorkspaceId, me } = useWorkspace();
   const [oooState, setOooState] = useState({});
@@ -106,6 +107,16 @@ export function TeamScreen({ setRoute }) {
         onClose={() => setManageMember(null)}
       />
 
+      <div className="tabs mb-4">
+        <div className={`tab ${teamTab === 'members' ? 'active' : ''}`} onClick={() => setTeamTab('members')}>👥 Team</div>
+        <div className={`tab ${teamTab === 'performance' ? 'active' : ''}`} onClick={() => setTeamTab('performance')}>📊 Performance</div>
+      </div>
+
+      {teamTab === 'performance' && (
+        <TeamPerformance users={users} tasks={tasks} projects={data.projects} activity={data.activity} />
+      )}
+
+      {teamTab === 'members' && <>
       <div className="grid grid-4 gap-3 mb-4">
         <KPI label="Teammitglieder" value={users.length} trend={`${users.filter((u) => u.online).length} online`} />
         <KPI label="Offene Tasks" value={tasks.filter((t) => t.status !== 'Done').length} trend="Gesamtauslastung" />
@@ -291,6 +302,91 @@ export function TeamScreen({ setRoute }) {
             </div>
           );
         })}
+      </div>
+      </>}
+    </div>
+  );
+}
+
+function TeamPerformance({ users, tasks, projects, activity }) {
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - SEVEN_DAYS;
+  const projMap = {};
+  projects.forEach(p => { projMap[p.id] = p; });
+
+  const stats = users.map(u => {
+    const mine = tasks.filter(t => t.assignee === u.id);
+    const open = mine.filter(t => t.status !== 'Done');
+    const overdue = open.filter(t => t.due && new Date(t.due + 'T00:00:00') < new Date());
+    const doneThisWeek = activity.filter(a => a.user === u.id && a.icon === 'check' && new Date(a.time).getTime() > cutoff).length;
+    const totalSP = mine.reduce((s, t) => s + (t.estimate ?? 0), 0);
+    const doneSP  = mine.filter(t => t.status === 'Done').reduce((s, t) => s + (t.estimate ?? 0), 0);
+    const pct = totalSP > 0 ? Math.round(doneSP / totalSP * 100) : null;
+    return { user: u, open: open.length, overdue: overdue.length, doneThisWeek, totalSP, doneSP, pct };
+  }).sort((a, b) => b.doneThisWeek - a.doneThisWeek);
+
+  const maxDone = Math.max(1, ...stats.map(s => s.doneThisWeek));
+
+  return (
+    <div className="col gap-4">
+      <div className="row gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
+        {[
+          { label: 'Tasks erledigt (7 Tage)', value: stats.reduce((s, x) => s + x.doneThisWeek, 0) },
+          { label: 'Offene Tasks gesamt', value: stats.reduce((s, x) => s + x.open, 0) },
+          { label: 'Überfällig gesamt', value: stats.reduce((s, x) => s + x.overdue, 0) },
+        ].map(s => (
+          <div key={s.label} className="card" style={{ padding: '10px 16px', minWidth: 130 }}>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{s.value}</div>
+            <div className="meta">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border-soft)', fontSize: 13, fontWeight: 600 }}>
+          Leistung diese Woche
+        </div>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Erledigt (7d)</th>
+              <th>Trend</th>
+              <th>Offen</th>
+              <th>Überfällig</th>
+              <th>Story Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.map(s => (
+              <tr key={s.user.id}>
+                <td>
+                  <div className="row gap-2 items-center">
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--brand-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--brand)', flexShrink: 0 }}>
+                      {s.user.name.charAt(0)}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{s.user.name.split(' ')[0]}</span>
+                  </div>
+                </td>
+                <td style={{ fontSize: 16, fontWeight: 700, color: s.doneThisWeek > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+                  {s.doneThisWeek}
+                </td>
+                <td style={{ minWidth: 100 }}>
+                  <div style={{ height: 8, background: 'var(--bg-sunk)', borderRadius: 4, overflow: 'hidden', width: '100%' }}>
+                    <div style={{ width: `${s.doneThisWeek / maxDone * 100}%`, height: '100%', background: 'var(--success)', borderRadius: 4, transition: 'width 0.3s' }} />
+                  </div>
+                </td>
+                <td style={{ fontSize: 13 }}>{s.open}</td>
+                <td style={{ fontSize: 13, color: s.overdue > 0 ? 'var(--danger)' : 'var(--text-4)' }}>
+                  {s.overdue > 0 ? `⚠ ${s.overdue}` : '—'}
+                </td>
+                <td style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {s.totalSP > 0 ? `${s.doneSP}/${s.totalSP} SP${s.pct !== null ? ` (${s.pct}%)` : ''}` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
