@@ -1818,7 +1818,7 @@ function StudioTab({ episodes, workspaceId }) {
           </div>
 
           {/* Live Preview */}
-          <div style={{ background: 'white', borderRadius: 12, padding: '16px 18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ background: 'var(--bg-elev)', borderRadius: 12, padding: '16px 18px', border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <div className="row gap-3 items-center">
               <div style={{ width: 52, height: 52, borderRadius: 8, background: 'linear-gradient(135deg,#1a1d24,#3b4a6b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>🎙️</div>
               <div style={{ flex: 1, minWidth: 0 }}>

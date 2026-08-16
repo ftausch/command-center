@@ -35,7 +35,7 @@ export function DivisionSwitcher({ style }) {
             fontSize: 12.5,
             fontWeight: 500,
             transition: 'all 0.12s',
-            background: division === t.id ? 'white' : 'transparent',
+            background: division === t.id ? 'var(--bg-elev)' : 'transparent',
             color: division === t.id ? 'var(--text-1)' : 'var(--text-3)',
             boxShadow: division === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
           }}

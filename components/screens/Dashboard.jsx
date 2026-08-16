@@ -125,7 +125,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
               {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }, { id: 'week', label: '📅 Wochenplan' }].map((t) => (
                 <button key={t.id} onClick={() => setDashTab(t.id)} style={{
                   padding: '4px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, transition: 'all 0.12s',
-                  background: dashTab === t.id ? 'white' : 'transparent',
+                  background: dashTab === t.id ? 'var(--bg-elev)' : 'transparent',
                   color: dashTab === t.id ? 'var(--text-1)' : 'var(--text-3)',
                   boxShadow: dashTab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 }}>{t.label}</button>

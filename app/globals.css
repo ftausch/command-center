@@ -14,6 +14,10 @@
   --bg-sunk:   #f0edef;   /* surface-container — recessed areas */
   --bg-hover:  #eae7e9;   /* surface-container-high — hover */
   --bg-active: #e4e2e4;   /* surface-container-highest — pressed */
+  /* Translucent variant of --bg, for blurred bars that sit above content.
+     Must be redefined by every surface theme below, otherwise the bar keeps
+     the light background while its text follows --text-1 into the dark. */
+  --bg-blur:   rgba(252, 248, 250, 0.92);
 
   /* Borders — from outline-variant / surface-container-highest */
   --border:        #e4e2e4;   /* outline-variant light */
@@ -141,7 +145,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ===== Card — white, 1px border, no heavy shadows ===== */
 .card {
-  background: #ffffff;
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
@@ -247,7 +251,7 @@ a { color: inherit; text-decoration: none; }
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
-  background: #ffffff;
+  background: var(--bg-elev);
   color: var(--text-1);
   outline: none;
   transition: border-color 0.12s, box-shadow 0.12s;
@@ -541,7 +545,7 @@ a { color: inherit; text-decoration: none; }
 .topbar {
   height: var(--topbar-h);
   border-bottom: 1px solid var(--border);
-  background: rgba(252, 248, 250, 0.92);
+  background: var(--bg-blur);
   backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
@@ -858,6 +862,7 @@ body[data-cc-surface="studio"] {
   --text-2: #4b5363;
   --text-3: #7c8493;
   --text-4: #aab1bd;
+  --bg-blur: rgba(243, 245, 247, 0.92);
 }
 
 /* ── SURFACE: CARBON (dark) ─────────────────────────── */
@@ -867,6 +872,7 @@ body[data-cc-surface="carbon"] {
   --bg-sunk: #0a0c10;
   --bg-hover: #1c2028;
   --bg-active: #232832;
+  --bg-blur: rgba(14, 16, 20, 0.92);
   --border: #232730;
   --border-strong: #313644;
   --border-soft: #1b1e25;

@@ -265,12 +265,28 @@ const TWEAK_DEFAULTS = {
 
 export function CommandCenterTweaks() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  // The Topbar dark-mode toggle persists the chosen surface under
+  // 'cc.surface'. Adopt it before the effect below writes anything —
+  // otherwise every mount stomps the restored choice back to the 'paper'
+  // default, which is why dark mode never survived a reload. Seeding happens
+  // in an effect rather than in the initial state so the server-rendered
+  // markup and the first client render stay identical.
+  const [seeded, setSeeded] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('cc.surface');
+      if (stored && stored !== t.surface) setTweak('surface', stored);
+    } catch {}
+    setSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
+    if (!seeded) return;
     document.body.dataset.ccDensity = t.density;
     document.body.dataset.ccSurface = t.surface;
     document.body.dataset.ccBrandIntensity = t.brand;
-  }, [t.density, t.surface, t.brand]);
+  }, [seeded, t.density, t.surface, t.brand]);
 
   return (
     <TweaksPanel>

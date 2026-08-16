@@ -312,8 +312,9 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
   const toggleDark = () => {
     const next = !isDark;
     setIsDark(next);
-    try { localStorage.setItem('cc.surface', next ? 'carbon' : ''); } catch {}
-    document.body.dataset.ccSurface = next ? 'carbon' : '';
+    const surface = next ? 'carbon' : 'paper';
+    try { localStorage.setItem('cc.surface', surface); } catch {}
+    document.body.dataset.ccSurface = surface;
   };
 
   return (
@@ -348,7 +349,7 @@ export function Topbar({ openCmdK, breadcrumb, setRoute, onOpenSidebar, onOpenTa
         style={{
           height: 34, padding: '0 12px', minWidth: 260,
           border: '1px solid var(--border-strong)', borderRadius: 8,
-          background: '#ffffff', color: 'var(--text-3)', fontSize: 13,
+          background: 'var(--bg-elev)', color: 'var(--text-3)', fontSize: 13,
           justifyContent: 'space-between',
         }}
       >
