@@ -14,7 +14,6 @@ import { FocusOnboarding, getFocusPreference, setFocusPreference } from '@/compo
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
-import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
 import { StatusScreen } from '@/components/screens/Status';
 import { SalesScreen } from '@/components/screens/Sales';
@@ -146,6 +145,11 @@ export function App() {
     return () => { window.removeEventListener('keydown', onKey); clearTimeout(gTimer.current); };
   }, [setCmdkOpen, cmdkOpen, setRoute, showOnboarding]);
 
+  // Einziger Workspace: Unicorn Bakery — direkt auswaehlen statt Auswahlseite.
+  useEffect(() => {
+    if (!workspace) setCurrentWorkspaceId('unicornbakery');
+  }, [workspace, setCurrentWorkspaceId]);
+
   // Restore dark mode preference on mount
   useEffect(() => {
     try {
@@ -198,15 +202,10 @@ export function App() {
     );
   }
 
+  // Es gibt nur noch Unicorn Bakery (SelbstFrei eingestellt, Sept. 2026):
+  // keine Workspace-Auswahl mehr, der Effekt oben waehlt UB automatisch.
   if (!workspace) {
-    return (
-      <WorkspaceSwitcher
-        onPick={(w) => {
-          setCurrentWorkspaceId(w);
-          setRoute('dashboard');
-        }}
-      />
-    );
+    return <SkeletonPage />;
   }
 
   let screen;
@@ -328,7 +327,7 @@ export function App() {
       <Sidebar
         route={route}
         setRoute={(r) => { setRoute(r); setSidebarOpen(false); }}
-        onSwitchWorkspace={() => { setCurrentWorkspaceId(null); setSidebarOpen(false); }}
+        onSwitchWorkspace={null}
         counts={counts}
         mobileOpen={sidebarOpen}
         onMobileClose={() => setSidebarOpen(false)}

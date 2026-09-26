@@ -88,14 +88,13 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
       </div>
 
       {/* Workspace brand pill */}
-      <button className="brand-pill" onClick={onSwitchWorkspace} title="Workspace wechseln">
+      <div className="brand-pill" style={{ cursor: 'default' }}>
         <div className="brand-mark">{brand.initials}</div>
         <div>
           <div className="brand-name">{brand.name}</div>
           <div className="brand-sub">{(brand.sub || '').split('·')[1]?.trim() || 'Workspace'}</div>
         </div>
-        <span className="caret"><I.caret size={14} /></span>
-      </button>
+      </div>
 
       {/* Quick add — member+ only */}
       {canCreateTask && (
