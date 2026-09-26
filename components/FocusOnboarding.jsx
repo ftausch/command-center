@@ -48,7 +48,7 @@ const OPTIONS = [
     icon: '🗂',
     label: 'Assistenz',
     desc: 'Du koordinierst Termine, Follow-ups und Unterlagen',
-    color: '#712edd',
+    color: 'var(--brand)',
     bg: '#f3e8ff',
   },
   {

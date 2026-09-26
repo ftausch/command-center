@@ -1062,7 +1062,7 @@ function TranskriptKITab({ episodes }) {
               className="btn btn-brand btn-sm"
               onClick={generatePkg}
               disabled={generating}
-              style={{ background: 'linear-gradient(135deg, var(--brand), #7c3aed)', border: 'none' }}
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-strong))', border: 'none' }}
             >
               {generating
                 ? <><I.zap size={13} /> Generiere…</>
@@ -1887,7 +1887,7 @@ function StudioCard({ icon, title, desc, tools, eta, badge }) {
 
 const GUEST_STATUSES = ['prospect','contacted','confirmed','recorded','published','recurring'];
 const GUEST_STATUS_LABEL = { prospect:'Prospect', contacted:'Kontaktiert', confirmed:'Bestätigt', recorded:'Aufgenommen', published:'Veröffentlicht', recurring:'Stammgast' };
-const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'#712edd' };
+const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'var(--brand)' };
 
 function GuestOutreachTemplates({ guest }) {
   const [open, setOpen] = useState(false);

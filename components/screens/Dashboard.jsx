@@ -13,6 +13,8 @@ import {
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, parseDate, projectProgress } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 import { StandupWidget } from '@/components/screens/Standup';
+import { MONATE } from '@/lib/status-beispiel';
+import './status.css';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
@@ -115,11 +117,11 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
   return (
     <div className="page fade-in">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="page-head" style={{ paddingBottom: 20, marginBottom: 24 }}>
+      <div className="page-head" style={dashTab === 'overview' ? { paddingBottom: 12, marginBottom: 16, borderBottom: 0 } : { paddingBottom: 20, marginBottom: 24 }}>
         <div>
-          <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>
+          {dashTab !== 'overview' && <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>}
           <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
-            <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>
+            {dashTab !== 'overview' && <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>}
             <DivisionSwitcher />
             <div style={{ display: 'flex', gap: 4, padding: '2px', background: 'var(--bg-sunk)', borderRadius: 10, marginLeft: 4 }}>
               {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }, { id: 'week', label: '📅 Wochenplan' }].map((t) => (
@@ -132,7 +134,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
               ))}
             </div>
           </div>
-          <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
+          {dashTab !== 'overview' && <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
               Das ist dein Überblick für heute.
             </p>
@@ -148,7 +150,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
                 {SPECIALTY_LABEL[me.specialty].icon} {SPECIALTY_LABEL[me.specialty].label}
               </span>
             )}
-          </div>
+          </div>}
         </div>
         <button className="btn btn-brand btn-sm" onClick={() => setRoute('projects')} style={{ alignSelf: 'flex-start' }}>
           <I.plus size={13} /> Neues Projekt
@@ -230,308 +232,213 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
         </div>
       )}
 
-      {dashTab !== 'focus' && dashTab !== 'week' && (
-      <>
-      {/* ── Jetzt wichtig ───────────────────────────────────────────────── */}
-      {(() => {
-        const urgent = myOpen.filter(t => daysUntil(t.due) <= 0);
-        const blocked = allTasks.filter(t => t.status === 'Blocked');
-        const done100 = data.projects.filter(p => {
-          const pt = data.tasks.filter(x => x.projectId === p.id);
-          return pt.length > 0 && pt.every(x => x.status === 'Done') && p.status !== 'Done';
-        });
-        if (urgent.length === 0 && blocked.length === 0 && done100.length === 0) return null;
-        return (
-          <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap', padding: '10px 14px', background: 'var(--danger-bg,#fef2f2)', borderRadius: 10, border: '1px solid #fca5a520' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)', alignSelf: 'center' }}>⚡ Jetzt:</span>
-            {urgent.length > 0 && (
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--danger)' }} onClick={() => setDashTab('focus')}>
-                🔴 {urgent.length} Task{urgent.length > 1 ? 's' : ''} überfällig
-              </button>
-            )}
-            {blocked.length > 0 && (
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--warning)' }} onClick={() => setRoute('projects')}>
-                ⛔ {blocked.length} Task{blocked.length > 1 ? 's' : ''} blockiert
-              </button>
-            )}
-            {done100.map(p => (
-              <button key={p.id} className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--success)' }} onClick={() => setRoute('project:' + p.id)}>
-                📦 {p.name} — bereit zum Archivieren
-              </button>
-            ))}
-          </div>
-        );
-      })()}
-
-      {/* ── Schnellzugriff ──────────────────────────────────────────────── */}
-      <div className="row gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
-        {[
-          { icon: '📋', label: 'Projekte',       onClick: () => setRoute('projects')   },
-          { icon: '📅', label: 'Kalender',        onClick: () => setRoute('calendar')  },
-          { icon: '🎙', label: 'Podcast Hub',     onClick: () => setRoute('podcast')   },
-          { icon: '🎪', label: 'Event Hub',       onClick: () => setRoute('eventhub')  },
-          { icon: '🗂', label: 'Assistant Hub',   onClick: () => setRoute('assisthub') },
-        ].map(({ icon, label, onClick }) => (
-          <button key={label} onClick={onClick}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '6px 14px', borderRadius: 8,
-              background: 'var(--bg-elev)', border: '1px solid var(--border)',
-              cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-2)',
-              transition: 'border-color 0.1s, color 0.1s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
-          >
-            <span style={{ fontSize: 15 }}>{icon}</span> {label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Morning Briefing strip ───────────────────────────────────────── */}
-      {(() => {
-        const todayEvents = data.projects.filter(p =>
-          p.division === 'events' && p.eventMeta?.eventDate &&
-          p.eventMeta.eventDate.slice(0,10) === todayIso
-        );
-        const todayEpisodes = (data.episodes ?? []).filter(e => e.date === todayIso);
-        const myDueToday = me ? dueToday.filter(t => t.assignee === me.id) : dueToday;
-
-        if (todayEvents.length === 0 && todayEpisodes.length === 0 && myDueToday.length === 0) return null;
+      {dashTab !== 'focus' && dashTab !== 'week' && (() => {
+        // ── Neuer Überblick (Look wie Status): echte Tasks, Projekte, Team ──
+        const puenktlich = open.length ? Math.round(((open.length - overdue.length) / open.length) * 100) : 100;
+        const wocheMax = Math.max(1, ...weekPlan.map((d) => d.tasks.length + d.events.length + d.episodes.length));
+        const auslastung = data.members
+          .map((u) => ({ u, n: open.filter((t) => t.assignee === u.id).length }))
+          .sort((a, b) => b.n - a.n)
+          .slice(0, 6);
+        const auslastungMax = Math.max(1, ...auslastung.map((x) => x.n));
+        const umsatz = MONATE[MONATE.length - 1];
+        const umsatzQuote = Math.round((umsatz.umsatzIst / umsatz.umsatzPlan) * 100);
+        const istLeitung = myRole === 'owner' || myRole === 'admin';
+        const personName = (id) => data.members.find((u) => u.id === id)?.name ?? '';
+        const projektName = (id) => data.projects.find((p) => p.id === id)?.name ?? '';
 
         return (
-          <div style={{
-            margin: '0 0 24px',
-            padding: '14px 18px',
-            borderRadius: 12,
-            background: 'linear-gradient(135deg, var(--brand-soft) 0%, #fff4e6 100%)',
-            border: '1px solid var(--brand)',
-            display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', flexShrink: 0 }}>
-              📅 Heute
-            </div>
-            {todayEvents.map(p => (
-              <div key={p.id} onClick={() => setRoute('project:' + p.id)}
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>🎪</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#e8780a' }}>{p.name}</div>
-                  {p.eventMeta?.location && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{p.eventMeta.location}</div>}
+          <div className="st-seite db-seite">
+            <div className="st-raster">
+              <section className="st-held">
+                <h1 className="st-held-titel" suppressHydrationWarning>{greeting(firstName)}<br /><span suppressHydrationWarning>{todayLabel}</span></h1>
+                <p className="st-held-unter">Das ist dein Überblick für heute.</p>
+                <div className="st-held-drei">
+                  <button type="button" onClick={() => setRoute('mytasks')}><small><i />Überfällig</small><b>{overdue.length}</b></button>
+                  <button type="button" onClick={() => setRoute('mytasks')}><small><i />Heute fällig</small><b>{dueToday.length}</b></button>
+                  <button type="button" onClick={() => setRoute('kanban')}><small><i />Blockiert</small><b>{blocked.length}</b></button>
                 </div>
-              </div>
-            ))}
-            {todayEpisodes.map(ep => (
-              <div key={ep.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>🎙</span>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)' }}>
-                  {ep.num ? `Ep. ${ep.num} ` : ''}{ep.title}
+                <div className="st-held-bogen">
+                  <DbBogen prozent={puenktlich} klasse="st-bogen st-bogen-held" />
+                  <div className="st-held-zahl">
+                    <small>{puenktlich} % im Zeitplan</small>
+                    <b>{open.length}</b>
+                    <span>offene Tasks · {completedThisWeek} erledigt in 7 Tagen</span>
+                  </div>
                 </div>
+              </section>
+
+              <section className="st-feed">
+                <h2>Jetzt <span>wichtig</span></h2>
+                {criticalTasks.length === 0 ? (
+                  <p className="db-feed-leer">Nichts überfällig, nichts brennt. Gute Arbeit!</p>
+                ) : (
+                  <ul>
+                    {criticalTasks.map((t) => {
+                      const due = dueLabel(t.due);
+                      const wer = personName(t.assignee);
+                      return (
+                        <li key={t.id} className="st-feed-eintrag db-klickbar" onClick={() => onOpenTask?.(t.id, t.projectId)}>
+                          <span className="st-feed-zeichen">{(wer || '?')[0]}</span>
+                          <div>
+                            <b>{t.title}</b>
+                            <span>{projektName(t.projectId) || 'Ohne Projekt'}{wer ? ` · ${wer.split(' ')[0]}` : ''}</span>
+                          </div>
+                          <span className={due.danger ? 'st-feed-wann st-feed-spaet' : 'st-feed-wann'}>{due.text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+
+              <div className="st-kacheln">
+                <button type="button" className="st-kachel" onClick={() => setRoute('mytasks')}>
+                  <span>Meine offenen Tasks</span>
+                  <b>{myOpen.length}<em> Tasks</em></b>
+                  <div className="st-kachel-fuss">{myOpen.filter((t) => daysUntil(t.due) <= 0).length} davon heute oder überfällig</div>
+                </button>
+                <button type="button" className="st-kachel" onClick={() => setRoute('projects')}>
+                  <span>Aktive Projekte</span>
+                  <b>{activeProjects.length}<em> Projekte</em></b>
+                  <div className="st-kachel-fuss">{upcomingEvents.length} Deadlines in 7 Tagen</div>
+                </button>
+                <button type="button" className="st-kachel" onClick={() => setRoute('activity')}>
+                  <span>Erledigt, letzte 7 Tage</span>
+                  <b>{completedThisWeek}<em> Tasks</em></b>
+                  <div className="st-kachel-fuss">{inReview.length} im Review</div>
+                </button>
               </div>
-            ))}
-            {myDueToday.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>✅</span>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-                  {myDueToday.length} Task{myDueToday.length > 1 ? 's' : ''} heute fällig
+
+              <section className="st-box st-verlauf-box">
+                <div className="st-box-kopf">
+                  <h2>Diese Woche</h2>
+                  <button type="button" className="db-link" onClick={() => setRoute('calendar')}>Kalender <I.arrowRight size={13} /></button>
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-      {/* ── KPI row — 4 coloured stat cards ─────────────────────────────── */}
-      <div className="grid grid-4 gap-3 mb-6">
-        <StatCard
-          icon={<I.alert size={18} />}
-          label="Überfällig"
-          value={overdue.length}
-          color="var(--danger)"
-          bg="var(--danger-bg)"
-          onClick={() => setRoute('mytasks')}
-        />
-        <StatCard
-          icon={<I.calendar size={18} />}
-          label="Heute fällig"
-          value={dueToday.length}
-          color="var(--warning)"
-          bg="var(--warning-bg)"
-          onClick={() => setRoute('mytasks')}
-        />
-        <StatCard
-          icon={<I.check size={18} />}
-          label="Im Review"
-          value={inReview.length}
-          color="var(--info)"
-          bg="var(--info-bg)"
-          onClick={() => setRoute('kanban')}
-        />
-        <StatCard
-          icon={<I.block size={18} />}
-          label="Blockiert"
-          value={blocked.length}
-          color={blocked.length > 0 ? 'var(--danger)' : 'var(--success)'}
-          bg={blocked.length > 0 ? 'var(--danger-bg)' : 'var(--success-bg)'}
-          onClick={() => setRoute('kanban')}
-        />
-      </div>
+                <div className="st-summe">
+                  <small>Fällig in den nächsten 7 Tagen</small>
+                  <b>{weekPlan.reduce((s, d) => s + d.tasks.length, 0)}<em> Tasks</em></b>
+                </div>
+                <div className="st-verlauf">
+                  {weekPlan.map((d, n) => {
+                    const menge = d.tasks.length + d.events.length + d.episodes.length;
+                    const titel = [...d.events.map((e) => e.name), ...d.episodes.map((e) => e.title), ...d.tasks.map((t) => t.title)];
+                    return (
+                      <button key={d.iso} type="button" onClick={() => setRoute('calendar')} className={n === 0 ? 'st-saeule st-an' : 'st-saeule'}>
+                        <div className="st-saeule-feld">
+                          <div className="st-plan" style={{ height: '100%' }} />
+                          <div className="st-ist" style={{ height: `${Math.max(menge ? 6 : 0, (menge / wocheMax) * 100)}%` }}>
+                            {n === 0 && <span className="st-marke">{menge} heute</span>}
+                          </div>
+                          {titel.length > 0 && (
+                            <div className="st-tipp">
+                              <b>{d.label}</b>
+                              {titel.slice(0, 4).map((x, k) => <span key={k} className="db-tipp-zeile">{x}</span>)}
+                              {titel.length > 4 && <span className="st-klein">+ {titel.length - 4} weitere</span>}
+                            </div>
+                          )}
+                        </div>
+                        <span className="st-monat">{n < 2 ? d.label : d.label.slice(0, 2)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-      {/* ── Team Standup ──────────────────────────────────────────────────── */}
-      <div className="mb-5">
-        <StandupWidget compact={true} />
-      </div>
-
-      <div className="grid gap-5" style={{ gridTemplateColumns: '1.55fr 1fr' }}>
-        {/* ── Left column ─────────────────────────────────────────────── */}
-        <div className="col gap-5">
-
-          {/* Kritische Aufgaben */}
-          <section className="card">
-            <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div>
-                <div className="h3">Kritische Aufgaben</div>
-                <div className="meta mt-1">Überfällig · Heute fällig · Hohe Priorität</div>
-              </div>
-              <button className="btn btn-quiet btn-sm" onClick={() => setRoute('mytasks')}>Alle ansehen <I.arrowRight size={13} /></button>
-            </div>
-            <div>
-              {criticalTasks.length === 0 ? (
-                <EmptyState icon={<I.check size={20} />} title="Keine kritischen Tasks." body="Alles im Griff. Gute Arbeit!" />
-              ) : criticalTasks.map((t) => (
-                <FocusRow key={t.id} task={t} setRoute={setRoute} onOpenTask={onOpenTask} showTag />
-              ))}
-            </div>
-          </section>
-
-          {/* Aktive Projekte — card grid */}
-          <section>
-            <div className="row between mb-3">
-              <div className="h3">Aktive Projekte</div>
-              <button className="btn btn-quiet btn-sm" onClick={() => setRoute('projects')}>Alle Projekte <I.arrowRight size={13} /></button>
-            </div>
-            {activeProjects.length === 0 ? (
-              <div className="card card-pad">
-                <EmptyState icon={<I.folder size={20} />} title="Keine aktiven Projekte." body="Erstelle ein Projekt um loszulegen." />
-              </div>
-            ) : (
-              <div className="grid grid-2 gap-3">
-                {activeProjects.slice(0, 4).map((p) => (
-                  <ProjectCard key={p.id} project={p} setRoute={setRoute} />
-                ))}
-                {activeProjects.length < 4 && (
-                  <div
-                    className="card"
-                    onClick={() => setRoute('projects')}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 100, cursor: 'pointer', border: '1px dashed var(--border-strong)', background: 'transparent', color: 'var(--text-3)' }}
-                  >
-                    <div className="col items-center gap-2">
-                      <I.plus size={20} />
-                      <span style={{ fontSize: 13 }}>+ Neues Projekt</span>
+              <section className="st-box st-produkte">
+                <div className="st-box-kopf">
+                  <h2>Team-Auslastung</h2>
+                  <button type="button" className="db-link" onClick={() => setRoute('team')}>Team <I.arrowRight size={13} /></button>
+                </div>
+                <div className="db-last">
+                  {auslastung.map(({ u, n }) => (
+                    <div key={u.id} className="db-last-zeile">
+                      <Avatar user={u} />
+                      <span className="db-last-name">{u.name.split(' ')[0]}</span>
+                      <div className="db-last-balken">
+                        <div className={n > 6 ? 'db-last-voll db-last-hoch' : 'db-last-voll'} style={{ width: `${(n / auslastungMax) * 100}%` }} />
+                      </div>
+                      <span className={n > 6 ? 'db-last-zahl st-schlecht' : 'db-last-zahl'}>{n}</span>
                     </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="st-box st-pipeline">
+                {istLeitung ? (
+                  <>
+                    <div className="st-box-kopf">
+                      <h2>Umsatz {umsatz.kurz}</h2>
+                      <button type="button" className="db-link" onClick={() => setRoute('status')}>Status <I.arrowRight size={13} /></button>
+                    </div>
+                    <div className="st-pipeline-bogen">
+                      <DbBogen prozent={umsatzQuote} klasse="st-bogen st-bogen-hell" />
+                      <div className="st-pipeline-zahl">
+                        <b>{umsatzQuote} %</b>
+                        <span>vom Monatsziel</span>
+                      </div>
+                    </div>
+                    <div className="st-pipeline-fuss">
+                      <div><small><i className="st-punkt st-punkt-ist" />Ist</small><b>{umsatz.umsatzIst.toLocaleString('de-DE')} €</b></div>
+                      <div><small><i className="st-punkt st-punkt-plan" />Ziel</small><b>{umsatz.umsatzPlan.toLocaleString('de-DE')} €</b></div>
+                    </div>
+                    <p className="st-klein db-hinweis">Beispielzahlen, bis die echte Quelle steht</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="st-box-kopf"><h2>Review & Blockiert</h2></div>
+                    <div className="st-pipeline-fuss db-zwei">
+                      <div><small><i className="st-punkt st-punkt-ist" />Im Review</small><b>{inReview.length}</b></div>
+                      <div><small><i className="st-punkt st-punkt-hinten" />Blockiert</small><b>{blocked.length}</b></div>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className="st-box st-projekte">
+                <div className="st-box-kopf">
+                  <h2>Aktive Projekte</h2>
+                  <button type="button" className="db-link" onClick={() => setRoute('projects')}>Alle Projekte <I.arrowRight size={13} /></button>
+                </div>
+                {activeProjects.length === 0 ? (
+                  <EmptyState icon={<I.folder size={20} />} title="Keine aktiven Projekte." body="Erstelle ein Projekt um loszulegen." />
+                ) : (
+                  <div className="db-projekte">
+                    {activeProjects.slice(0, 6).map((p) => <ProjectCard key={p.id} project={p} setRoute={setRoute} />)}
                   </div>
                 )}
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* ── Right column ────────────────────────────────────────────── */}
-        <div className="col gap-5">
-
-          {/* Meine Tasks */}
-          <section className="card">
-            <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div>
-                <div className="h3">Meine offenen Tasks</div>
-                <div className="meta mt-1">{myOpen.length} Tasks · {firstName}</div>
-              </div>
-              <button className="btn btn-quiet btn-sm" onClick={() => setRoute('mytasks')}><I.arrowRight size={13} /></button>
+              </section>
             </div>
-            <div>
-              {myOpen.length === 0 ? (
-                <div className="meta" style={{ padding: '16px 18px' }}>Keine Tasks zugewiesen.</div>
-              ) : myOpen.slice(0, 5).map((t) => (
-                <FocusRow key={t.id} task={t} setRoute={setRoute} onOpenTask={onOpenTask} />
-              ))}
-            </div>
-          </section>
 
-          {/* Team workload */}
-          <section className="card">
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div className="h3">Team-Auslastung</div>
-              <div className="meta mt-1">Offene Tasks pro Person</div>
-            </div>
-            <div style={{ padding: '4px 18px 12px' }}>
-              {data.members.slice(0, 5).map((u) => {
-                const userTasks = open.filter((t) => t.assignee === u.id);
-                const pct = Math.min(100, (userTasks.length / Math.max(1, open.length / data.members.length)) * 50);
-                const isHigh = userTasks.length > 6;
-                return (
-                  <div key={u.id} className="row gap-3" style={{ padding: '9px 0', borderBottom: '1px solid var(--border-soft)' }}>
-                    <Avatar user={u} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="row between mb-1">
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{u.name.split(' ')[0]}</span>
-                        <span className="mono" style={{ fontSize: 11.5, color: isHigh ? 'var(--danger)' : 'var(--text-3)', fontWeight: isHigh ? 600 : 400 }}>{userTasks.length}</span>
-                      </div>
-                      <div style={{ background: 'var(--bg-sunk)', borderRadius: 999, height: 4, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: isHigh ? 'var(--danger)' : 'var(--brand)', borderRadius: 999, transition: 'width 0.4s' }} />
-                      </div>
-                    </div>
+            <div className={slackNotifs.length > 0 ? 'db-unten' : 'db-unten db-unten-eins'}>
+              <StandupWidget compact={true} />
+              {slackNotifs.length > 0 && (
+                <section className="st-box">
+                  <div className="st-box-kopf">
+                    <h2 className="row gap-2"><I.slack size={15} /> Slack Digest</h2>
+                    <Badge kind="success" dot>Live</Badge>
                   </div>
-                );
-              })}
+                  <div className="col gap-2">
+                    {slackNotifs.slice(0, 3).map((n, i) => <SlackCard key={i} notif={n} />)}
+                  </div>
+                </section>
+              )}
             </div>
-          </section>
-
-          {/* Diese Woche */}
-          <section className="card">
-            <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-              <div>
-                <div className="h3">Diese Woche</div>
-                <div className="meta mt-1">Nächste 7 Tage · {upcomingEvents.length} Deadlines</div>
-              </div>
-              <button className="btn btn-quiet btn-sm" onClick={() => setRoute('calendar')}><I.arrowRight size={13} /></button>
-            </div>
-            <div>
-              {upcomingEvents.length === 0 ? (
-                <div className="meta" style={{ padding: '16px 18px' }}>Keine Deadlines diese Woche.</div>
-              ) : upcomingEvents.slice(0, 5).map((ev, i) => (
-                <div
-                  key={i}
-                  className="row gap-3"
-                  style={{ padding: '10px 18px', borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}
-                  onClick={() => setRoute('project:' + ev.projectId)}
-                >
-                  <div className="mono" style={{ fontSize: 11.5, color: 'var(--text-3)', minWidth: 40 }}>{formatDate(ev.date)}</div>
-                  <span className="dot-indicator" style={{ background: eventColor(ev.type), flexShrink: 0 }} />
-                  <div style={{ flex: 1, fontSize: 13 }} className="truncate">{ev.title}</div>
-                  <span className={`badge ${daysUntil(ev.date) === 0 ? 'warning' : daysUntil(ev.date) < 0 ? 'danger' : 'ghost'}`} style={{ fontSize: 10.5 }}>
-                    {dueLabel(ev.date).text}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Slack Digest */}
-          {slackNotifs.length > 0 && (
-            <section className="card">
-              <div className="row between" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-                <div className="h3 row gap-2"><I.slack size={15} /> Slack Digest</div>
-                <Badge kind="success" dot>Live</Badge>
-              </div>
-              <div className="col gap-2" style={{ padding: '10px 14px 14px' }}>
-                {slackNotifs.slice(0, 3).map((n, i) => <SlackCard key={i} notif={n} />)}
-              </div>
-            </section>
-          )}
-        </div>
-      </div>
-      </>
-      )}
+          </div>
+        );
+      })()}
     </div>
+  );
+}
+
+// Halbkreis-Bogen wie auf der Status-Seite. prozent 0–100, Farben aus status.css.
+function DbBogen({ prozent, klasse }) {
+  const d = 'M 20 150 A 130 130 0 0 1 280 150';
+  return (
+    <svg viewBox="0 0 300 160" className={klasse} aria-hidden>
+      <path d={d} pathLength={100} className="st-bogen-hinten" />
+      <path d={d} pathLength={100} className="st-bogen-vorne" strokeDasharray={`${Math.min(prozent, 100)} 100`} />
+    </svg>
   );
 }
 

@@ -228,3 +228,45 @@
   .st-box, .st-kachel { padding: 18px 16px; }
   .st-pipeline-bogen { max-width: 300px; margin-left: auto; margin-right: auto; }
 }
+
+/* ---------- Dashboard im Status-Look (db-*) ---------- */
+
+.db-seite { padding: 0; max-width: none; }
+.st-seite .st-kachel { text-align: left; width: 100%; background: var(--st-flaeche); border: 1px solid var(--st-linie); padding: 20px 22px; transition: border-color 0.15s ease; }
+.st-seite .st-kachel:hover { border-color: var(--st-pink); }
+.st-kachel b em { font-size: 0.55em; letter-spacing: 0; }
+.st-held-drei button { display: block; border-radius: 12px; padding: 6px 8px !important; margin: -6px -8px !important; transition: background 0.15s ease; }
+.st-held-drei button:hover { background: rgba(255, 255, 255, 0.14) !important; }
+.db-klickbar { cursor: pointer; transition: background 0.15s ease; }
+.db-klickbar:hover { background: rgba(255, 255, 255, 0.24); }
+.db-feed-leer { margin: 0; padding: 18px; border-radius: 14px; background: rgba(255, 255, 255, 0.14); font-size: 14px; }
+.db-link { display: inline-flex !important; align-items: center; gap: 4px; font-size: 13px; color: var(--st-normal) !important; }
+.db-link:hover { color: var(--st-pink) !important; }
+.db-tipp-zeile { display: block !important; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--st-normal); }
+
+.db-last { display: grid; gap: 12px; }
+.db-last-zeile { display: grid; grid-template-columns: 28px 70px minmax(0, 1fr) 28px; align-items: center; gap: 10px; }
+.db-last-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-last-balken { height: 10px; border-radius: 99px; background: var(--st-grau-1); overflow: hidden; }
+.db-last-voll { height: 100%; border-radius: 99px; background: var(--st-pink); transition: width 0.4s ease; }
+.db-last-hoch { background: var(--st-schlecht); }
+.db-last-zahl { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.db-hinweis { margin: 10px 0 0; }
+.db-zwei { margin-top: 0 !important; }
+.db-zwei b { font-size: 32px !important; font-weight: 400 !important; }
+
+.db-projekte { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.db-unten { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
+.db-unten-eins { grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 1040px) {
+  .db-projekte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db-unten { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .db-projekte { grid-template-columns: minmax(0, 1fr); }
+}
+
+.db-seite .st-held-titel { font-size: 30px; }
+.db-seite .st-held-titel span { display: block; margin-top: 4px; font-size: 18px; }
