@@ -78,6 +78,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
 
   const navMain = [
     { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
+    ...(showOps ? [{ id: 'status', label: 'Status', icon: <I.trend size={16} /> }] : []),
     { id: 'mytasks',   label: 'My Tasks',  icon: <I.task size={16} />, count: counts.myTasks },
     { id: 'projects',  label: 'Projects',  icon: <I.folder size={16} />, count: counts.projects },
     { id: 'roadmap',   label: 'Roadmap',   icon: <I.trend size={16} /> },
@@ -89,7 +90,6 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
     { id: 'team',      label: 'Team',       icon: <I.team size={16} /> },
     { id: 'standup',   label: 'Standup',    icon: <span style={{ fontSize: 14 }}>☀️</span> },
     { id: 'goals',     label: 'Ziele',      icon: <I.flag size={16} /> },
-    { id: 'templates', label: 'Templates',  icon: <I.template size={16} /> },
     { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
   ];
 
@@ -195,26 +195,7 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
           </>
         )}
 
-        {/* ── Operations ────────────────────────────────────────── */}
-        {showOps && (
-          <>
-            <SectionLabel id="operations" label="Operations" />
-            {!collapsed.operations && <>
-              <div className={`nav-item ${route === 'ops-health' ? 'active' : ''}`} onClick={() => closeAndNav('ops-health')}>
-                <I.shield size={16} /><span>Health</span>
-              </div>
-              <div className={`nav-item ${route === 'approvals' ? 'active' : ''}`} onClick={() => closeAndNav('approvals')}>
-                <I.check size={16} /><span>Approvals</span>
-              </div>
-              <div className={`nav-item ${route === 'decisions' ? 'active' : ''}`} onClick={() => closeAndNav('decisions')}>
-                <I.log size={16} /><span>Decisions</span>
-              </div>
-              <div className={`nav-item ${route === 'risks' ? 'active' : ''}`} onClick={() => closeAndNav('risks')}>
-                <I.alert size={16} /><span>Risks & Blockers</span>
-              </div>
-            </>}
-          </>
-        )}
+        {/* Operations (Health, Approvals, Decisions, Risks) ausgeblendet — Screens liegen weiter unter components/screens/. */}
 
         {/* ── Team ──────────────────────────────────────────────── */}
         {showTeam && <SectionLabel id="team" label="Team" />}
