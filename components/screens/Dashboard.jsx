@@ -13,8 +13,7 @@ import {
 import { daysUntil, dueLabel, eventColor, formatDate, formatDateLong, parseDate, projectProgress } from '@/lib/utils';
 import { markTaskDone, changeTaskStatus } from '@/lib/actions/tasks';
 import { StandupWidget } from '@/components/screens/Standup';
-import { MONATE } from '@/lib/status-beispiel';
-import './status.css';
+import './dashboard.css';
 
 const WEEKDAY_LABEL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
@@ -119,12 +118,12 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="page-head" style={dashTab === 'overview' ? { paddingBottom: 12, marginBottom: 16, borderBottom: 0 } : { paddingBottom: 20, marginBottom: 24 }}>
         <div>
-          {dashTab !== 'overview' && <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>}
+          <div className="meta mb-2" suppressHydrationWarning>{todayLabel}</div>
           <div className="row gap-3 items-center" style={{ flexWrap: 'wrap', marginBottom: 4 }}>
-            {dashTab !== 'overview' && <h1 className="h1" style={{ fontSize: 28, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>}
+            <h1 className="h1" style={{ fontSize: 24, margin: 0 }} suppressHydrationWarning>{greeting(firstName)}</h1>
             <DivisionSwitcher />
             <div style={{ display: 'flex', gap: 4, padding: '2px', background: 'var(--bg-sunk)', borderRadius: 10, marginLeft: 4 }}>
-              {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: '🎯 Mein Fokus' }, { id: 'week', label: '📅 Wochenplan' }].map((t) => (
+              {[{ id: 'overview', label: 'Überblick' }, { id: 'focus', label: 'Mein Fokus' }, { id: 'week', label: 'Wochenplan' }].map((t) => (
                 <button key={t.id} onClick={() => setDashTab(t.id)} style={{
                   padding: '4px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, transition: 'all 0.12s',
                   background: dashTab === t.id ? 'var(--bg-elev)' : 'transparent',
@@ -134,7 +133,7 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
               ))}
             </div>
           </div>
-          {dashTab !== 'overview' && <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
+          <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
               Das ist dein Überblick für heute.
             </p>
@@ -150,9 +149,9 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
                 {SPECIALTY_LABEL[me.specialty].icon} {SPECIALTY_LABEL[me.specialty].label}
               </span>
             )}
-          </div>}
+          </div>
         </div>
-        <button className="btn btn-brand btn-sm" onClick={() => setRoute('projects')} style={{ alignSelf: 'flex-start' }}>
+        <button className="btn btn-primary btn-sm" onClick={() => setRoute('projects')} style={{ alignSelf: 'flex-start' }}>
           <I.plus size={13} /> Neues Projekt
         </button>
       </div>
@@ -233,212 +232,254 @@ export function DashboardScreen({ setRoute, onOpenTask }) {
       )}
 
       {dashTab !== 'focus' && dashTab !== 'week' && (() => {
-        // ── Neuer Überblick (Look wie Status): echte Tasks, Projekte, Team ──
-        const puenktlich = open.length ? Math.round(((open.length - overdue.length) / open.length) * 100) : 100;
-        const wocheMax = Math.max(1, ...weekPlan.map((d) => d.tasks.length + d.events.length + d.episodes.length));
+        // ── Überblick: ruhige Karten, eine Akzentfarbe, echte Daten ─────────
+        const WOCHE_MS = 7 * 24 * 60 * 60 * 1000;
+        const jetzt = Date.now();
+        const erledigtIn = (von, bis) => data.activity.filter((a) => {
+          const t = new Date(a.time).getTime();
+          return a.icon === 'check' && t >= von && t < bis;
+        }).length;
+        const wochen = Array.from({ length: 8 }, (_, i) => {
+          const bis = jetzt - (7 - i) * WOCHE_MS;
+          const d = new Date(bis - 1);
+          return { label: i === 7 ? 'Diese' : `${d.getDate()}.${d.getMonth() + 1}.`, n: erledigtIn(bis - WOCHE_MS, bis + (i === 7 ? WOCHE_MS : 0)) };
+        });
+        const dieseWoche = wochen[7].n;
+        const vorwoche = wochen[6].n;
+        const schnitt = wochen.reduce((s, w) => s + w.n, 0) / wochen.length;
+        const wocheMax = Math.max(1, schnitt, ...wochen.map((w) => w.n));
+        const delta = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null);
+
+        const gruppen = [
+          { id: 'offen',    label: 'Offen',     farbe: '#3f63d6', n: open.filter((t) => t.status === 'Backlog' || t.status === 'To Do').length },
+          { id: 'arbeit',   label: 'In Arbeit', farbe: 'var(--brand)', n: open.filter((t) => t.status === 'In Progress').length },
+          { id: 'review',   label: 'Review',    farbe: '#7c3aed', n: inReview.length },
+          { id: 'blockiert',label: 'Blockiert', farbe: 'var(--danger)', n: blocked.length, status: true },
+        ];
+        const gruppenSumme = Math.max(1, gruppen.reduce((s, g) => s + g.n, 0));
+
+        // Fälligkeiten: 4 Wochen ab Montag dieser Woche, Zeilen = Wochentage
+        const montag = new Date(); montag.setHours(0, 0, 0, 0);
+        montag.setDate(montag.getDate() - ((montag.getDay() + 6) % 7));
+        const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const heatSpalten = Array.from({ length: 4 }, (_, w) => {
+          const tage = Array.from({ length: 7 }, (_, t) => {
+            const d = new Date(montag); d.setDate(montag.getDate() + w * 7 + t);
+            const tasks = open.filter((x) => x.due === iso(d));
+            return { iso: iso(d), datum: d, n: tasks.length, titel: tasks.slice(0, 3).map((x) => x.title), vergangen: d < new Date(new Date().setHours(0, 0, 0, 0)) };
+          });
+          const k = new Date(montag); k.setDate(montag.getDate() + w * 7);
+          return { label: w === 0 ? 'Diese Woche' : `ab ${k.getDate()}.${k.getMonth() + 1}.`, tage };
+        });
+        const heatMax = Math.max(1, ...heatSpalten.flatMap((s) => s.tage.map((t) => t.n)));
+        const stufe = (n) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / heatMax) * 4)));
+        const faelligVier = heatSpalten.flatMap((s) => s.tage).filter((t) => !t.vergangen).reduce((s, t) => s + t.n, 0);
+
         const auslastung = data.members
-          .map((u) => ({ u, n: open.filter((t) => t.assignee === u.id).length }))
-          .sort((a, b) => b.n - a.n)
-          .slice(0, 6);
+          .map((u) => ({ u, n: open.filter((t) => t.assignee === u.id).length, spaet: overdue.filter((t) => t.assignee === u.id).length }))
+          .sort((a, b) => b.n - a.n).slice(0, 6);
         const auslastungMax = Math.max(1, ...auslastung.map((x) => x.n));
-        const umsatz = MONATE[MONATE.length - 1];
-        const umsatzQuote = Math.round((umsatz.umsatzIst / umsatz.umsatzPlan) * 100);
-        const istLeitung = myRole === 'owner' || myRole === 'admin';
-        const personName = (id) => data.members.find((u) => u.id === id)?.name ?? '';
-        const projektName = (id) => data.projects.find((p) => p.id === id)?.name ?? '';
+        const auslastungSchnitt = auslastung.length ? auslastung.reduce((s, x) => s + x.n, 0) / auslastung.length : 0;
+        const person = (id) => data.members.find((u) => u.id === id);
+        const projektName = (id) => data.projects.find((p) => p.id === id)?.name ?? '—';
+
+        const Kopf = ({ icon, titel, hilfe, children }) => (
+          <div className="db2-kopf">
+            <div className="db2-titel">{icon}<span>{titel}</span>{hilfe && <i className="db2-hilfe" title={hilfe}>i</i>}</div>
+            <div className="db2-aktionen">{children}</div>
+          </div>
+        );
+        const Delta = ({ wert }) => (wert == null ? null : (
+          <span className={wert >= 0 ? 'db2-delta db2-hoch' : 'db2-delta db2-runter'}>{wert >= 0 ? '↑' : '↓'} {Math.abs(wert)} %</span>
+        ));
 
         return (
-          <div className="st-seite db-seite">
-            <div className="st-raster">
-              <section className="st-held">
-                <h1 className="st-held-titel" suppressHydrationWarning>{greeting(firstName)}<br /><span suppressHydrationWarning>{todayLabel}</span></h1>
-                <p className="st-held-unter">Das ist dein Überblick für heute.</p>
-                <div className="st-held-drei">
-                  <button type="button" onClick={() => setRoute('mytasks')}><small><i />Überfällig</small><b>{overdue.length}</b></button>
-                  <button type="button" onClick={() => setRoute('mytasks')}><small><i />Heute fällig</small><b>{dueToday.length}</b></button>
-                  <button type="button" onClick={() => setRoute('kanban')}><small><i />Blockiert</small><b>{blocked.length}</b></button>
-                </div>
-                <div className="st-held-bogen">
-                  <DbBogen prozent={puenktlich} klasse="st-bogen st-bogen-held" />
-                  <div className="st-held-zahl">
-                    <small>{puenktlich} % im Zeitplan</small>
-                    <b>{open.length}</b>
-                    <span>offene Tasks · {completedThisWeek} erledigt in 7 Tagen</span>
-                  </div>
-                </div>
-              </section>
+          <div className="db2">
+            {/* ── Kennzahlen ── */}
+            <div className="db2-kpis">
+              <button type="button" className="db2-karte db2-kpi" onClick={() => setRoute('mytasks')}>
+                <Kopf titel="Offene Aufgaben" hilfe="Alle nicht erledigten Aufgaben im Workspace"><span className="db2-rund"><I.task size={15} /></span></Kopf>
+                <div className="db2-zahl">{open.length}</div>
+                <div className="db2-unter">{overdue.length > 0 ? <span className="db2-delta db2-runter">{overdue.length} überfällig</span> : <span className="db2-delta db2-hoch">nichts überfällig</span>}<span>davon {myOpen.length} bei dir</span></div>
+              </button>
+              <button type="button" className="db2-karte db2-kpi" onClick={() => setRoute('mytasks')}>
+                <Kopf titel="Heute fällig"><span className="db2-rund"><I.calendar size={15} /></span></Kopf>
+                <div className="db2-zahl">{dueToday.length}</div>
+                <div className="db2-unter"><span>{upcomingEvents.length} Deadlines in den nächsten 7 Tagen</span></div>
+              </button>
+              <button type="button" className="db2-karte db2-kpi" onClick={() => setRoute('projects')}>
+                <Kopf titel="Aktive Projekte"><span className="db2-rund"><I.folder size={15} /></span></Kopf>
+                <div className="db2-zahl">{activeProjects.length}</div>
+                <div className="db2-unter"><span>{projects.filter((p) => p.status === 'Blocked').length} blockiert · {projects.filter((p) => p.status === 'Review').length} im Review</span></div>
+              </button>
+              <button type="button" className="db2-karte db2-kpi" onClick={() => setRoute('activity')}>
+                <Kopf titel="Erledigt, 7 Tage"><span className="db2-rund"><I.check size={15} /></span></Kopf>
+                <div className="db2-zahl">{completedThisWeek}</div>
+                <div className="db2-unter"><Delta wert={delta(dieseWoche, vorwoche)} /><span>{vorwoche} in der Vorwoche</span></div>
+              </button>
+            </div>
 
-              <section className="st-feed">
-                <h2>Jetzt <span>wichtig</span></h2>
-                {criticalTasks.length === 0 ? (
-                  <p className="db-feed-leer">Nichts überfällig, nichts brennt. Gute Arbeit!</p>
-                ) : (
-                  <ul>
-                    {criticalTasks.map((t) => {
-                      const due = dueLabel(t.due);
-                      const wer = personName(t.assignee);
-                      return (
-                        <li key={t.id} className="st-feed-eintrag db-klickbar" onClick={() => onOpenTask?.(t.id, t.projectId)}>
-                          <span className="st-feed-zeichen">{(wer || '?')[0]}</span>
-                          <div>
-                            <b>{t.title}</b>
-                            <span>{projektName(t.projectId) || 'Ohne Projekt'}{wer ? ` · ${wer.split(' ')[0]}` : ''}</span>
-                          </div>
-                          <span className={due.danger ? 'st-feed-wann st-feed-spaet' : 'st-feed-wann'}>{due.text}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-
-              <div className="st-kacheln">
-                <button type="button" className="st-kachel" onClick={() => setRoute('mytasks')}>
-                  <span>Meine offenen Tasks</span>
-                  <b>{myOpen.length}<em> Tasks</em></b>
-                  <div className="st-kachel-fuss">{myOpen.filter((t) => daysUntil(t.due) <= 0).length} davon heute oder überfällig</div>
-                </button>
-                <button type="button" className="st-kachel" onClick={() => setRoute('projects')}>
-                  <span>Aktive Projekte</span>
-                  <b>{activeProjects.length}<em> Projekte</em></b>
-                  <div className="st-kachel-fuss">{upcomingEvents.length} Deadlines in 7 Tagen</div>
-                </button>
-                <button type="button" className="st-kachel" onClick={() => setRoute('activity')}>
-                  <span>Erledigt, letzte 7 Tage</span>
-                  <b>{completedThisWeek}<em> Tasks</em></b>
-                  <div className="st-kachel-fuss">{inReview.length} im Review</div>
-                </button>
-              </div>
-
-              <section className="st-box st-verlauf-box">
-                <div className="st-box-kopf">
-                  <h2>Diese Woche</h2>
-                  <button type="button" className="db-link" onClick={() => setRoute('calendar')}>Kalender <I.arrowRight size={13} /></button>
-                </div>
-                <div className="st-summe">
-                  <small>Fällig in den nächsten 7 Tagen</small>
-                  <b>{weekPlan.reduce((s, d) => s + d.tasks.length, 0)}<em> Tasks</em></b>
-                </div>
-                <div className="st-verlauf">
-                  {weekPlan.map((d, n) => {
-                    const menge = d.tasks.length + d.events.length + d.episodes.length;
-                    const titel = [...d.events.map((e) => e.name), ...d.episodes.map((e) => e.title), ...d.tasks.map((t) => t.title)];
-                    return (
-                      <button key={d.iso} type="button" onClick={() => setRoute('calendar')} className={n === 0 ? 'st-saeule st-an' : 'st-saeule'}>
-                        <div className="st-saeule-feld">
-                          <div className="st-plan" style={{ height: '100%' }} />
-                          <div className="st-ist" style={{ height: `${Math.max(menge ? 6 : 0, (menge / wocheMax) * 100)}%` }}>
-                            {n === 0 && <span className="st-marke">{menge} heute</span>}
-                          </div>
-                          {titel.length > 0 && (
-                            <div className="st-tipp">
-                              <b>{d.label}</b>
-                              {titel.slice(0, 4).map((x, k) => <span key={k} className="db-tipp-zeile">{x}</span>)}
-                              {titel.length > 4 && <span className="st-klein">+ {titel.length - 4} weitere</span>}
-                            </div>
-                          )}
+            {/* ── Verlauf + Status ── */}
+            <div className="db2-reihe db2-8-4">
+              <section className="db2-karte">
+                <Kopf icon={<I.trend size={15} />} titel="Erledigte Aufgaben" hilfe="Pro Woche, aus dem Aktivitätsverlauf">
+                  <button type="button" className="db2-knopf" onClick={() => setRoute('activity')}>Verlauf <I.arrowRight size={12} /></button>
+                </Kopf>
+                <div className="db2-gross">{dieseWoche}<small>diese Woche</small><Delta wert={delta(dieseWoche, vorwoche)} /></div>
+                {wochen.every((w) => w.n === 0) && <p className="db2-hinweis">In den letzten 8 Wochen wurde noch nichts als erledigt markiert.</p>}
+                <div className="db2-balken" role="img" aria-label="Erledigte Aufgaben der letzten 8 Wochen">
+                  {schnitt > 0 && <div className="db2-schnitt" style={{ bottom: `${(schnitt / wocheMax) * 100}%` }}><span>Ø {schnitt.toLocaleString('de-DE', { maximumFractionDigits: 1 })}</span></div>}
+                  {wochen.map((w, i) => (
+                    <div key={i} className={i === 7 ? 'db2-saeule db2-an' : 'db2-saeule'}>
+                      <div className="db2-saeule-feld">
+                        <div className="db2-saeule-wert" style={{ height: `${Math.max(w.n ? 4 : 1.5, (w.n / wocheMax) * 100)}%` }}>
+                          {i === 7 && <b>{w.n}</b>}
                         </div>
-                        <span className="st-monat">{n < 2 ? d.label : d.label.slice(0, 2)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="st-box st-produkte">
-                <div className="st-box-kopf">
-                  <h2>Team-Auslastung</h2>
-                  <button type="button" className="db-link" onClick={() => setRoute('team')}>Team <I.arrowRight size={13} /></button>
-                </div>
-                <div className="db-last">
-                  {auslastung.map(({ u, n }) => (
-                    <div key={u.id} className="db-last-zeile">
-                      <Avatar user={u} />
-                      <span className="db-last-name">{u.name.split(' ')[0]}</span>
-                      <div className="db-last-balken">
-                        <div className={n > 6 ? 'db-last-voll db-last-hoch' : 'db-last-voll'} style={{ width: `${(n / auslastungMax) * 100}%` }} />
+                        <span className="db2-tipp">{w.n} erledigt</span>
                       </div>
-                      <span className={n > 6 ? 'db-last-zahl st-schlecht' : 'db-last-zahl'}>{n}</span>
+                      <span className="db2-achse">{w.label}</span>
                     </div>
                   ))}
                 </div>
               </section>
 
-              <section className="st-box st-pipeline">
-                {istLeitung ? (
-                  <>
-                    <div className="st-box-kopf">
-                      <h2>Umsatz {umsatz.kurz}</h2>
-                      <button type="button" className="db-link" onClick={() => setRoute('status')}>Status <I.arrowRight size={13} /></button>
-                    </div>
-                    <div className="st-pipeline-bogen">
-                      <DbBogen prozent={umsatzQuote} klasse="st-bogen st-bogen-hell" />
-                      <div className="st-pipeline-zahl">
-                        <b>{umsatzQuote} %</b>
-                        <span>vom Monatsziel</span>
-                      </div>
-                    </div>
-                    <div className="st-pipeline-fuss">
-                      <div><small><i className="st-punkt st-punkt-ist" />Ist</small><b>{umsatz.umsatzIst.toLocaleString('de-DE')} €</b></div>
-                      <div><small><i className="st-punkt st-punkt-plan" />Ziel</small><b>{umsatz.umsatzPlan.toLocaleString('de-DE')} €</b></div>
-                    </div>
-                    <p className="st-klein db-hinweis">Beispielzahlen, bis die echte Quelle steht</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="st-box-kopf"><h2>Review & Blockiert</h2></div>
-                    <div className="st-pipeline-fuss db-zwei">
-                      <div><small><i className="st-punkt st-punkt-ist" />Im Review</small><b>{inReview.length}</b></div>
-                      <div><small><i className="st-punkt st-punkt-hinten" />Blockiert</small><b>{blocked.length}</b></div>
-                    </div>
-                  </>
-                )}
-              </section>
-
-              <section className="st-box st-projekte">
-                <div className="st-box-kopf">
-                  <h2>Aktive Projekte</h2>
-                  <button type="button" className="db-link" onClick={() => setRoute('projects')}>Alle Projekte <I.arrowRight size={13} /></button>
+              <section className="db2-karte">
+                <Kopf icon={<I.kanban size={15} />} titel="Aufgaben nach Status">
+                  <button type="button" className="db2-knopf" onClick={() => setRoute('kanban')}>Board <I.arrowRight size={12} /></button>
+                </Kopf>
+                <div className="db2-gross">{open.length}<small>offen</small></div>
+                <div className="db2-segmente" role="img" aria-label="Verteilung nach Status">
+                  {gruppen.filter((g) => g.n > 0).map((g) => (
+                    <div key={g.id} style={{ flexGrow: g.n, background: g.farbe }} title={`${g.label}: ${g.n}`} />
+                  ))}
                 </div>
-                {activeProjects.length === 0 ? (
-                  <EmptyState icon={<I.folder size={20} />} title="Keine aktiven Projekte." body="Erstelle ein Projekt um loszulegen." />
-                ) : (
-                  <div className="db-projekte">
-                    {activeProjects.slice(0, 6).map((p) => <ProjectCard key={p.id} project={p} setRoute={setRoute} />)}
-                  </div>
-                )}
+                <ul className="db2-legende">
+                  {gruppen.map((g) => (
+                    <li key={g.id}>
+                      <i style={{ background: g.farbe }} />
+                      <span>{g.status ? <><I.alert size={12} /> {g.label}</> : g.label}</span>
+                      <b>{g.n}</b>
+                      <em>{Math.round((g.n / gruppenSumme) * 100)} %</em>
+                    </li>
+                  ))}
+                </ul>
               </section>
             </div>
 
-            <div className={slackNotifs.length > 0 ? 'db-unten' : 'db-unten db-unten-eins'}>
-              <StandupWidget compact={true} />
-              {slackNotifs.length > 0 && (
-                <section className="st-box">
-                  <div className="st-box-kopf">
-                    <h2 className="row gap-2"><I.slack size={15} /> Slack Digest</h2>
-                    <Badge kind="success" dot>Live</Badge>
-                  </div>
-                  <div className="col gap-2">
-                    {slackNotifs.slice(0, 3).map((n, i) => <SlackCard key={i} notif={n} />)}
-                  </div>
-                </section>
+            {/* ── Fälligkeiten + Team ── */}
+            <div className="db2-reihe db2-7-5">
+              <section className="db2-karte">
+                <Kopf icon={<I.calendar size={15} />} titel="Fälligkeiten, nächste 4 Wochen" hilfe="Offene Aufgaben nach Fälligkeitstag">
+                  <button type="button" className="db2-knopf" onClick={() => setRoute('calendar')}>Kalender <I.arrowRight size={12} /></button>
+                </Kopf>
+                <div className="db2-gross">{faelligVier}<small>Aufgaben fällig</small></div>
+                {faelligVier === 0 && <p className="db2-hinweis">Keine offenen Aufgaben mit Fälligkeit in den nächsten 4 Wochen.</p>}
+                <div className="db2-heat">
+                  <div className="db2-heat-tage">{['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((t) => <span key={t}>{t}</span>)}</div>
+                  {heatSpalten.map((s) => (
+                    <div key={s.label} className="db2-heat-spalte">
+                      {s.tage.map((t) => (
+                        <div key={t.iso} className={`db2-zelle db2-s${stufe(t.n)}${t.vergangen ? ' db2-vorbei' : ''}${t.iso === todayIso ? ' db2-heute' : ''}`}>
+                          <span className="db2-tipp">{t.datum.getDate()}.{t.datum.getMonth() + 1}. · {t.n} fällig{t.titel.length ? ': ' + t.titel.join(', ') : ''}</span>
+                        </div>
+                      ))}
+                      <span className="db2-achse">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="db2-skala"><span>weniger</span>{[0, 1, 2, 3, 4].map((n) => <i key={n} className={`db2-zelle db2-s${n}`} />)}<span>mehr</span></div>
+              </section>
+
+              <section className="db2-karte">
+                <Kopf icon={<I.team size={15} />} titel="Team-Auslastung" hilfe="Offene Aufgaben pro Person">
+                  <button type="button" className="db2-knopf" onClick={() => setRoute('team')}>Team <I.arrowRight size={12} /></button>
+                </Kopf>
+                <ul className="db2-team">
+                  {auslastung.map(({ u, n, spaet }) => (
+                    <li key={u.id}>
+                      <Avatar user={u} />
+                      <span className="db2-team-name">{u.name.split(' ')[0]}</span>
+                      <div className="db2-team-spur">
+                        <div style={{ width: `${(n / auslastungMax) * 100}%` }} />
+                        <i style={{ left: `${(auslastungSchnitt / auslastungMax) * 100}%` }} />
+                      </div>
+                      <b>{n}</b>
+                      {spaet > 0 ? <span className="db2-delta db2-runter">{spaet} spät</span> : <span className="db2-delta db2-leer">—</span>}
+                    </li>
+                  ))}
+                </ul>
+                <div className="db2-fussnote">Strich = Ø {auslastungSchnitt.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Aufgaben pro Person</div>
+              </section>
+            </div>
+
+            {/* ── Kritische Aufgaben ── */}
+            <section className="db2-karte db2-tabelle-karte">
+              <Kopf icon={<I.alert size={15} />} titel="Jetzt wichtig" hilfe="Überfällig, heute fällig oder hohe Priorität">
+                <button type="button" className="db2-knopf" onClick={() => setRoute('mytasks')}>Alle Aufgaben <I.arrowRight size={12} /></button>
+              </Kopf>
+              {criticalTasks.length === 0 ? (
+                <EmptyState icon={<I.check size={20} />} title="Nichts brennt." body="Keine überfälligen oder dringenden Aufgaben." />
+              ) : (
+                <div className="db2-tabelle-rahmen">
+                  <table className="db2-tabelle">
+                    <thead><tr><th>Aufgabe</th><th>Projekt</th><th>Zuständig</th><th>Fällig</th><th>Priorität</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {criticalTasks.map((t) => {
+                        const wer = person(t.assignee);
+                        const due = dueLabel(t.due);
+                        return (
+                          <tr key={t.id} onClick={() => onOpenTask?.(t.id, t.projectId)}>
+                            <td className="db2-fett">{t.title}</td>
+                            <td className="db2-leise">{projektName(t.projectId)}</td>
+                            <td>{wer ? <span className="db2-person"><Avatar user={wer} />{wer.name.split(' ')[0]}</span> : '—'}</td>
+                            <td><span className={due.danger ? 'db2-pille db2-rot' : due.today ? 'db2-pille db2-gelb' : 'db2-pille'}>{due.text}</span></td>
+                            <td><span className={`db2-pille db2-prio-${(t.priority || '').toLowerCase()}`}>{t.priority === 'High' ? 'Hoch' : t.priority === 'Low' ? 'Niedrig' : 'Mittel'}</span></td>
+                            <td><span className="db2-pille">{t.status}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
+            </section>
+
+            {/* ── Projekte + Standup/Slack ── */}
+            <div className="db2-reihe db2-7-5">
+              <section className="db2-karte">
+                <Kopf icon={<I.folder size={15} />} titel="Aktive Projekte">
+                  <button type="button" className="db2-knopf" onClick={() => setRoute('projects')}>Alle <I.arrowRight size={12} /></button>
+                </Kopf>
+                <ul className="db2-projekte">
+                  {activeProjects.slice(0, 6).map((p) => {
+                    const pt = data.tasks.filter((t) => t.projectId === p.id);
+                    const fortschritt = projectProgress(pt);
+                    const due = dueLabel(p.due);
+                    return (
+                      <li key={p.id} onClick={() => setRoute('project:' + p.id)}>
+                        <div className="db2-projekt-name"><b>{p.name}</b><span>{pt.filter((t) => t.status !== 'Done').length} offen</span></div>
+                        <div className="db2-projekt-spur"><div style={{ width: `${fortschritt}%` }} /></div>
+                        <span className="db2-projekt-prozent">{fortschritt} %</span>
+                        <span className={due.danger ? 'db2-pille db2-rot' : 'db2-pille'}>{due.text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+              <div className="db2-stapel">
+                <StandupWidget compact={true} />
+                {slackNotifs.length > 0 && (
+                  <section className="db2-karte">
+                    <Kopf icon={<I.slack size={15} />} titel="Slack"><Badge kind="success" dot>Live</Badge></Kopf>
+                    <div className="col gap-2">{slackNotifs.slice(0, 3).map((n, i) => <SlackCard key={i} notif={n} />)}</div>
+                  </section>
+                )}
+              </div>
             </div>
           </div>
         );
       })()}
     </div>
-  );
-}
-
-// Halbkreis-Bogen wie auf der Status-Seite. prozent 0–100, Farben aus status.css.
-function DbBogen({ prozent, klasse }) {
-  const d = 'M 20 150 A 130 130 0 0 1 280 150';
-  return (
-    <svg viewBox="0 0 300 160" className={klasse} aria-hidden>
-      <path d={d} pathLength={100} className="st-bogen-hinten" />
-      <path d={d} pathLength={100} className="st-bogen-vorne" strokeDasharray={`${Math.min(prozent, 100)} 100`} />
-    </svg>
   );
 }
 
