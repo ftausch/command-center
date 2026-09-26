@@ -11,7 +11,6 @@ import { useMemo, useState } from 'react';
 import { I } from '@/components/icons';
 import { DEALS, GRENZE_EXPAND, PERSONEN, PRODUKTE, QUELLEN, RADAR, STUFEN } from '@/lib/sales-beispiel';
 import './status.css';
-import './dashboard.css';
 
 const euro = (n) => n.toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €';
 const k = (n) => (n >= 1000 ? (n / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) : String(n));
@@ -80,26 +79,26 @@ export function SalesScreen() {
 
   return (
     <div className="page fade-in">
-      <div className="page-head" style={{ borderBottom: 0, paddingBottom: 8, marginBottom: 16 }}>
-        <div>
-          <div className="meta mb-2">Unter {euro(GRENZE_EXPAND)} Daniel · ab {euro(GRENZE_EXPAND)} Fabian · Umsatz zählt für den, der den Account aufgebaut hat</div>
-          <h1 className="h1" style={{ margin: 0 }}>Sales</h1>
-          <p className="db2-hinweis" style={{ margin: '8px 0 0' }}>Entwurf: Deals erfunden, Radar echt. Verschieben speichert noch nicht.</p>
+      <div className="st-seite db-seite">
+        <div className="st-leiste">
+          <div>
+            <h1 className="h1" style={{ margin: 0 }}>Sales</h1>
+            <p className="meta" style={{ margin: '4px 0 0' }}>Unter {euro(GRENZE_EXPAND)} Daniel, ab {euro(GRENZE_EXPAND)} Fabian. Der Umsatz zählt für den, der den Account aufgebaut hat.</p>
+          </div>
+          <div className="st-wahl" aria-label="Produkt filtern">
+            <button type="button" onClick={() => setProdukt(null)} aria-pressed={!produkt}>Alle</button>
+            {PRODUKTE.map((p) => (
+              <button key={p} type="button" onClick={() => setProdukt(p)} aria-pressed={produkt === p}>{p}</button>
+            ))}
+          </div>
         </div>
-        <div className="db2-wahl" role="group" aria-label="Produkt filtern">
-          <button type="button" onClick={() => setProdukt(null)} aria-pressed={!produkt}>Alle</button>
-          {PRODUKTE.map((p) => (
-            <button key={p} type="button" onClick={() => setProdukt(p)} aria-pressed={produkt === p}>{p}</button>
-          ))}
-        </div>
-      </div>
+        <span className="st-entwurf" style={{ display: 'inline-block', marginBottom: 14 }}>Entwurf: Deals erfunden, Radar echt. Verschieben speichert noch nicht.</span>
 
-      <div className="db2">
-        <div className="db2-kpis">
-          <div className="db2-karte"><div className="db2-kopf"><div className="db2-titel"><span>Offene Pipeline</span></div><span className="db2-rund"><I.kanban size={15} /></span></div><div className="db2-zahl">{euro(zahlen.summe)}</div><div className="db2-unter"><span>{offen.length} Deals offen</span></div></div>
-          <div className="db2-karte"><div className="db2-kopf"><div className="db2-titel"><span>Gewichtet</span><i className="db2-hilfe" title="Wert × Wahrscheinlichkeit der Stufe">i</i></div><span className="db2-rund"><I.trend size={15} /></span></div><div className="db2-zahl">{euro(Math.round(zahlen.gewichtet))}</div><div className="db2-unter"><span>realistisch zu erwarten</span></div></div>
-          <div className="db2-karte"><div className="db2-kopf"><div className="db2-titel"><span>Gewonnen</span></div><span className="db2-rund"><I.check size={15} /></span></div><div className="db2-zahl">{euro(zahlen.gewonnen)}</div><div className="db2-unter"><span>in dieser Ansicht</span></div></div>
-          <div className="db2-karte"><div className="db2-kopf"><div className="db2-titel"><span>Bei Fabian</span><i className="db2-hilfe" title="Offene Deals ab 10.000 €">i</i></div><span className="db2-rund"><I.flag size={15} /></span></div><div className="db2-zahl">{zahlen.expand.length} <small className="db2-einheit">Deals</small></div><div className="db2-unter"><span>{euro(zahlen.expand.reduce((s, d) => s + d.wert, 0))} offen</span></div></div>
+        <div className="sl-kacheln">
+          <div className="st-kachel"><span>Offene Pipeline</span><b>{k(zahlen.summe)}<em>{zahlen.summe >= 1000 ? 'k €' : ' €'}</em></b><div className="st-kachel-fuss">{offen.length} Deals offen</div></div>
+          <div className="st-kachel"><span>Gewichtet</span><b>{k(Math.round(zahlen.gewichtet))}<em>k €</em></b><div className="st-kachel-fuss">nach Stufe gewichtet</div></div>
+          <div className="st-kachel"><span>Gewonnen</span><b>{k(zahlen.gewonnen)}<em>k €</em></b><div className="st-kachel-fuss">in dieser Ansicht</div></div>
+          <div className="st-kachel"><span>Bei Fabian (ab 10k)</span><b>{zahlen.expand.length}<em> Deals</em></b><div className="st-kachel-fuss">{euro(zahlen.expand.reduce((s, d) => s + d.wert, 0))} offen</div></div>
         </div>
 
         <div className="sl-raster">
@@ -124,8 +123,9 @@ export function SalesScreen() {
             })}
           </div>
 
-          <aside className="db2-karte sl-radar">
-            <div className="db2-kopf"><div className="db2-titel"><I.trend size={15} /><span>Radar</span><i className="db2-hilfe" title="Frische Finanzierungsrunden aus DACH, jeden Sonntag auch per WhatsApp">i</i></div><span className="db2-pille">{RADAR.woche}</span></div>
+          <aside className="st-feed sl-radar">
+            <h2>Radar <span>{RADAR.woche}</span></h2>
+            <p className="sl-radar-unter">Frische Finanzierungsrunden, die zu uns passen. Kommt jeden Sonntag auch per WhatsApp.</p>
             <ul>
               {RADAR.runden.map((r) => {
                 const drin = uebernommen.includes(r.firma);
