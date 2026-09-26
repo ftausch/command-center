@@ -176,3 +176,34 @@ button.db2-karte:hover { border-color: var(--border-strong); }
 }
 .db2-hinweis { margin: -8px 0 12px; font-size: 12.5px; color: var(--text-3); }
 .db2-schnitt span { left: auto; right: 0; }
+
+/* ---------- Ergaenzungen fuer Status und Sales ---------- */
+
+.db2 button.db2-saeule { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.db2-wahl { display: flex; gap: 2px; padding: 3px; background: var(--bg-sunk); border-radius: 10px; overflow-x: auto; max-width: 100%; }
+.db2-wahl button { height: 30px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-3); white-space: nowrap; transition: background 0.12s ease, color 0.12s ease; }
+.db2-wahl button:hover { color: var(--text-1); }
+.db2-wahl button[aria-pressed="true"] { background: var(--bg-elev); color: var(--text-1); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.db2-wahl-klein button { height: 26px; font-size: 12px; padding: 0 10px; }
+.db2-legende-kurz { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-3); }
+.db2-legende-kurz span { display: inline-flex; align-items: center; gap: 5px; }
+.db2-legende-kurz i { width: 9px; height: 9px; border-radius: 3px; }
+.db2-einheit { font-size: 14px; font-weight: 400; color: var(--text-3); }
+
+/* Plan hinter Ist */
+.db2-plan { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bg-hover); border: 1px dashed var(--border-strong); border-bottom: 0; border-radius: 6px 6px 0 0; }
+.db2-schmal { width: 56%; margin: 0 auto; z-index: 1; background: var(--text-3); }
+.db2-saeule:hover .db2-schmal { background: var(--text-2); }
+.db2-unter-plan .db2-schmal { background: #e0a3a3; }
+.db2-unter-plan:hover .db2-schmal { background: var(--danger); }
+.db2-an .db2-schmal, .db2-an:hover .db2-schmal { background: var(--brand); }
+.db2-saeule-feld { justify-content: center; }
+
+/* einfache Liste */
+.db2-liste { list-style: none; margin: 0; padding: 0; }
+.db2-liste li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+.db2-liste li:last-child { border-bottom: 0; }
+.db2-liste b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db2-liste div span { display: block; font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db2-kreis { width: 30px; height: 30px; border-radius: 50%; background: var(--bg-sunk); color: var(--text-2); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.db2-gruen { border-color: var(--success-border); color: var(--success); background: var(--success-bg); }
