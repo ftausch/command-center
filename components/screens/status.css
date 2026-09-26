@@ -270,3 +270,52 @@
 
 .db-seite .st-held-titel { font-size: 30px; }
 .db-seite .st-held-titel span { display: block; margin-top: 4px; font-size: 18px; }
+
+/* ---------- Sales (sl-*) ---------- */
+
+.sl-kacheln { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.sl-raster { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+.sl-board { display: grid; grid-template-columns: repeat(5, minmax(172px, 1fr)); grid-area: auto; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.sl-spalte { background: var(--st-grau-1); border-radius: var(--st-kante); padding: 10px; min-height: 420px; }
+.sl-spalte-gewonnen { background: var(--st-gut-zart); }
+.sl-spalte-kopf { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 6px 10px; font-size: 13px; }
+.sl-spalte-kopf span { font-size: 12px; color: var(--st-leise); font-variant-numeric: tabular-nums; }
+.sl-spalte-inhalt { display: grid; gap: 8px; }
+.sl-leer { text-align: center; color: var(--st-blass); padding: 18px 0; }
+
+.sl-karte { position: relative; background: var(--st-flaeche); border: 1px solid var(--st-linie); border-radius: 14px; padding: 12px 12px 10px; display: grid; gap: 8px; transition: border-color 0.15s ease; }
+.sl-karte:hover { border-color: var(--st-pink); }
+.sl-karte-kopf { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.sl-karte-kopf b { font-size: 14px; font-weight: 600; }
+.sl-wert { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sl-karte-zeile { display: flex; gap: 6px; flex-wrap: wrap; }
+.sl-chip { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; background: rgba(223, 48, 144, 0.1); color: var(--st-pink); }
+.sl-chip-leise { background: var(--st-grau-1); color: var(--st-normal); }
+.sl-naechster { font-size: 12px; color: var(--st-normal); }
+.sl-karte-fuss { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--st-leise); }
+.sl-karte-fuss b { color: var(--st-stark); font-weight: 500; }
+.sl-uebergabe { font-size: 11px; font-weight: 600; color: #fff; background: var(--st-stark); padding: 2px 8px; border-radius: 99px; }
+.sl-pfeile { position: absolute; top: 8px; right: 8px; display: none; gap: 2px; background: var(--st-flaeche); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+.sl-karte:hover .sl-pfeile { display: flex; }
+.sl-pfeile button { width: 26px; height: 26px; border-radius: 8px; font-size: 16px; line-height: 1; display: grid !important; place-items: center; text-align: center !important; }
+.sl-pfeile button:hover:not(:disabled) { background: rgba(223, 48, 144, 0.12) !important; color: var(--st-pink) !important; }
+.sl-pfeile button:disabled { opacity: 0.3; cursor: default; }
+
+.sl-radar { grid-area: auto; position: sticky; top: calc(var(--topbar-h) + 16px); }
+.sl-radar-unter { margin: -6px 0 14px; font-size: 13px; color: rgba(255, 255, 255, 0.85); }
+.sl-radar ul { max-height: none; }
+.sl-radar-eintrag { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.14); }
+.sl-radar-eintrag b { display: block; font-size: 14px; font-weight: 600; }
+.sl-radar-eintrag b small { font-weight: 400; opacity: 0.7; font-size: 12px; }
+.sl-radar-eintrag span { display: block; font-size: 12px; opacity: 0.9; }
+.sl-radar-eintrag em { display: block; font-style: normal; font-size: 11.5px; opacity: 0.7; margin-top: 2px; }
+.sl-radar-eintrag button { display: inline-flex !important; align-items: center; gap: 4px; padding: 6px 10px !important; border-radius: 10px; background: #fff !important; color: var(--st-pink) !important; font-size: 12px !important; font-weight: 600; white-space: nowrap; }
+.sl-radar-eintrag button:disabled { opacity: 0.75; cursor: default; }
+
+@media (max-width: 1180px) {
+  .sl-raster { grid-template-columns: minmax(0, 1fr); }
+  .sl-radar { position: static; }
+}
+@media (max-width: 760px) {
+  .sl-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

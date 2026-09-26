@@ -76,22 +76,6 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
   const showWork      = focusArea !== 'assistenz' || myRole === 'owner' || myRole === 'admin' || myRole === 'manager';
   const showTeam      = focusArea === 'all' || myRole === 'owner' || myRole === 'admin';
 
-  const navMain = [
-    { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
-    ...(showOps ? [{ id: 'status', label: 'Status', icon: <I.trend size={16} /> }] : []),
-    { id: 'mytasks',   label: 'My Tasks',  icon: <I.task size={16} />, count: counts.myTasks },
-    { id: 'projects',  label: 'Projects',  icon: <I.folder size={16} />, count: counts.projects },
-    { id: 'roadmap',   label: 'Roadmap',   icon: <I.trend size={16} /> },
-    { id: 'sprints',   label: 'Sprints',   icon: <I.zap size={16} /> },
-    { id: 'kanban',    label: 'Board',     icon: <I.kanban size={16} /> },
-    { id: 'calendar',  label: 'Calendar',  icon: <I.calendar size={16} /> },
-  ];
-  const navWork = [
-    { id: 'team',      label: 'Team',       icon: <I.team size={16} /> },
-    { id: 'standup',   label: 'Standup',    icon: <span style={{ fontSize: 14 }}>☀️</span> },
-    { id: 'goals',     label: 'Ziele',      icon: <I.flag size={16} /> },
-    { id: 'activity',  label: 'Activity',   icon: <I.activity size={16} /> },
-  ];
 
   return (
     <>
@@ -130,13 +114,37 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
 
       {/* Main nav */}
       <nav style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Navigation neu geordnet (Sept. 2026): nur, was wirklich genutzt wird.
+            Leere oder doppelte Bereiche liegen unter "Mehr" (standardmaessig zu)
+            und sind nicht geloescht. Nutzungsstand 27.09.: 18 Projekte, 1 offener
+            Task; Sprints, Newsletter, Social, Redaktionsplan, Event Hub,
+            Partner, Assistant Hub, Standup, Ziele leer. */}
 
-        {/* ── Work ─────────────────────────────────────────────── */}
-        <div className="nav-section">Work</div>
-        {navMain.map(n => (
+        {/* ── Überblick ─────────────────────────────────────────── */}
+        <div className="nav-section">Überblick</div>
+        {[
+          { id: 'dashboard', label: 'Dashboard', icon: <I.home size={16} /> },
+          ...(showOps ? [
+            { id: 'status', label: 'Status', icon: <I.trend size={16} /> },
+            { id: 'sales',  label: 'Sales',  icon: <I.flag size={16} />, neu: true },
+          ] : []),
+        ].map(n => (
           <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
-            {n.icon}
-            <span>{n.label}</span>
+            {n.icon}<span>{n.label}</span>
+            {n.neu && <span className="nav-count nav-neu">neu</span>}
+          </div>
+        ))}
+
+        {/* ── Arbeit ────────────────────────────────────────────── */}
+        <div className="nav-section">Arbeit</div>
+        {[
+          { id: 'mytasks',  label: 'Meine Aufgaben', icon: <I.task size={16} />, count: counts.myTasks },
+          { id: 'projects', label: 'Projekte',       icon: <I.folder size={16} />, count: counts.projects },
+          { id: 'kanban',   label: 'Board',          icon: <I.kanban size={16} /> },
+          { id: 'calendar', label: 'Kalender',       icon: <I.calendar size={16} /> },
+        ].map(n => (
+          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
+            {n.icon}<span>{n.label}</span>
             {n.count != null && <span className="nav-count">{n.count}</span>}
           </div>
         ))}
@@ -144,70 +152,58 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         {/* ── Podcast ───────────────────────────────────────────── */}
         {brand.capabilities?.podcast !== false && showPodcast && (
           <>
-            <SectionLabel id="podcast" label="Podcast" />
-            {!collapsed.podcast && <>
-              <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => closeAndNav('podcast')}>
-                <I.mic size={16} /><span>Podcast Hub</span>
-              </div>
-              <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
-                <I.kanban size={16} /><span>Episode Pipeline</span>
-              </div>
-              <div className={`nav-item ${route === 'newsletter' ? 'active' : ''}`} onClick={() => closeAndNav('newsletter')}>
-                <span style={{ fontSize: 15 }}>✉️</span><span>Newsletter</span>
-              </div>
-              <div className={`nav-item ${route === 'social' ? 'active' : ''}`} onClick={() => closeAndNav('social')}>
-                <span style={{ fontSize: 15 }}>📱</span><span>Social Media</span>
-              </div>
-              <div className={`nav-item ${route === 'editorial' ? 'active' : ''}`} onClick={() => closeAndNav('editorial')}>
-                <span style={{ fontSize: 15 }}>🗓</span><span>Redaktionsplan</span>
-              </div>
-            </>}
+            <div className="nav-section">Podcast</div>
+            <div className={`nav-item ${route === 'podcast' ? 'active' : ''}`} onClick={() => closeAndNav('podcast')}>
+              <I.mic size={16} /><span>Podcast Hub</span>
+            </div>
+            <div className={`nav-item ${route === 'pipeline' ? 'active' : ''}`} onClick={() => closeAndNav('pipeline')}>
+              <I.kanban size={16} /><span>Episoden</span>
+            </div>
           </>
         )}
-
-        {/* ── Events ────────────────────────────────────────────── */}
-        {brand.capabilities?.events && showEvents && (
-          <>
-            <SectionLabel id="events" label="Events" />
-            {!collapsed.events && <>
-              <div className={`nav-item ${route === 'eventhub' ? 'active' : ''}`} onClick={() => closeAndNav('eventhub')}>
-                <I.calendar size={16} /><span>Event Hub</span>
-              </div>
-              <div className={`nav-item ${route === 'eventpipeline' ? 'active' : ''}`} onClick={() => closeAndNav('eventpipeline')}>
-                <I.kanban size={16} /><span>Event Pipeline</span>
-              </div>
-              <div className={`nav-item ${route === 'partners' ? 'active' : ''}`} onClick={() => closeAndNav('partners')}>
-                <I.team size={16} /><span>Partner & Sponsoren</span>
-              </div>
-            </>}
-          </>
-        )}
-
-        {/* ── Assistenz ─────────────────────────────────────────── */}
-        {(myRole === 'owner' || myRole === 'admin' || myRole === 'manager') && showAssistenz && (
-          <>
-            <SectionLabel id="assistenz" label="Assistenz" />
-            {!collapsed.assistenz && (
-              <div className={`nav-item ${route === 'assisthub' ? 'active' : ''}`} onClick={() => closeAndNav('assisthub')}>
-                <span style={{ fontSize: 15 }}>🗂</span><span>Assistant Hub</span>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Operations (Health, Approvals, Decisions, Risks) ausgeblendet — Screens liegen weiter unter components/screens/. */}
 
         {/* ── Team ──────────────────────────────────────────────── */}
-        {showTeam && <SectionLabel id="team" label="Team" />}
-        {showTeam && !collapsed.team && navWork.map(n => (
-          <div key={n.id} className={`nav-item ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
-            {n.icon}
-            <span>{n.label}</span>
-            {n.id === 'activity' && unreadActivity > 0 && (
-              <span className="nav-count" style={{ background: 'var(--danger)', color: 'white', minWidth: 18, textAlign: 'center' }}>
-                {unreadActivity > 9 ? '9+' : unreadActivity}
-              </span>
-            )}
+        {showTeam && (
+          <>
+            <div className="nav-section">Team</div>
+            <div className={`nav-item ${route === 'team' ? 'active' : ''}`} onClick={() => closeAndNav('team')}>
+              <I.team size={16} /><span>Team</span>
+            </div>
+            <div className={`nav-item ${route === 'activity' ? 'active' : ''}`} onClick={() => closeAndNav('activity')}>
+              <I.activity size={16} /><span>Aktivität</span>
+              {unreadActivity > 0 && (
+                <span className="nav-count" style={{ background: 'var(--danger)', color: 'white', minWidth: 18, textAlign: 'center' }}>
+                  {unreadActivity > 9 ? '9+' : unreadActivity}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── Mehr (ausgeblendet, nicht geloescht) ──────────────── */}
+        <div className="nav-section" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
+          onClick={() => toggleSection('mehrOffen')}>
+          <span>Mehr</span>
+          <span style={{ fontSize: 10, color: 'var(--text-4)', marginRight: 4 }}>{collapsed.mehrOffen ? '▾' : '▸'}</span>
+        </div>
+        {collapsed.mehrOffen && [
+          { id: 'roadmap',       label: 'Roadmap' },
+          { id: 'sprints',       label: 'Sprints' },
+          { id: 'editorial',     label: 'Redaktionsplan' },
+          { id: 'newsletter',    label: 'Newsletter' },
+          { id: 'social',        label: 'Social Media' },
+          ...(brand.capabilities?.events ? [
+            { id: 'eventhub',      label: 'Event Hub' },
+            { id: 'eventpipeline', label: 'Event Pipeline' },
+            { id: 'partners',      label: 'Partner & Sponsoren' },
+          ] : []),
+          ...((myRole === 'owner' || myRole === 'admin' || myRole === 'manager') ? [{ id: 'assisthub', label: 'Assistant Hub' }] : []),
+          { id: 'standup',       label: 'Standup' },
+          { id: 'goals',         label: 'Ziele' },
+          { id: 'concept',       label: 'Concept Doc' },
+        ].map(n => (
+          <div key={n.id} className={`nav-item nav-item-leise ${route === n.id ? 'active' : ''}`} onClick={() => closeAndNav(n.id)}>
+            <span className="nav-punkt" /><span>{n.label}</span>
           </div>
         ))}
 
@@ -237,11 +233,6 @@ export function Sidebar({ route, setRoute, onSwitchWorkspace, counts, mobileOpen
         <div className={`nav-item ${route === 'settings' ? 'active' : ''}`} onClick={() => setRoute('settings')}>
           <I.settings size={16} />
           <span>Settings</span>
-        </div>
-        <div className={`nav-item ${route === 'concept' ? 'active' : ''}`} onClick={() => setRoute('concept')}>
-          <I.doc size={16} />
-          <span>Concept Doc</span>
-          <span className="nav-count" style={{ background: 'var(--bg-sunk)', color: 'var(--text-3)' }}>read</span>
         </div>
         {/* Sign-out: <form> POST works without JS so it survives even if the
             client bundle fails to hydrate. Reuses .nav-item styling so it

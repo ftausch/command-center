@@ -17,6 +17,7 @@ import { NewTaskModal } from '@/components/NewTaskModal';
 import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
 import { StatusScreen } from '@/components/screens/Status';
+import { SalesScreen } from '@/components/screens/Sales';
 import { DashboardScreen } from '@/components/screens/Dashboard';
 import { MyTasksScreen } from '@/components/screens/MyTasks';
 import { ProjectsScreen } from '@/components/screens/Projects';
@@ -299,6 +300,12 @@ export function App() {
       case 'editorial':
         screen = <EditorialCalendarScreen setRoute={setRoute} />;
         breadcrumb = 'Redaktionskalender';
+        break;
+      case 'sales':
+        screen = (myRole === 'owner' || myRole === 'admin')
+          ? <SalesScreen />
+          : <DashboardScreen setRoute={setRoute} />;
+        breadcrumb = 'Sales';
         break;
       case 'status':
         screen = (myRole === 'owner' || myRole === 'admin')

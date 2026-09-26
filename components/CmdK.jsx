@@ -114,6 +114,10 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
         action: () => setRoute('assisthub'),
       },
       {
+        kind: 'Action', id: 'go-sales', label: 'Sales öffnen', sub: 'Pipeline & Radar',
+        action: () => setRoute('sales'),
+      },
+      {
         kind: 'Action', id: 'go-status', label: 'Status öffnen', sub: 'Plan gegen Ist',
         action: () => setRoute('status'),
       },

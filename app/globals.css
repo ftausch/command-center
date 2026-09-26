@@ -1111,3 +1111,7 @@ body[data-brand="unicornbakery"] .tab.active { border-bottom-color: var(--brand)
 body[data-brand="unicornbakery"] .input { border-radius: var(--r-sm); }
 body[data-brand="unicornbakery"] .badge { border-radius: 999px; }
 body[data-brand="unicornbakery"] ::selection { background: rgba(223, 48, 144, 0.18); color: var(--text-1); }
+body[data-brand="unicornbakery"] .nav-neu { background: var(--brand) !important; color: #fff !important; font-family: var(--font-sans) !important; font-size: 10px !important; }
+.nav-item-leise { font-size: 13px; color: var(--text-3); padding-top: 5px; padding-bottom: 5px; }
+.nav-punkt { width: 5px; height: 5px; border-radius: 50%; background: var(--text-4); margin: 0 6px 0 5px; flex-shrink: 0; }
+.nav-item-leise.active .nav-punkt { background: var(--brand); }
