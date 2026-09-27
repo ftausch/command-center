@@ -1045,23 +1045,22 @@ select.twk-field{padding-right:22px;
 
 body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]),
 body:not([data-cc-surface="carbon"]) .app[data-brand="unicornbakery"] {
-  /* Neutral wie in den Referenzen: graue Flaeche, weisse Karten, Farbe nur als Akzent */
-  --bg:          #f4f4f6;
+  --bg:          #fbf6f8;
   --bg-elev:     #ffffff;
-  --bg-sunk:     #f1f1f4;
-  --bg-hover:    #ececf0;
-  --bg-active:   #e4e4e9;
-  --bg-blur:     rgba(244, 244, 246, 0.92);
-  --border:        #e7e7ec;
-  --border-soft:   #f0f0f3;
-  --border-strong: #d4d4db;
-  --text-1: #17171c;
-  --text-2: #52525c;
-  --text-3: #8b8b96;
-  --text-4: #c2c2cb;
-  --neutral: #52525c;
-  --neutral-bg: #f1f1f4;
-  --neutral-border: #d4d4db;
+  --bg-sunk:     #f5edf1;
+  --bg-hover:    #f3e8ee;
+  --bg-active:   #eddde6;
+  --bg-blur:     rgba(251, 246, 248, 0.92);
+  --border:        #efe3e9;
+  --border-soft:   #f5edf1;
+  --border-strong: #dccbd4;
+  --text-1: #250209;
+  --text-2: #5c3a48;
+  --text-3: #93707f;
+  --text-4: #c9b3bd;
+  --neutral: #5c3a48;
+  --neutral-bg: #f5edf1;
+  --neutral-border: #dccbd4;
 }
 [data-brand="unicornbakery"] {
   --brand:        #df3090;
@@ -1070,7 +1069,7 @@ body:not([data-cc-surface="carbon"]) .app[data-brand="unicornbakery"] {
   --brand-pill-bg: #df3090;
   --r-sm: 10px;
   --r-md: 14px;
-  --r-lg: 16px;
+  --r-lg: 20px;
   --r-xl: 24px;
   --shadow-sm: none;
 }
@@ -1083,7 +1082,7 @@ body[data-cc-surface="carbon"] [data-brand="unicornbakery"] {
 }
 
 /* Typo: ruhiger, groesser, weniger fett */
-body[data-brand="unicornbakery"] .h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+body[data-brand="unicornbakery"] .h1 { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; }
 body[data-brand="unicornbakery"] .h2 { font-weight: 500; letter-spacing: -0.015em; }
 body[data-brand="unicornbakery"] .h3 { font-weight: 500; }
 body[data-brand="unicornbakery"] .page-head { border-bottom: 0; }
@@ -1095,8 +1094,8 @@ body[data-brand="unicornbakery"] .card[style*="cursor: pointer"]:hover { border-
 /* Buttons: Marke = Pink, Primaer = tiefes Mahagoni */
 body[data-brand="unicornbakery"] .btn-brand { background: var(--brand); border-color: var(--brand); color: #fff; }
 body[data-brand="unicornbakery"] .btn-brand:hover { background: var(--brand-strong); border-color: var(--brand-strong); }
-body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary { background: #17171c; border-color: #17171c; }
-body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary:hover { background: #33333b; }
+body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary { background: #250209; border-color: #250209; }
+body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary:hover { background: #4a1022; }
 body[data-brand="unicornbakery"] .btn { border-radius: var(--r-sm); }
 
 /* Navigation */
@@ -1105,7 +1104,7 @@ body[data-brand="unicornbakery"] .nav-item.active { background: var(--brand-soft
 body[data-brand="unicornbakery"] .nav-item.active svg { color: var(--brand); }
 body[data-brand="unicornbakery"] .nav-item.active .nav-count { background: rgba(223, 48, 144, 0.16); color: var(--brand-strong); }
 body[data-brand="unicornbakery"] .brand-pill { border-radius: 16px; }
-body[data-brand="unicornbakery"] .brand-pill .brand-mark { border-radius: 10px; background: var(--brand); }
+body[data-brand="unicornbakery"] .brand-pill .brand-mark { border-radius: 10px; background: linear-gradient(145deg, #ea4aa0, #c01f79); }
 
 /* Tabs, Eingaben, Badges */
 body[data-brand="unicornbakery"] .tab.active { border-bottom-color: var(--brand); }
@@ -1116,11 +1115,3 @@ body[data-brand="unicornbakery"] .nav-neu { background: var(--brand) !important;
 .nav-item-leise { font-size: 13px; color: var(--text-3); padding-top: 5px; padding-bottom: 5px; }
 .nav-punkt { width: 5px; height: 5px; border-radius: 50%; background: var(--text-4); margin: 0 6px 0 5px; flex-shrink: 0; }
 .nav-item-leise.active .nav-punkt { background: var(--brand); }
-
-body[data-brand="unicornbakery"] .sidebar { background: var(--bg-elev); }
-body[data-brand="unicornbakery"] .topbar { background: var(--bg-elev); }
-/* Handy: Spalte darf schmaler als ihr breitester Inhalt werden (Tabellen scrollen dann in sich) */
-@media (max-width: 900px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .page-head .row { flex-wrap: wrap; }
-}
