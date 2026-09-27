@@ -14,6 +14,10 @@
   --bg-sunk:   #f0edef;   /* surface-container — recessed areas */
   --bg-hover:  #eae7e9;   /* surface-container-high — hover */
   --bg-active: #e4e2e4;   /* surface-container-highest — pressed */
+  /* Translucent variant of --bg, for blurred bars that sit above content.
+     Must be redefined by every surface theme below, otherwise the bar keeps
+     the light background while its text follows --text-1 into the dark. */
+  --bg-blur:   rgba(252, 248, 250, 0.92);
 
   /* Borders — from outline-variant / surface-container-highest */
   --border:        #e4e2e4;   /* outline-variant light */
@@ -79,10 +83,11 @@
 /* Both workspaces share the Editorial Command purple accent.
    The workspace "identity" lives in the brand-pill color only. */
 [data-brand="unicornbakery"] {
-  --brand:        #712edd;
-  --brand-soft:   rgba(113, 46, 221, 0.08);
-  --brand-strong: #5b00c5;
-  --brand-pill-bg: #131b2e; /* Deep Navy for the workspace pill */
+  /* Unicorn Bakery: Pink (Stand Sept. 2026, siehe Block "NEUER LOOK" unten) */
+  --brand:        #df3090;
+  --brand-soft:   rgba(223, 48, 144, 0.10);
+  --brand-strong: #b81f74;
+  --brand-pill-bg: #df3090;
 }
 
 [data-brand="selbstfrei"] {
@@ -141,7 +146,7 @@ a { color: inherit; text-decoration: none; }
 
 /* ===== Card — white, 1px border, no heavy shadows ===== */
 .card {
-  background: #ffffff;
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
@@ -247,7 +252,7 @@ a { color: inherit; text-decoration: none; }
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
-  background: #ffffff;
+  background: var(--bg-elev);
   color: var(--text-1);
   outline: none;
   transition: border-color 0.12s, box-shadow 0.12s;
@@ -541,7 +546,7 @@ a { color: inherit; text-decoration: none; }
 .topbar {
   height: var(--topbar-h);
   border-bottom: 1px solid var(--border);
-  background: rgba(252, 248, 250, 0.92);
+  background: var(--bg-blur);
   backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
@@ -858,6 +863,7 @@ body[data-cc-surface="studio"] {
   --text-2: #4b5363;
   --text-3: #7c8493;
   --text-4: #aab1bd;
+  --bg-blur: rgba(243, 245, 247, 0.92);
 }
 
 /* ── SURFACE: CARBON (dark) ─────────────────────────── */
@@ -867,6 +873,7 @@ body[data-cc-surface="carbon"] {
   --bg-sunk: #0a0c10;
   --bg-hover: #1c2028;
   --bg-active: #232832;
+  --bg-blur: rgba(14, 16, 20, 0.92);
   --border: #232730;
   --border-strong: #313644;
   --border-soft: #1b1e25;
@@ -894,9 +901,6 @@ body[data-cc-surface="carbon"] {
   --neutral: #a6abb6;
   --neutral-bg: #1c2028;
   --neutral-border: #313644;
-}
-body[data-cc-surface="carbon"][data-brand="unicornbakery"] {
-  --brand: #6ba7d8; --brand-soft: rgba(107,167,216,0.12); --brand-strong: #97c1e2;
 }
 body[data-cc-surface="carbon"][data-brand="selbstfrei"] {
   --brand: #c39af0; --brand-soft: rgba(195,154,240,0.12); --brand-strong: #d6b6f5;
@@ -1030,3 +1034,84 @@ select.twk-field{padding-right:22px;
 .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
   background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
 .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+/* ══════════════════════════════════════════════════════════════════════
+   UNICORN BAKERY — NEUER LOOK (Sept. 2026)
+   Pink statt Lila, weichere Karten, ruhige Flaechen — passend zu Dashboard
+   und Status (components/screens/status.css). Gilt nur im Workspace
+   UnicornBakery; SelbstFrei behaelt seinen Stil. Zuruecknehmen = diesen
+   Block loeschen.
+   ══════════════════════════════════════════════════════════════════════ */
+
+body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]),
+body:not([data-cc-surface="carbon"]) .app[data-brand="unicornbakery"] {
+  --bg:          #fbf6f8;
+  --bg-elev:     #ffffff;
+  --bg-sunk:     #f5edf1;
+  --bg-hover:    #f3e8ee;
+  --bg-active:   #eddde6;
+  --bg-blur:     rgba(251, 246, 248, 0.92);
+  --border:        #efe3e9;
+  --border-soft:   #f5edf1;
+  --border-strong: #dccbd4;
+  --text-1: #250209;
+  --text-2: #5c3a48;
+  --text-3: #93707f;
+  --text-4: #c9b3bd;
+  --neutral: #5c3a48;
+  --neutral-bg: #f5edf1;
+  --neutral-border: #dccbd4;
+}
+[data-brand="unicornbakery"] {
+  --brand:        #df3090;
+  --brand-soft:   rgba(223, 48, 144, 0.10);
+  --brand-strong: #b81f74;
+  --brand-pill-bg: #df3090;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+  --shadow-sm: none;
+}
+body[data-cc-surface="carbon"][data-brand="unicornbakery"],
+body[data-cc-surface="carbon"] [data-brand="unicornbakery"] {
+  --brand:        #f06bb4;
+  --brand-soft:   rgba(240, 107, 180, 0.14);
+  --brand-strong: #f59acb;
+  --brand-pill-bg: #df3090;
+}
+
+/* Typo: ruhiger, groesser, weniger fett */
+body[data-brand="unicornbakery"] .h1 { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; }
+body[data-brand="unicornbakery"] .h2 { font-weight: 500; letter-spacing: -0.015em; }
+body[data-brand="unicornbakery"] .h3 { font-weight: 500; }
+body[data-brand="unicornbakery"] .page-head { border-bottom: 0; }
+
+/* Karten: weich, ohne Schatten, Hover mit pinkem Rand */
+body[data-brand="unicornbakery"] .card { border-radius: var(--r-lg); box-shadow: none; }
+body[data-brand="unicornbakery"] .card[style*="cursor: pointer"]:hover { border-color: var(--brand); }
+
+/* Buttons: Marke = Pink, Primaer = tiefes Mahagoni */
+body[data-brand="unicornbakery"] .btn-brand { background: var(--brand); border-color: var(--brand); color: #fff; }
+body[data-brand="unicornbakery"] .btn-brand:hover { background: var(--brand-strong); border-color: var(--brand-strong); }
+body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary { background: #250209; border-color: #250209; }
+body[data-brand="unicornbakery"]:not([data-cc-surface="carbon"]) .btn-primary:hover { background: #4a1022; }
+body[data-brand="unicornbakery"] .btn { border-radius: var(--r-sm); }
+
+/* Navigation */
+body[data-brand="unicornbakery"] .nav-item { border-radius: 12px; }
+body[data-brand="unicornbakery"] .nav-item.active { background: var(--brand-soft); color: var(--brand-strong); font-weight: 600; }
+body[data-brand="unicornbakery"] .nav-item.active svg { color: var(--brand); }
+body[data-brand="unicornbakery"] .nav-item.active .nav-count { background: rgba(223, 48, 144, 0.16); color: var(--brand-strong); }
+body[data-brand="unicornbakery"] .brand-pill { border-radius: 16px; }
+body[data-brand="unicornbakery"] .brand-pill .brand-mark { border-radius: 10px; background: linear-gradient(145deg, #ea4aa0, #c01f79); }
+
+/* Tabs, Eingaben, Badges */
+body[data-brand="unicornbakery"] .tab.active { border-bottom-color: var(--brand); }
+body[data-brand="unicornbakery"] .input { border-radius: var(--r-sm); }
+body[data-brand="unicornbakery"] .badge { border-radius: 999px; }
+body[data-brand="unicornbakery"] ::selection { background: rgba(223, 48, 144, 0.18); color: var(--text-1); }
+body[data-brand="unicornbakery"] .nav-neu { background: var(--brand) !important; color: #fff !important; font-family: var(--font-sans) !important; font-size: 10px !important; }
+.nav-item-leise { font-size: 13px; color: var(--text-3); padding-top: 5px; padding-bottom: 5px; }
+.nav-punkt { width: 5px; height: 5px; border-radius: 50%; background: var(--text-4); margin: 0 6px 0 5px; flex-shrink: 0; }
+.nav-item-leise.active .nav-punkt { background: var(--brand); }

@@ -15,7 +15,6 @@ const GROUPS = [
       { keys: ['G', 'A'], desc: 'Aktivität' },
       { keys: ['E'],      desc: 'Event Hub' },
       { keys: ['A'],      desc: 'Assistant Hub' },
-      { keys: ['H'],      desc: 'Health Dashboard' },
       { keys: ['B'],      desc: 'Kanban Board' },
     ],
   },

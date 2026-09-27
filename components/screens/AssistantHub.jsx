@@ -22,7 +22,7 @@ const TYPE_META = {
   document_request: { label: 'Dokument',      icon: '📄', color: 'var(--warning)' },
   meeting_prep:     { label: 'Meeting Prep',  icon: '🤝', color: 'var(--brand)'   },
   approval:         { label: 'Freigabe',      icon: '✅', color: 'var(--success)' },
-  decision:         { label: 'Entscheidung',  icon: '⚖️', color: '#712edd'        },
+  decision:         { label: 'Entscheidung',  icon: '⚖️', color: 'var(--brand)'        },
   reminder:         { label: 'Erinnerung',    icon: '🔔', color: '#e8780a'        },
   contact:          { label: 'Kontakt',       icon: '👤', color: 'var(--text-2)'  },
   other:            { label: 'Sonstiges',     icon: '📌', color: 'var(--text-3)'  },

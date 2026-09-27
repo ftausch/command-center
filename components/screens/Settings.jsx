@@ -45,7 +45,7 @@ export function SettingsScreen() {
           <div className="row gap-2 mb-2"><Badge kind="brand" dot>{brand.name}</Badge></div>
           <h1 className="h1">Settings</h1>
           <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '4px 0 0' }}>
-            Workspace-spezifische Konfiguration. Brand-Settings sind getrennt von SelbstFrei.
+            Workspace-spezifische Konfiguration. 
           </p>
         </div>
       </div>

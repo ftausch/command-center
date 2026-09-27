@@ -1062,7 +1062,7 @@ function TranskriptKITab({ episodes }) {
               className="btn btn-brand btn-sm"
               onClick={generatePkg}
               disabled={generating}
-              style={{ background: 'linear-gradient(135deg, var(--brand), #7c3aed)', border: 'none' }}
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-strong))', border: 'none' }}
             >
               {generating
                 ? <><I.zap size={13} /> Generiere…</>
@@ -1818,7 +1818,7 @@ function StudioTab({ episodes, workspaceId }) {
           </div>
 
           {/* Live Preview */}
-          <div style={{ background: 'white', borderRadius: 12, padding: '16px 18px', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ background: 'var(--bg-elev)', borderRadius: 12, padding: '16px 18px', border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <div className="row gap-3 items-center">
               <div style={{ width: 52, height: 52, borderRadius: 8, background: 'linear-gradient(135deg,#1a1d24,#3b4a6b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>🎙️</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1887,7 +1887,7 @@ function StudioCard({ icon, title, desc, tools, eta, badge }) {
 
 const GUEST_STATUSES = ['prospect','contacted','confirmed','recorded','published','recurring'];
 const GUEST_STATUS_LABEL = { prospect:'Prospect', contacted:'Kontaktiert', confirmed:'Bestätigt', recorded:'Aufgenommen', published:'Veröffentlicht', recurring:'Stammgast' };
-const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'#712edd' };
+const GUEST_STATUS_COLOR = { prospect:'var(--text-3)', contacted:'var(--info)', confirmed:'var(--success)', recorded:'var(--brand)', published:'var(--success)', recurring:'var(--brand)' };
 
 function GuestOutreachTemplates({ guest }) {
   const [open, setOpen] = useState(false);

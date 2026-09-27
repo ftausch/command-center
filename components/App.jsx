@@ -14,15 +14,15 @@ import { FocusOnboarding, getFocusPreference, setFocusPreference } from '@/compo
 import { CmdK } from '@/components/CmdK';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { NewTaskModal } from '@/components/NewTaskModal';
-import { WorkspaceSwitcher } from '@/components/screens/WorkspaceSwitcher';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
+import { StatusScreen } from '@/components/screens/Status';
+import { SalesScreen } from '@/components/screens/Sales';
 import { DashboardScreen } from '@/components/screens/Dashboard';
 import { MyTasksScreen } from '@/components/screens/MyTasks';
 import { ProjectsScreen } from '@/components/screens/Projects';
 import { ProjectDetailScreen } from '@/components/screens/ProjectDetail';
 import { KanbanScreen } from '@/components/screens/Kanban';
 import { CalendarScreen } from '@/components/screens/Calendar';
-import { TemplatesScreen } from '@/components/screens/Templates';
 import { TeamScreen } from '@/components/screens/Team';
 import { ActivityScreen } from '@/components/screens/Activity';
 import { SettingsScreen } from '@/components/screens/Settings';
@@ -37,10 +37,6 @@ import { ShortcutOverlay } from '@/components/ShortcutOverlay';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SkeletonPage } from '@/components/Skeleton';
 import { PAWelcome } from '@/components/PAWelcome';
-import { OpsHealthScreen } from '@/components/screens/OpsHealth';
-import { ApprovalCenterScreen } from '@/components/screens/ApprovalCenter';
-import { DecisionCenterScreen } from '@/components/screens/DecisionCenter';
-import { RiskBoardScreen } from '@/components/screens/RiskBoard';
 import { NewsletterScreen } from '@/components/screens/Newsletter';
 import { RoadmapScreen } from '@/components/screens/Roadmap';
 import { StandupScreen } from '@/components/screens/Standup';
@@ -120,9 +116,6 @@ export function App() {
       // 'e' — event hub
       if (e.key === 'e') { e.preventDefault(); setRoute('eventhub'); return; }
 
-      // 'h' — health dashboard
-      if (e.key === 'h') { e.preventDefault(); setRoute('ops-health'); return; }
-
       // '?' — shortcuts overlay
       if (e.key === '?') { e.preventDefault(); setShortcutsOpen(true); return; }
 
@@ -151,6 +144,11 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); clearTimeout(gTimer.current); };
   }, [setCmdkOpen, cmdkOpen, setRoute, showOnboarding]);
+
+  // Einziger Workspace: Unicorn Bakery — direkt auswaehlen statt Auswahlseite.
+  useEffect(() => {
+    if (!workspace) setCurrentWorkspaceId('unicornbakery');
+  }, [workspace, setCurrentWorkspaceId]);
 
   // Restore dark mode preference on mount
   useEffect(() => {
@@ -204,15 +202,10 @@ export function App() {
     );
   }
 
+  // Es gibt nur noch Unicorn Bakery (SelbstFrei eingestellt, Sept. 2026):
+  // keine Workspace-Auswahl mehr, der Effekt oben waehlt UB automatisch.
   if (!workspace) {
-    return (
-      <WorkspaceSwitcher
-        onPick={(w) => {
-          setCurrentWorkspaceId(w);
-          setRoute('dashboard');
-        }}
-      />
-    );
+    return <SkeletonPage />;
   }
 
   let screen;
@@ -248,10 +241,6 @@ export function App() {
         screen = <TeamScreen setRoute={setRoute} />;
         breadcrumb = 'Team';
         break;
-      case 'templates':
-        screen = <TemplatesScreen setRoute={setRoute} />;
-        breadcrumb = 'Templates';
-        break;
       case 'activity':
         screen = <ActivityScreen />;
         breadcrumb = 'Activity';
@@ -283,18 +272,6 @@ export function App() {
       case 'assisthub':
         screen = <AssistantHubScreen setRoute={setRoute} />;
         break;
-      case 'ops-health':
-        screen = <OpsHealthScreen setRoute={setRoute} />;
-        break;
-      case 'approvals':
-        screen = <ApprovalCenterScreen setRoute={setRoute} />;
-        break;
-      case 'decisions':
-        screen = <DecisionCenterScreen setRoute={setRoute} />;
-        break;
-      case 'risks':
-        screen = <RiskBoardScreen setRoute={setRoute} />;
-        break;
       case 'newsletter':
         screen = <NewsletterScreen />;
         breadcrumb = 'Newsletter';
@@ -323,6 +300,18 @@ export function App() {
         screen = <EditorialCalendarScreen setRoute={setRoute} />;
         breadcrumb = 'Redaktionskalender';
         break;
+      case 'sales':
+        screen = (myRole === 'owner' || myRole === 'admin')
+          ? <SalesScreen />
+          : <DashboardScreen setRoute={setRoute} />;
+        breadcrumb = 'Sales';
+        break;
+      case 'status':
+        screen = (myRole === 'owner' || myRole === 'admin')
+          ? <StatusScreen />
+          : <DashboardScreen setRoute={setRoute} />;
+        breadcrumb = 'Status';
+        break;
       case 'concept':
         screen = <ConceptScreen setRoute={setRoute} />;
         breadcrumb = 'Concept Doc';
@@ -338,7 +327,7 @@ export function App() {
       <Sidebar
         route={route}
         setRoute={(r) => { setRoute(r); setSidebarOpen(false); }}
-        onSwitchWorkspace={() => { setCurrentWorkspaceId(null); setSidebarOpen(false); }}
+        onSwitchWorkspace={null}
         counts={counts}
         mobileOpen={sidebarOpen}
         onMobileClose={() => setSidebarOpen(false)}

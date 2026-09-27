@@ -43,7 +43,7 @@ const STATUS_COLORS = {
   // partner
   lead: 'var(--text-3)', contacted: 'var(--info)', call_scheduled: 'var(--info)',
   offer_sent: '#f59e0b', 'confirmed': 'var(--success)', active: 'var(--success)',
-  recap_sent: '#712edd', closed: 'var(--text-4)',
+  recap_sent: 'var(--brand)', closed: 'var(--text-4)',
 };
 
 const STATUS_LABEL = {
@@ -982,7 +982,7 @@ const APPROVAL_STATUS_COLOR = {
   ready_for_review:  'var(--info)',
   changes_requested: 'var(--warning)',
   approved:          'var(--success)',
-  published:         '#712edd',
+  published:         'var(--brand)',
 };
 
 export function ApprovalsPanel({ projectId, workspaceId, canEdit, members = [] }) {

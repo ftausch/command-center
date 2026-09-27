@@ -114,16 +114,12 @@ export function CmdK({ open, onClose, setRoute, onOpenTask }) {
         action: () => setRoute('assisthub'),
       },
       {
-        kind: 'Action', id: 'go-approvals', label: 'Freigaben öffnen', sub: 'Operations',
-        action: () => setRoute('approvals'),
+        kind: 'Action', id: 'go-sales', label: 'Sales öffnen', sub: 'Pipeline & Radar',
+        action: () => setRoute('sales'),
       },
       {
-        kind: 'Action', id: 'go-decisions', label: 'Entscheidungen öffnen', sub: 'Operations',
-        action: () => setRoute('decisions'),
-      },
-      {
-        kind: 'Action', id: 'go-risks', label: 'Risiken & Blocker öffnen', sub: 'Operations',
-        action: () => setRoute('risks'),
+        kind: 'Action', id: 'go-status', label: 'Status öffnen', sub: 'Plan gegen Ist',
+        action: () => setRoute('status'),
       },
       {
         kind: 'Action', id: 'go-activity', label: 'Aktivitäts-Feed öffnen', sub: 'Alle Aktionen',

@@ -226,7 +226,7 @@ export function SocialPlannerScreen() {
             {[{ id: 'board', label: '📋 Board' }, { id: 'list', label: '📄 Liste' }].map(v => (
               <button key={v.id} onClick={() => setView(v.id)} style={{
                 padding: '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500,
-                background: view === v.id ? 'white' : 'transparent', color: view === v.id ? 'var(--text-1)' : 'var(--text-3)',
+                background: view === v.id ? 'var(--bg-elev)' : 'transparent', color: view === v.id ? 'var(--text-1)' : 'var(--text-3)',
                 boxShadow: view === v.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               }}>{v.label}</button>
             ))}

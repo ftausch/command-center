@@ -81,8 +81,12 @@ const WorkspaceContext = createContext({
   pushActivity: noop,
 });
 
+// Nur noch Unicorn Bakery — SelbstFrei ist eingestellt (Sept. 2026). Die
+// Daten bleiben in Supabase, werden aber nicht mehr angezeigt.
+const NUR_WORKSPACE = 'unicornbakery';
+
 function mockWorkspaces() {
-  return Object.values(D.brands);
+  return Object.values(D.brands).filter((w) => w.id === NUR_WORKSPACE);
 }
 
 export function WorkspaceProvider({ children }) {
@@ -133,7 +137,8 @@ export function WorkspaceProvider({ children }) {
         return;
       }
       try {
-        const ws = await db.listWorkspaces();
+        const alle = await db.listWorkspaces();
+        const ws = alle.filter((w) => w.id === NUR_WORKSPACE);
         if (!cancelled && ws.length > 0) {
           setWorkspaces(ws);
           setMode('supabase');
